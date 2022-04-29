@@ -4,3 +4,6 @@ ldpy/rewriter/antlr
 ldpy/sparql
 antlr4.sh
 **/__pycache__
+dist
+build
+**/*.egg-info

@@ -1,4 +1,5 @@
 import pathlib
+import re
 from setuptools import find_packages, setup
 
 # The directory containing this file
