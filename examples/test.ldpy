@@ -1,0 +1,19 @@
+@prefix sosa: <http://www.w3.org/ns/sosa/> .
+
+i= 12
+
+print(f<slmdjn{ i }sdf{ str(<hello>) }>.n3())
+
+x = <hello>
+g{ f{x} a sosa:Observation }.print()
+
+
+# g = g{ <z> sosa:b ( 1 2 (3 4 ) )}
+# g.print()
+
+# g = g{ 1 <a> [ <p> [ <p2> 0 ] ]} 
+# g.print()
+
+# g = g{ [ sosa:p 1 ] sosa:b [ sosa:s [ sosa:p 2 ]]}
+# g.print()
+

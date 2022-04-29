@@ -1,0 +1,6 @@
+.vscode
+grammars/.antlr
+ldpy/rewriter/antlr
+ldpy/sparql
+antlr4.sh
+**/__pycache__
