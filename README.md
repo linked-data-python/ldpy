@@ -2,6 +2,7 @@
 
 The Linked-Data Python package can rewrite a .ldpy file into an equivalent python code.
 
+![](ldpyIcon.png)
 
 ## Installation
 
