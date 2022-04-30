@@ -1,0 +1,10 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix ex:  <http://example.org/ontology#>.
+@base <http://example.org/data/>.
+
+print("test1")
+i=0
+while i<len(g{<s> <p> <o1>, <o2>}):
+    i+=1
+print(i)
+

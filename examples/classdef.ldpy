@@ -1,0 +1,16 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix ex:  <http://example.org/ontology#>.
+@base <http://example.org/data/>.
+
+class Test(str):
+
+    def hello(self, g=g{<s> <p> <o>}):
+        g.print()
+
+
+print("test1")
+Test().hello()
+
+print("test2")
+Test().hello(g{<s> <p> <o2>})
+

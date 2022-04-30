@@ -1,0 +1,30 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix ex:  <http://example.org/ontology#>.
+@base <http://example.org/data/>.
+
+import functools
+import inspect
+def default(graph):
+    def decorator_repeat(func):
+        sig = inspect.signature(func)
+        @functools.wraps(func)
+        def wrapper_repeat(*args, **kwds):
+            bound = sig.bind(*args, **kwds)
+            bound.apply_defaults()
+            print('Calling decorated function')
+            print('called with:', bound.arguments)
+        return wrapper_repeat
+    return decorator_repeat
+
+@default(g{<s> <p> <default>})
+def test(g=g{<s> <p> <o>}):
+    g.print()
+
+print("test1")
+test()
+
+print("test2")
+test(g{<s> <p> <o2>})
+
+print("test3")
+test(g=g{<s> <p> <o2>})

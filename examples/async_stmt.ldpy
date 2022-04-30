@@ -1,0 +1,14 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix ex:  <http://example.org/ontology#>.
+@base <http://example.org/data/>.
+
+import asyncio
+
+async def test(g=g{<s> <p> <o>}):
+    g.print()
+
+print("test1")
+asyncio.run(test())
+
+print("test2")
+asyncio.run(test(g{<s> <p> <o1>, <o2>}))

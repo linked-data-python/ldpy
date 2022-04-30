@@ -295,7 +295,7 @@ atom: ('(' (yield_expr|testlist_comp)? ')' |
        '[' (testlist_comp)? ']' |
        '{' (dictorsetmaker)? '}' |
        NAME | NUMBER | STRING + | rdf_literal+ | '...' | 'None' | 'True' | 'False' |
-       iri | var | xiri | construct_template );
+       iri | var | firi | construct_template );
 testlist_comp: (test|star_expr) ( comp_for | (',' (test|star_expr))* (',')? );
 trailer: '(' (arglist)? ')' | '[' subscriptlist ']' | '.' NAME;
 subscriptlist: subscript (',' subscript)* (',')?;
@@ -355,11 +355,11 @@ triples_node: collection | blank_node_property_list;
 blank_node_property_list: '[' property_list_not_empty ']';
 collection: '(' graph_node+ ')';
 graph_node: var_or_term | triples_node;
-var_or_term: graph_term | var | xiri | xnode;
+var_or_term: graph_term | var | firi | fnode;
 var_or_iri: iri | var ;
 var: VAR1 | VAR2;
 graph_term: iri | rdf_literal | var | NUMBER | 'True' | 'False' | blank_node | nil;
-rdf_literal: STRING ( LANGTAG | ( '^^' iri ) )?;
+rdf_literal: STRING ( LANGTAG | ( '^^' ( iri | firi | fnode ) ) )?;
 iri: IRIREF | prefixed_name;
 prefixed_name: {self.enableWs();} all_names? COLON all_names? {self.disableWs();};
 all_names:  DEF | RETURN | RAISE | FROM | IMPORT | AS | GLOBAL | NONLOCAL | ASSERT | IF | ELIF | ELSE | WHILE | FOR | IN | TRY | FINALLY | WITH | EXCEPT | LAMBDA | OR | AND | NOT | IS | NONE | TRUE | FALSE | CLASS | YIELD | DEL | PASS | CONTINUE | BREAK | ASYNC | AWAIT | NAME;
@@ -367,8 +367,8 @@ blank_node: BLANK_NODE_LABEL | anon;
 nil: OPEN_PAREN CLOSE_PAREN;
 anon: OPEN_BRACK CLOSE_BRACK;
 
-xiri: XIRIREF_START test ( XIRIREF_SUB test )* XIRIREF_END;
-xnode: 'f{' test '}';
+firi: FIRIREF_START test ( FIRIREF_SUB test )* FIRIREF_END;
+fnode: 'f{' test '}';
 
 /*
  * lexer rules
@@ -377,13 +377,13 @@ xnode: 'f{' test '}';
 IRIREF
     : '<' ( ~('<' | '>' | '"' | '{' | '}' | '|' | '^' | '\\' | '`' | [\u0000-\u0020] ) )* '>'
     ;
-XIRIREF_START
+FIRIREF_START
     : 'f<' ( ~('<' | '>' | '"' | '{' | '}' | '|' | '^' | '\\' | '`' | [\u0000-\u0020] ) )* '{'
     ;
-XIRIREF_SUB
+FIRIREF_SUB
     : '}' ( ~('<' | '>' | '"' | '{' | '}' | '|' | '^' | '\\' | '`' | [\u0000-\u0020] ) )* '{'
     ;
-XIRIREF_END
+FIRIREF_END
     : '}' ( ~('<' | '>' | '"' | '{' | '}' | '|' | '^' | '\\' | '`' | [\u0000-\u0020] ) )* '>'
     ;
 

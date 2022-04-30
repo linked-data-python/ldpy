@@ -1,0 +1,19 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix ex:  <http://example.org/ontology#>.
+@base <http://example.org/data/>.
+
+print("test1")
+
+if len(g{ <s> <p> <o> , <o2> , <o> }) == 2:
+    print("ok")
+else:
+    print("nok")
+
+print("test2")
+if g{ <s> <p> <o> , <o2> , <o> } == g{ <s> <p> <o> , <o2> }:
+    print("ok1")
+elif len(g{ <s> <p> <o> , <o2> , <o> }) == 2:
+    print("ok2")
+else:
+    print("nok")
+

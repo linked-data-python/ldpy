@@ -1,0 +1,31 @@
+@prefix sosa: <http://www.w3.org/ns/sosa/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+
+from rdflib import Graph
+
+print("test1")
+g = g{ 
+    [] a sosa:Observation ; 
+      sosa:hasSimpleResult 0 .
+    [] a sosa:Observation ; 
+      sosa:hasSimpleResult 0.25 .
+    [] a sosa:Observation ; 
+      sosa:hasSimpleResult 0.7 .
+    [] a sosa:Observation ; 
+      sosa:hasSimpleResult 0.5 .
+    }
+
+for s,p,o in g:
+    if p != rdf:type:
+        continue
+    value = g.value(predicate = sosa:hasSimpleResult , subject=s, any=False)
+    print(value)
+
+print("test2")
+for s,p,o in g{ <s> <p> 1,2,3}:
+    print(o)
+
+print("test3")
+
+l = [ o for s,p,o in g{ <s> <p> 1,2,3}]
+print(l)

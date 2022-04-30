@@ -1,0 +1,40 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+@prefix ex:  <http://example.org/ontology#>.
+@base <http://example.org/data/>.
+
+test = True
+roomNumber = 12
+prop = "temperature"
+
+x = <hello>
+print("iri: " + x.n3())
+
+iri = f<{ str(test).lower() }/room/{ roomNumber*2 }/{ prop + "Value" }>
+print("iri: " + iri.n3())
+
+pname = ex:SomeClass
+print("pname:" + pname)
+print("pname:" + pname.n3())
+
+literal = f"{ str(test).lower() }/room/{ roomNumber*2 }/{ prop + 'Value' }"
+print("literal:" + literal)
+
+literal = f"{ str(test).lower() }/room/{ roomNumber*2 }/{ prop + 'Value' }"@en
+print("literal:" + literal.n3())
+
+literal = f"{ str(test).lower() }/room/{ roomNumber*2 }/{ prop + 'Value' }"^^xsd:string
+print("literal:" + literal.n3())
+
+literal = "hello"^^f<{ prop + "Value" }>
+print("literal:" + literal.n3())
+
+literal = "hello"^^f{ <hello> if test else ex:World }
+print("literal:" + literal.n3())
+
+print("graph:")
+g{ [] a  f{ x if test else ex:World } }.print()
+
+print("graph:")
+g{ [] a  f{ x if not test else ex:World } }.print()
+

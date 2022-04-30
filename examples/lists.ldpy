@@ -1,0 +1,6 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix ex:  <http://example.org/ontology#>.
+@base <http://example.org/data/>.
+
+g = g{ <z> ex:b ( 1 2 (3 4 ) ( 5 (8) ) )}
+g.print()

@@ -2,7 +2,7 @@
 
 The Linked-Data Python package can rewrite a .ldpy file into an equivalent python code.
 
-![](ldpyIcon.png)
+![](https://gitlab.com/coswot/ldpy/-/raw/master/ldpyIcon.png)
 
 ## Installation
 
@@ -27,7 +27,7 @@ The Linked-Data Python grammar only uses grammar rules supported by MicroPython 
 Furthermore, it allows:
 
 - formatted IRIs: `f<http://example/org/{ id }/>`
-- RDF expression variables in RDF graphs: `g{ ex:Person ex:age ?{ age } }`
+- formatted nodes in RDF graphs: `f{ ex:Person ex:age ?{ age } }`
 
 Example programs are available in the `examples` folder of the source code repository.
 
@@ -38,19 +38,22 @@ The Linked-Data Python package is a command line application, name `ldpy`. It ca
 
 ```
 $ python -m ldpy -h
-usage: __main__.py [-h] [-l] [-p] [-s] [-x] file
+usage: __main__.py [-h] [-l] [-p] [-d] [-s] [-w] [-x] file
 
 Rewrite a .ldpy file into an equivalent python code.
 
 positional arguments:
-  file                the file to rewrite
+  file                  the file to rewrite
 
 optional arguments:
-  -h, --help          show this help message and exit
-  -l, --debug-lexer   print the lexer output
-  -p, --debug-parser  print the parser output
-  -s, --silent        do not display the output code
-  -x, --execute       execute the output code
+  -h, --help            show this help message and exit
+  -l, --debug-lexer     print the lexer output
+  -p, --debug-parser    print the parser output
+  -d, --diagnose-syntax
+                        diagnose the ambiguities in the syntax
+  -s, --silent          do not display the output code
+  -w, --write-output    write the output python code with the .py extension
+  -x, --execute         execute the output cod
 ```
 
 You can also run a transformation in your own Python code, by importing from the `ldpy` package:

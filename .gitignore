@@ -7,3 +7,4 @@ antlr4.sh
 dist
 build
 **/*.egg-info
+examples/*.py

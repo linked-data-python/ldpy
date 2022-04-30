@@ -125,6 +125,7 @@ class LDPythonRewriter(LDPythonVisitor):
         base = ctx.getChild(1).getText()[1:-1]
         self.base = base
         self.output.write(f"# @base <{base}> .")
+
     
 
     # Visit a parse tree produced by LDPythonParser#prefix_stmt.
@@ -182,17 +183,28 @@ class LDPythonRewriter(LDPythonVisitor):
                 childResult = child.accept(self)
                 out.append(childResult.out)
                 name = childResult.out.split(":")[0]
+                result.stmts += childResult.stmts                
+            elif isinstance(child, TerminalNode) and ( child.getText() == '*' or child.getText() == '**') :
+                star = child.getText()
+                i+=1
+                child = ctx.getChild(i)
+                childResult = child.accept(self)
+                out.append(star + childResult.out)
+                name = childResult.out.split(":")[0]
                 result.stmts += childResult.stmts
-            if isinstance(child, TerminalNode) and child.getText() == '=':
+            elif isinstance(child, TerminalNode) and child.getText() == '=':
                 child_testResult = ctx.getChild(i+1).accept(self)
-                if child_testResult.stmts:
-                    result.post_stmts.append(f"if {name} is None:")
+                # if child_testResult.stmts:
+                if True:
+                    secret = "param_" + secrets.token_hex(SIZE)
+                    result.post_stmts.append(f"if {name} == '{secret}':")
                     for stmt in child_testResult.stmts:
                         result.post_stmts.append(f"    {stmt}")
                     result.post_stmts.append(f"    {name} = {child_testResult.out}")
+                    out[-1] += f"= '{secret}'"
                     i += 2
-                else:
-                    out[-1] += '=' + child_testResult.out
+                # else:
+                #     out[-1] += '=' + child_testResult.out
             i += 1
         result.out = ', '.join(out)
         return result
@@ -327,8 +339,9 @@ class LDPythonRewriter(LDPythonVisitor):
             self.output.write("elif " + results_elif[i].out + ":")
             ctx.suite()[i+1].accept(self)
         # the else
-        self.output.write("else:")
-        ctx.suite()[-1].accept(self)
+        if ctx.ELSE():
+            self.output.write("else:")
+            ctx.suite()[-1].accept(self)
 
 
     # Visit a parse tree produced by LDPythonParser#while_stmt.
@@ -352,7 +365,7 @@ class LDPythonRewriter(LDPythonVisitor):
         testlist = ctx.testlist().accept(self)
         for stmt in testlist.stmts:
             self.output.write(stmt)
-        out += "while " + exprlist.out + " in " + testlist.out + ":"
+        out += "for " + exprlist.out + " in " + testlist.out + ":"
         self.output.write(out)
         ctx.suite()[0].accept(self)        
         if len(ctx.suite())>1:
@@ -422,18 +435,22 @@ class LDPythonRewriter(LDPythonVisitor):
 
     # Visit a parse tree produced by LDPythonParser#construct_template.
     def visitConstruct_template(self, ctx:LDPythonParser.Construct_templateContext):
-        if not ctx.construct_triples():
-            return Result("rdflib.Graph()")
         rdfgraph = "graph_" + secrets.token_hex(SIZE)
         result = Result(rdfgraph)
-        result.stmts.append(f"{rdfgraph} = rdflib.Graph()")
-        
-        childResult = ctx.construct_triples().accept(self)
-        for stmt in childResult.stmts:
-            if isinstance(stmt, str):
-                result.stmts.append(stmt)
-            elif isinstance(stmt, tuple):
-                result.stmts.append(f"{rdfgraph}.add(({stmt[0]},{stmt[1]},{stmt[2]}))")
+
+        base = f"base='{self.base}'" if self.base else ""
+        result.stmts.append(f"{rdfgraph} = rdflib.Graph({base})")
+
+        for prefix, uri in self.namespaces.items():
+            result.stmts.append(f"{rdfgraph}.namespace_manager.bind('{prefix}', '{uri}')")
+
+        if ctx.construct_triples():
+            childResult = ctx.construct_triples().accept(self)
+            for stmt in childResult.stmts:
+                if isinstance(stmt, str):
+                    result.stmts.append(stmt)
+                elif isinstance(stmt, tuple):
+                    result.stmts.append(f"{rdfgraph}.add(({stmt[0]},{stmt[1]},{stmt[2]}))")
 
         return result
 
@@ -445,7 +462,7 @@ class LDPythonRewriter(LDPythonVisitor):
         result.add_stmts(childResult)
         
         if ctx.construct_triples():
-            childResult = ctx.triples_sameconstruct_triples_subject().accept(self)
+            childResult = ctx.construct_triples().accept(self)
             result.add_stmts(childResult)
 
         return result
@@ -568,6 +585,11 @@ class LDPythonRewriter(LDPythonVisitor):
         if ctx.iri():
             datatype = ctx.iri().accept(self)
             return Result(f"rdflib.Literal({string},datatype={datatype})")
+        if ctx.firi() or ctx.fnode():
+            datatype = ctx.getChild(2).accept(self)
+            result = Result(f"rdflib.Literal({string},datatype={datatype})")
+            result.add_stmts(datatype)
+            return result
         elif ctx.LANGTAG():
             lang = ctx.LANGTAG().getText()[1:]
             return Result(f"rdflib.Literal({string},lang='{lang}')")
@@ -627,12 +649,12 @@ class LDPythonRewriter(LDPythonVisitor):
         return result
     
     
-    # Visit a parse tree produced by LDPythonParser#xiri.
-    def visitXiri(self, ctx:LDPythonParser.XiriContext):
+    # Visit a parse tree produced by LDPythonParser#firi.
+    def visitFiri(self, ctx:LDPythonParser.FiriContext):
         name = "var_" + secrets.token_hex(SIZE)
         result = Result(name)
         out = []
-        string = ctx.XIRIREF_START().getText()[2:-1]
+        string = ctx.FIRIREF_START().getText()[2:-1]
         if len(string)>0:
             out.append(f"'{string}'")
         n = ctx.getChildCount()
@@ -647,8 +669,8 @@ class LDPythonRewriter(LDPythonVisitor):
         result.stmts.append(f"{name} = rdflib.URIRef({iri})")
         return result
 
-    # Visit a parse tree produced by LDPythonParser#xiri.
-    def visitXnode(self, ctx:LDPythonParser.XnodeContext):
+    # Visit a parse tree produced by LDPythonParser#fnode.
+    def visitFnode(self, ctx:LDPythonParser.FnodeContext):
         testResult = ctx.test().accept(self)
         if not testResult.stmts:
             return testResult

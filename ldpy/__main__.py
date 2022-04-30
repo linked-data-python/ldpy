@@ -30,6 +30,8 @@
 #
 import sys
 from antlr4 import FileStream, Token
+from antlr4.error.ErrorListener import ErrorListener
+from antlr4.error.DiagnosticErrorListener import DiagnosticErrorListener
 from ldpy.rewriter import *
 import argparse
 
@@ -39,13 +41,28 @@ def debugTokens(input_stream):
     tokenTypes = lib.readTokenTypes("ldpy/rewriter/antlr/LDPython.tokens")
     printTokens(lexer, tokenTypes)
 
-def parseTree(input_stream): 
+class MainErrorListener(ErrorListener):
+    
+    def __init__(self):
+        self.errors = []
+    
+    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
+        self.errors.append("line " + str(line) + ":" + str(column) + " " + msg)
+
+
+def parseTree(input_stream, diagnose=False): 
     lexer = LDPythonLexer(input_stream)
     stream = MultiChannelTokenStream(lexer)
     parser = LDPythonParser(stream)
+    parser.removeErrorListeners()
+    errorListener = MainErrorListener()
+    parser.addErrorListener(errorListener)
+    if diagnose:
+        diagnosticErrorListener = DiagnosticErrorListener()
+        parser.addErrorListener(diagnosticErrorListener)
     tree = parser.file_input()
     if parser.getNumberOfSyntaxErrors() != 0:
-        raise Exception("Exception while parsing the input")
+        raise SyntaxError("Exception while parsing the input:\n  " + "\n  ".join(errorListener.errors))
     return tree
 
 def printTree(tree):
@@ -62,7 +79,7 @@ def execResult(code): # from https://stackoverflow.com/a/47337130
     old_stdout = sys.stdout
     redirected_output = sys.stdout = StringIO()
     try:
-        exec(code)
+        exec(code, locals(), locals())
     except:
         raise 
     finally: # !
@@ -86,22 +103,29 @@ if __name__ == '__main__':
                         help='print the lexer output')
     parser.add_argument('-p', '--debug-parser', dest='parser', action='store_true', default=False,
                         help='print the parser output')
+    parser.add_argument('-d', '--diagnose-syntax', dest='diagnose', action='store_true', default=False,
+                        help='diagnose the ambiguities in the syntax')
     parser.add_argument('-s', '--silent', dest='silent', action='store_true', default=False,
                         help='do not display the output code')
+    parser.add_argument('-w', '--write-output', dest='write', action='store_true', default=False,
+                        help='write the output python code with the .py extension')
     parser.add_argument('-x', '--execute', dest='exec', action='store_true', default=False,
                         help='execute the output code')
     parser.add_argument('file', metavar='file', type=str,
                         help='the file to rewrite')
     args = parser.parse_args(sys.argv[1:])
     
+    if not args.file.endswith(".ldpy"):
+        raise AssertionError("the file must have the .ldpy extension")
     input_stream = FileStream(args.file)
     
     if args.lexer:
         print("Tokens are:")
         debugTokens(input_stream)
         input_stream = FileStream(args.file)
-    
-    tree = parseTree(input_stream)
+
+    tree = parseTree(input_stream, args.diagnose)
+
     
     if args.parser:
         print("Parsed tree is:")
@@ -112,9 +136,15 @@ if __name__ == '__main__':
     visitor.visit(tree)
 
     if not args.silent:
-        print("\noutput:\n" + output.getvalue())
+        print("output:")
+        print(output.getvalue())
+        
+    if args.write:
+        with open(args.file[:-4]+"py", "w") as f:
+            f.write(output.getvalue())
 
     if args.exec:
+        print("output:")
         execResult(output.getvalue())
     
     

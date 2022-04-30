@@ -1,0 +1,27 @@
+from ldpy import instantiateBGP
+
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+@prefix ex:  <http://example.org/ontology#>.
+@base <http://example.org/data/>.
+
+
+print("g:")
+g = g{ ?var a ex:Observation ; ex:hasSimpleResult ?result }
+g.print()
+
+print("g2:")
+mapping = { ?var: <observation/1> , ?result: 12 }
+g2 = instantiateBGP(g, mapping)
+g2.print()
+
+print("g3:")
+mappings = [
+    { ?var: <observation/1> , ?result: 12 },
+    { ?var: <observation/2> , ?result: 13 },
+    { ?var: <observation/3> , ?result: 14 },
+    { ?var: <observation/4> , ?result: 15 }
+    ]
+g2 = instantiateBGP(g, mappings)
+g2.print()
+
