@@ -10,7 +10,7 @@ You can install the Linked-Data Python
 ```
 pip install linked-data-python
 ```
-
+git a
 ## The Linked-Data Python syntax
 
 The extension ["linked-data-python" for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=MaximeLefrancois.linked-data-python) enables the syntax highlighting for Linked-Data Python source files (extensions .ldpy).
@@ -90,10 +90,4 @@ Generate the `SWPythonLexer`, `SWPythonParser`, and `SWPythonVisitor` using ANTL
 # cd ldpy
 antlr4 -o ldpy/rewriter/antlr -package ldpy.rewriter.antlr -Xexact-output-dir -Dlanguage=Python3 -visitor -no-listener grammars/LDPython.g4
 ```
-
-## Release Notes
-
-### 0.0.1
-
-Initial release of the Linked-Data Python package
 

@@ -8,6 +8,9 @@ HERE = pathlib.Path(__file__).parent
 # The text of the README file
 README = (HERE / "README.md").read_text()
 
+# The text of the CHANGELOG file
+CHANGELOG = (HERE / "CHANGELOG.md").read_text()
+
 
 def find_version(filename):
     _version_re = re.compile(r'__version__ = "(.*)"')
@@ -42,7 +45,7 @@ setup(
         "Operating System :: OS Independent",
         "Natural Language :: English",
     ],
-    long_description=README,
+    long_description=README + "\n" + CHANGELOG,
     long_description_content_type="text/markdown",
     packages=PACKAGES,
     include_package_data=True,
