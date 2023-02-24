@@ -1,0 +1,7 @@
+# testing line mapping on an Exception raised by an NameError
+@base <http://example.org/data/>.
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+g{ <MyClass> a owl:Class}
+
+print("iri: " + bleble.n3())

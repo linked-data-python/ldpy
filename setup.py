@@ -27,7 +27,7 @@ PACKAGES = find_packages(exclude=("examples*", "test*"))
 setup(
     name="linked-data-python",
     version=VERSION,
-    description="The python package \"linked-data-python\" can rewrite a .ldpy file into an equivalent python code.",
+    description="The python package \"linked-data-python\" can execute .ldpy files and run an interactive ldpy console.",
     author="Maxime Lefrançois",
     author_email="maxime.lefrancois@emse.fr",
     url="https://gitlab.com/coswot/ldpy",
@@ -49,7 +49,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=PACKAGES,
     include_package_data=True,
-    install_requires=["antlr4", "rdflib"],
+    install_requires=["antlr4", "rdflib", "ideas"],
     entry_points={
         "console_scripts": [
             "ldpy=ldpy.__main__:main",

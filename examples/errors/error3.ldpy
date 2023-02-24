@@ -1,0 +1,3 @@
+# testing line mapping on an Exception raised by a simple statement
+g{}
+1+"abc"

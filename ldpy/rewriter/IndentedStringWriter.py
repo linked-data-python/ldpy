@@ -32,9 +32,10 @@ from io import TextIOBase, StringIO
 
 class IndentedStringWriter(TextIOBase):
     
-    def __init__(self, output:TextIOBase = StringIO()):
+    def __init__(self, output:TextIOBase = None):
         self._indent:int = 0
-        self.output = output
+        self.output = output or StringIO()
+        self.line = 0
 
     def indent(self):
         self._indent+=1
@@ -43,9 +44,10 @@ class IndentedStringWriter(TextIOBase):
         self._indent-=1
     
     def write(self, s:str="", nl=True):
-        if nl==True:
+        if nl:
             self.output.write("\n" + " " * 4 * self._indent)
         self.output.write(str(s))
+        self.line += str(s).count("\n") + (1 if nl else 0) 
         
     def getvalue(self):
         return self.output.getvalue()

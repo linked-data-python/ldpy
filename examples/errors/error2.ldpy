@@ -1,0 +1,5 @@
+# testing line mapping on an Exception raised by an imported module
+@base <http://example.org/data/>.
+
+x = <error2>
+import examples.errors.error1

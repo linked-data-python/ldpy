@@ -30,7 +30,7 @@
 #
 import secrets
 import rdflib
-from antlr4 import TerminalNode, Token
+from antlr4 import TerminalNode, Token, ParserRuleContext
 from ldpy.rewriter.antlr.LDPythonVisitor import LDPythonVisitor
 from ldpy.rewriter.antlr.LDPythonParser import LDPythonParser
 from ldpy.rewriter.IndentedStringWriter import IndentedStringWriter
@@ -41,10 +41,15 @@ SIZE = 3
 # This class defines a complete generic visitor for a parse tree produced by LDPythonParser.
 class LDPythonRewriter(LDPythonVisitor):
     
-    def __init__(self, output:IndentedStringWriter=IndentedStringWriter()):
-        self.base:str = None;
-        self.namespaces = dict()
+    def __init__(self, output:IndentedStringWriter=IndentedStringWriter(), namespaces = {}):
+        self.namespaces = namespaces
         self.output = output
+        self.linemap = {} # store correspondence between input line and output line
+
+    def write(self, s:str, ctx:ParserRuleContext, nl=True):
+        self.output.write(s, nl)
+        if s:
+            self.linemap[self.output.line] = ctx.start.line
 
     def visit(self, tree):
         return tree.accept(self)
@@ -58,7 +63,7 @@ class LDPythonRewriter(LDPythonVisitor):
         for i in range(n):
             child = node.getChild(i)
             if isinstance(child, LDPythonParser.SuiteContext):
-                raise Exception("not to be used when suite!")
+                raise SyntaxError("line not to be used when suite!")
             childResult = child.accept(self)
             out.append(childResult.out)
             result.stmts += childResult.stmts
@@ -75,24 +80,24 @@ class LDPythonRewriter(LDPythonVisitor):
     # Visit a parse tree produced by LDPythonParser#single_input.
     def visitSingle_input(self, ctx:LDPythonParser.Single_inputContext) -> None:
         if isinstance(ctx.getChild(0), TerminalNode):
-            self.output.write("")
+            self.write("", ctx)
             return
         ctx.getChild(0).accept(self)
         if ctx.getChildCount()>1 and isinstance(ctx.getChild(0), TerminalNode):
-            self.output.write("")
+            self.write("", ctx)
 
 
     # Visit a parse tree produced by LDPythonParser#file_input.
     def visitFile_input(self, ctx:LDPythonParser.File_inputContext) -> None:
-        self.output.write("import rdflib")
         n = ctx.getChildCount()
         for i in range(n-1): # ignore the last token which is <EOF>
             child = ctx.getChild(i)
             if isinstance(child, TerminalNode):
-                self.output.write("")
+                pass
+#                self.write("", ctx)
             else:
                 child.accept(self)
-            self.output.write("")
+#            self.write("", ctx)
 
 
     # Visit a parse tree produced by LDPythonParser#eval_input.
@@ -115,7 +120,7 @@ class LDPythonRewriter(LDPythonVisitor):
     def visitDecorated(self, ctx:LDPythonParser.DecoratedContext):
         result_decorators = ctx.decorators().accept(self)
         for stmt in result_decorators.stmts:
-            self.output.write(stmt)
+            self.write(stmt, ctx)
         ctx.getChild(1).decorators = result_decorators.out
         ctx.getChild(1).accept(self)
         
@@ -123,8 +128,7 @@ class LDPythonRewriter(LDPythonVisitor):
     # Visit a parse tree produced by LDPythonParser#base_stmt.
     def visitBase_stmt(self, ctx:LDPythonParser.Base_stmtContext) -> None:
         base = ctx.getChild(1).getText()[1:-1]
-        self.base = base
-        self.output.write(f"# @base <{base}> .")
+        self.write(f"__base__ = \"{base}\"", ctx)
 
     
 
@@ -133,7 +137,7 @@ class LDPythonRewriter(LDPythonVisitor):
         prefix = ctx.NAME().getText() if ctx.NAME() else ""
         uri = ctx.IRIREF().getText()[1:-1]
         self.namespaces[prefix] = rdflib.Namespace(uri)
-        self.output.write(f"# @prefix {prefix}: <{uri}> .")
+        self.write(f"__namespaces__['{prefix}'] = rdflib.Namespace('{uri}')", ctx)
     
 
     # Visit a parse tree produced by LDPythonParser#async_funcdef.
@@ -153,19 +157,19 @@ class LDPythonRewriter(LDPythonVisitor):
         if ctx.test():
             result_test = ctx.test().accept(self)
             for stmt in result_test.stmts:
-                self.output.write(stmt)
+                self.write(stmt, ctx)
             out += " -> " + result_test.out
         out += ":"
         if hasattr(ctx, "decorators"):
             for decorator in ctx.decorators:
-                self.output.write(decorator)
-        self.output.write(out)
+                self.write(decorator, ctx)
+        self.write(out, ctx)
         # WARNING: les valeurs par défaut des paramètres doivent être à l'intérieur de la fonction, pas à l'exterieur
         # if param = None:
         #     param = param_default
         self.output.indent()
         for stmt in result_parameters.post_stmts:
-            self.output.write(stmt)
+            self.write(stmt, ctx)
         self.output.dedent()
         ctx.suite().accept(self)        
 
@@ -219,19 +223,19 @@ class LDPythonRewriter(LDPythonVisitor):
             childResult = small_stmt.accept(self) # type: Result
             if childResult.stmts:
                 if stmts !=0:
-                    self.output.write(out)
+                    self.write(out, ctx)
                     out = ''
                     stmts = 0
                 for stmt in childResult.stmts:
-                    self.output.write(stmt)
-                self.output.write(childResult.out)
+                    self.write(stmt, ctx)
+                self.write(childResult.out, ctx)
             else:
                 if stmts !=0:
                     out += '; '
                 out += childResult.out
                 stmts += 1
         if stmts !=0:
-            self.output.write(out)
+            self.write(out, ctx)
         # self.output.write("") # NEWLINE
 
 
@@ -330,17 +334,17 @@ class LDPythonRewriter(LDPythonVisitor):
             stmts += result_elif.stmts
         # print the stmts
         for stmt in stmts:
-            self.output.write(stmt)
+            self.write(stmt, ctx)
         # the if
-        self.output.write("if " + result_if.out + ":")
+        self.write("if " + result_if.out + ":", ctx)
         ctx.suite()[0].accept(self)
         # the elifs
         for i in range(len(results_elif)):
-            self.output.write("elif " + results_elif[i].out + ":")
+            self.write("elif " + results_elif[i].out + ":", ctx)
             ctx.suite()[i+1].accept(self)
         # the else
         if ctx.ELSE():
-            self.output.write("else:")
+            self.write("else:", ctx)
             ctx.suite()[-1].accept(self)
 
 
@@ -348,11 +352,11 @@ class LDPythonRewriter(LDPythonVisitor):
     def visitWhile_stmt(self, ctx:LDPythonParser.While_stmtContext):
         result_test = ctx.test().accept(self)
         for stmt in result_test.stmts:
-            self.output.write(stmt)
-        self.output.write("while " + result_test.out + ":")
+            self.write(stmt, ctx)
+        self.write("while " + result_test.out + ":", ctx)
         ctx.suite()[0].accept(self)        
         if len(ctx.suite())>1:
-            self.output.write("else:")
+            self.write("else:", ctx)
             ctx.suite()[1].accept(self)
 
 
@@ -361,15 +365,15 @@ class LDPythonRewriter(LDPythonVisitor):
         out = "async " if hasattr(ctx, "isasync") else ""
         exprlist = ctx.exprlist().accept(self)
         for stmt in exprlist.stmts:
-            self.output.write(stmt)
+            self.write(stmt, ctx)
         testlist = ctx.testlist().accept(self)
         for stmt in testlist.stmts:
-            self.output.write(stmt)
+            self.write(stmt, ctx)
         out += "for " + exprlist.out + " in " + testlist.out + ":"
-        self.output.write(out)
+        self.write(out, ctx)
         ctx.suite()[0].accept(self)        
         if len(ctx.suite())>1:
-            self.output.write("else:")
+            self.write("else:", ctx)
             ctx.suite()[1].accept(self)
 
 
@@ -378,19 +382,19 @@ class LDPythonRewriter(LDPythonVisitor):
         results_except_clause = [c.accept(self) for c in ctx.except_clause()]
         for result_except_clause in results_except_clause:
             for stmt in result_except_clause.stmts:
-                self.output.write(stmt)
-        self.output.write("try:")
+                self.write(stmt, ctx)
+        self.write("try:", ctx)
         ctx.suite()[0].accept(self)
         n = len(results_except_clause)
         for i in range(n):
-            self.output.write(results_except_clause[i].out + ":")
+            self.write(results_except_clause[i].out + ":", ctx)
             ctx.suite()[i+1].accept(self)
         for i in range(ctx.getChildCount()-7,ctx.getChildCount()):
             if ctx.getChild(i) == ctx.ELSE():
-                self.output.write("else:")
+                self.write("else:", ctx)
                 ctx.getChild(i+2).accept(self)
             elif ctx.getChild(i) == ctx.FINALLY():
-                self.output.write("finally:")
+                self.write("finally:", ctx)
                 ctx.getChild(i+2).accept(self)
                 
 
@@ -401,9 +405,9 @@ class LDPythonRewriter(LDPythonVisitor):
         results_with_item_out = [r.out for r in results_with_item]
         for result_with_item in results_with_item:
             for stmt in result_with_item.stmts:
-                self.output.write(stmt)
-        out += "with " + ",".join(results_with_item_out)
-        self.output.write(out)
+                self.write(stmt, ctx)
+        out += "with " + ",".join(results_with_item_out) + ":"
+        self.write(out, ctx)
         ctx.suite().accept(self)
 
 
@@ -425,11 +429,11 @@ class LDPythonRewriter(LDPythonVisitor):
             childResult = ctx.getChild(i).accept(self)
             out.append(childResult.out)
             for stmt in childResult.stmts:
-                self.output.write(stmt)
+                self.write(stmt, ctx)
         if hasattr(ctx, "decorators"):
             for decorator in ctx.decorators:
-                self.output.write(decorator)
-        self.output.write(' '.join(out))
+                self.write(decorator, ctx)
+        self.write(' '.join(out), ctx)
         ctx.suite().accept(self)
 
 
@@ -437,9 +441,7 @@ class LDPythonRewriter(LDPythonVisitor):
     def visitConstruct_template(self, ctx:LDPythonParser.Construct_templateContext):
         rdfgraph = "graph_" + secrets.token_hex(SIZE)
         result = Result(rdfgraph)
-
-        base = f"base='{self.base}'" if self.base else ""
-        result.stmts.append(f"{rdfgraph} = rdflib.Graph({base})")
+        result.stmts.append(f"{rdfgraph} = rdflib.Graph(base=__base__)")
 
         for prefix, uri in self.namespaces.items():
             result.stmts.append(f"{rdfgraph}.namespace_manager.bind('{prefix}', '{uri}')")
@@ -601,10 +603,7 @@ class LDPythonRewriter(LDPythonVisitor):
     def visitIri(self, ctx:LDPythonParser.IriContext):
         if ctx.IRIREF():
             uri = ctx.getText()[1:-1]
-            if self.base:
-                return Result(f"rdflib.URIRef('{uri}', '{self.base}')")
-            else:
-                return Result(f"rdflib.URIRef('{uri}')")
+            return Result(f"rdflib.URIRef('{uri}', __base__)")
         else:
             return ctx.prefixed_name().accept(self)
 
@@ -615,12 +614,9 @@ class LDPythonRewriter(LDPythonVisitor):
             offendingToken : Token = ctx.start 
             line = offendingToken.line
             column = offendingToken.column
-            raise Exception(f"Error at {line}:{column}: prefix {prefix} is undefined")
+            raise SyntaxError(f"line {line}:{column}: prefix '{prefix}:' is not defined")
         uri = self.namespaces[prefix][localName]
-        if self.base:
-            return Result(f"rdflib.URIRef('{uri}', '{self.base}')")
-        else:
-            return Result(f"rdflib.URIRef('{uri}')")
+        return Result(f"rdflib.URIRef('{uri}', __base__)")
 
 
     # Visit a parse tree produced by LDPythonParser#blank_node.
