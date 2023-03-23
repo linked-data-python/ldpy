@@ -49,7 +49,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=PACKAGES,
     include_package_data=True,
-    install_requires=["antlr4", "rdflib", "ideas"],
+    install_requires=["antlr4-python3-runtime", "rdflib", "ideas"],
     entry_points={
         "console_scripts": [
             "ldpy=ldpy.__main__:main",
