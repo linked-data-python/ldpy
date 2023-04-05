@@ -261,7 +261,7 @@ class LDPythonRewriter(LDPythonVisitor):
     def visitRaise_stmt(self, ctx:LDPythonParser.Raise_stmtContext):
         result = ctx.test()[0].accept(self)
         result.out = 'raise ' + result.out
-        if len(ctx.test()>1):
+        if len(ctx.test())>1 :
             result2 = ctx.test()[1].accept(self)
             result.out += ' from ' + result2.out
             result.stmts += result2.stmts
