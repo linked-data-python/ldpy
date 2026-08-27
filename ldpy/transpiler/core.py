@@ -45,6 +45,84 @@ STRING_PREFIXES = frozenset((
 _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 _LANGTAG_RE = re.compile(r"@([A-Za-z]+(?:-[A-Za-z0-9]+)*)")
 _NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_PYNAME_RE = re.compile(r"[^\W\d]\w*")      # identifiant Python (unicode)
+
+# --- Jeux de caractères Turtle (décision charsets, vérifiée par
+# --- tools/charsets.py contre une transcription indépendante des specs) :
+# --- tables EXACTES dans les îlots ; hors îlots, l'INTERSECTION avec les
+# --- identifiants Python (on ne peut pas capturer du Python valide).
+import bisect
+
+_PN_BASE_RANGES = (
+    (0x41, 0x5A), (0x61, 0x7A), (0xC0, 0xD6), (0xD8, 0xF6), (0xF8, 0x2FF),
+    (0x370, 0x37D), (0x37F, 0x1FFF), (0x200C, 0x200D), (0x2070, 0x218F),
+    (0x2C00, 0x2FEF), (0x3001, 0xD7FF), (0xF900, 0xFDCF), (0xFDF0, 0xFFFD),
+    (0x10000, 0xEFFFF),
+)
+_PN_EXTRA_RANGES = (          # PN_CHARS \ (PN_CHARS_BASE + '_' + chiffres)
+    (0x2D, 0x2D), (0xB7, 0xB7), (0x300, 0x36F), (0x203F, 0x2040),
+)
+
+
+def _in_ranges(c, ranges, _starts_cache={}):
+    key = id(ranges)
+    starts = _starts_cache.get(key)
+    if starts is None:
+        starts = _starts_cache[key] = [r[0] for r in ranges]
+    cp = ord(c)
+    i = bisect.bisect_right(starts, cp) - 1
+    return i >= 0 and cp <= ranges[i][1]
+
+
+def _pn_base(c):
+    """PN_CHARS_BASE de Turtle/SPARQL."""
+    return _in_ranges(c, _PN_BASE_RANGES)
+
+
+def _pn_char(c):
+    """PN_CHARS de Turtle/SPARQL."""
+    return (_pn_base(c) or c == "_" or c.isdigit() and c.isascii()
+            or _in_ranges(c, _PN_EXTRA_RANGES))
+
+
+def _py_id_continue(c):
+    return ("a" + c).isidentifier()
+
+
+def _ix_start(c):
+    """Début de nom HORS îlots : identifiant Python ∩ PN_CHARS_BASE|_."""
+    return c.isidentifier() and (_pn_base(c) or c == "_")
+
+
+def _ix_char(c):
+    """Continuation HORS îlots : identifiant Python ∩ PN_CHARS."""
+    return _py_id_continue(c) and _pn_char(c)
+
+
+def _scan_pn_prefix(text, i, n):
+    """PN_PREFIX exact de Turtle (points intérieurs, tirets…) ; retourne la
+    fin, ou i si pas de préfixe à cette position."""
+    if i >= n or not _pn_base(text[i]):
+        return i
+    j = i + 1
+    while j < n and (_pn_char(text[j]) or text[j] == "."):
+        j += 1
+    while j > i + 1 and text[j - 1] == ".":
+        j -= 1
+    return j
+
+
+def _scan_pn_local_island(text, i, n):
+    """PN_LOCAL de Turtle (sans ':' intérieur ni échappements PLX,
+    limitation documentée) ; points intérieurs, chiffres en tête."""
+    if i >= n or not (_pn_char(text[i]) or text[i] == "_"):
+        return i
+    j = i + 1
+    while j < n and (_pn_char(text[j]) or text[j] == "."):
+        j += 1
+    while j > i and text[j - 1] == ".":
+        j -= 1
+    return j
 
 
 def _is_iri_char(c):
@@ -413,16 +491,7 @@ class Transpiler:
 
     def _handle_name(self):
         t = self.text
-        m = _NAME_RE.match(t, self.i)
-        if m is None:  # identifiant non-ASCII : jamais un déclencheur d'îlot
-            j = self.i + 1
-            while j < self.n and _name_char(t[j]):
-                j += 1
-            self._copy(j - self.i)
-            self.operand = False
-            self.stmt_start = False
-            self.after_dot = False
-            return
+        m = _PYNAME_RE.match(t, self.i)
         name = m.group(0)
         nxt = t[m.end()] if m.end() < self.n else ""
         operand_here = self.operand
@@ -470,7 +539,7 @@ class Transpiler:
         # pname hors îlot : préfixe déclaré, ':' collé, partie locale
         if operand_here and nxt == ":" and name in self.prefixes:
             after = t[m.end() + 1] if m.end() + 1 < self.n else ""
-            if _name_start(after) or after == "{":
+            if _ix_start(after) or after == "{":
                 mark = self._begin_island()
                 gen = self._take_pname(in_island=False)
                 self._end_island("pname", mark, gen)
@@ -614,8 +683,12 @@ class Transpiler:
         Hors îlot : partie locale = identifiant (+ interpolations {expr}).
         En îlot : partie locale Turtle-like ([A-Za-z0-9_\\-.], sans '.' final)."""
         t = self.text
-        m = _NAME_RE.match(t, self.i)
-        prefix = self._take(len(m.group(0))) if m else ""
+        if in_island:
+            end = _scan_pn_prefix(t, self.i, self.n)
+        else:
+            m = _PYNAME_RE.match(t, self.i)
+            end = m.end() if m else self.i
+        prefix = self._take(end - self.i) if end > self.i else ""
         if self._peek() != ":":
             self._error("':' attendu dans le nom préfixé")
         self._take(1)
@@ -639,13 +712,15 @@ class Transpiler:
                 parts.append((False, expr))
                 continue
             if in_island:
-                ok = c != "" and (c.isalnum() or c in "_-.")
-                if ok and c == "." :
-                    # '.' final = ponctuation Turtle, pas partie locale
+                # PN_LOCAL exact (chiffres en tête, tirets, points intérieurs)
+                ok = c != "" and (_pn_char(c) or c == "_")
+                if not ok and c == ".":
+                    # '.' intérieur seulement (pas la ponctuation Turtle)
                     nc = self._peek(1)
-                    ok = nc != "" and (nc.isalnum() or nc in "_-.{")
+                    ok = nc != "" and (_pn_char(nc) or nc in ".{")
             else:
-                ok = c != "" and (c.isalnum() or c == "_")
+                # intersection identifiant Python ∩ PN_CHARS
+                ok = c != "" and _ix_char(c)
             if not ok:
                 break
             static.append(self._take(1))
@@ -684,14 +759,13 @@ class Transpiler:
         j = self._skip_ws_ahead(j)
         prefix = None
         if kind == "prefix":
-            nm = _NAME_RE.match(t, j)
-            prefix = nm.group(0) if nm else ""
-            j = nm.end() if nm else j
+            jend = _scan_pn_prefix(t, j, self.n)
+            prefix = t[j:jend]
+            j = jend
             if j >= self.n or t[j] != ":":
                 if looks_like_decl:
                     self._error("déclaration @prefix invalide — le nom de "
-                                "préfixe doit être un identifiant ASCII "
-                                "([A-Za-z_][A-Za-z0-9_]*) suivi de ':' "
+                                "préfixe doit suivre PN_PREFIX de Turtle "
                                 "(docs/reference/language.md)")
                 return False  # décorateur nommé prefix
             j = self._skip_ws_ahead(j + 1)
@@ -929,10 +1003,10 @@ class Transpiler:
                 self._take(1)
                 return _impure("%s.bnode((%s))" % (RUNTIME_ALIAS,
                                                    expr.strip()), gctx), False
-            m = _NAME_RE.match(t, self.i)
-            if not m:
+            end = _scan_pn_local_island(t, self.i, self.n)
+            if end == self.i:
                 self._error("étiquette de nœud anonyme attendue après '_:'")
-            label = self._take(len(m.group(0)))
+            label = self._take(end - self.i)
             return gctx.labeled_bnode(label), False
         if c == "{":
             self._take(1)

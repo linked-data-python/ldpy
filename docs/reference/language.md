@@ -120,10 +120,14 @@ within one `g{ ... }` island only.
 - PEP 701 f-strings (same-quote nesting) are unsupported, as in MicroPython.
 - The emitted code stays within a Python-3.4-level subset; source f-strings
   pass through unchanged.
-- Character sets: island trigger names (prefixes, `?vars`) are ASCII
-  identifiers; local parts follow Python's Unicode identifier rule (plus `-`
-  and `.` inside islands). Turtle's full `PN_CHARS` is wider in places (3 400
-  BMP characters, `-` and `·` included) and narrower in others (µ, ª): the
-  two sets are incomparable, and reconciling them exactly is an open design
-  question (design record 010). A declaration with a non-ASCII prefix is a
-  clear error, not a silent mangling.
+- Character sets — **inside islands, Turtle's exact `PN_CHARS` tables**:
+  prefixed names accept hyphenated and dotted prefixes (`o-pizza:Named`),
+  digit-initial locals (`ex:1a`), interior dots, `·` and combining marks;
+  **outside islands, the intersection** of Python identifiers and `PN_CHARS`
+  applies (a valid Python program can never be captured): `ex:café` works,
+  `-` stays subtraction, and Python-only identifier characters (µ, ª) end a
+  local part — Turtle could not write them either. A prefix that is not a
+  Python identifier (like `o-pizza`) is declarable and usable inside islands
+  only. Local parts do not support interior `:` or `%`/`\` escapes. These
+  rules are verified against an independent transcription of the specs by
+  `tools/charsets.py`.
