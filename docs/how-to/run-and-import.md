@@ -20,20 +20,23 @@ ldpy.install()
 # import mymod   (any mymod.ldpy on sys.path)
 ```
 
-To translate a traceback line number back to the `.ldpy` source, the hook
-keeps the language maps:
+Tracebacks need no translation: `.ldpy` code is compiled with the SOURCE
+file name and line numbers (mapped compilation — see the design note
+DESIGN_CHOICES/ldpy/011), so frames, `pdb` and `debugpy` speak `.ldpy`
+coordinates natively. The hook still keeps the language maps for tooling:
 
 ```python
-from ldpy.importer import MAPS, translate_lineno, install_excepthook
+from ldpy.importer import MAPS, translate_lineno
 ```
 
-`install_excepthook()` rewrites `.ldpy` frames automatically.
+(`ldpy.install_excepthook()` is kept as a no-op for compatibility.)
 
 ## Use the interactive console
 
 `python -m ldpy` with no argument opens a console in which islands work,
 multi-line graphs included; top-level `@prefix`/`@base` persist between
-entries. Ctrl-D exits.
+entries. Line editing, Tab completion and a persistent history
+(`~/.ldpy_history`) are available. Ctrl-D exits.
 
 ## Transpile programmatically
 

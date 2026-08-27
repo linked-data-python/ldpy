@@ -63,7 +63,8 @@ import ldpy
 ```
 
 - `ldpy.install()` / `ldpy.uninstall()` — the `.ldpy` import hook;
-- `ldpy.install_excepthook()` — traceback line translation;
+- `ldpy.install_excepthook()` — no-op kept for compatibility (tracebacks are
+  already in `.ldpy` coordinates since the mapped compilation, fiche 011);
 - `ldpy.transform_source(source, filename)` — v1-compatible shim returning
   `(code, prefixes, map)`;
 - `ldpy.transpile` — re-export of the above.

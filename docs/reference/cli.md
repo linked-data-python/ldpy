@@ -29,12 +29,16 @@ files in a tree are copied so mixed packages stay importable.
 ## `python -m ldpy.debug`
 
 ```text
+python -m ldpy.debug --run SOURCE [-- args...]
 python -m ldpy.debug SOURCE [-o OUT] [--listen H:P] [--wait-for-client]
                      [--breakpoints L1,L2,...] [-- args...]
 ```
 
-Builds the shadow then runs it — under debugpy when `--listen` is given.
-`--breakpoints` prints the `.ldpy`→shadow line table (JSON) and exits.
+`--run` executes SOURCE in-process, compiled in `.ldpy` coordinates
+(mapped compilation, fiche 011) — under pdb/debugpy, breakpoints bind on
+the `.ldpy` lines directly. Without `--run`: builds the shadow then runs
+it — under debugpy when `--listen` is given. `--breakpoints` prints the
+`.ldpy`→shadow line table (JSON) and exits.
 
 ## `python -m ldpy.lsp`
 

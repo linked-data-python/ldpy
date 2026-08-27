@@ -1,10 +1,24 @@
 # How to debug a `.ldpy` program
 
-Debugging works on the *shadow* Python files that `ldpy.build` materialises:
-they are real files on disk, so any Python debugger runs on them unchanged.
-The language map translates positions between the two.
+Since the mapped compilation (DESIGN_CHOICES/ldpy/011), `.ldpy` code objects
+carry the source file name and SOURCE line numbers: tracebacks, `pdb` and
+`debugpy` work on the `.ldpy` file directly. The *shadow* mode (a real
+generated `.py` on disk) remains for tooling and inspection.
 
-## From the command line
+## Direct mode (recommended)
+
+```text
+python -m ldpy.debug --run program.ldpy [-- args]   # run, .ldpy coordinates
+python -m pdb -m ldpy.debug --run program.ldpy      # break program.ldpy:7 works
+python -m debugpy --listen 127.0.0.1:5678 --wait-for-client \
+       -m ldpy.debug --run program.ldpy
+```
+
+Breakpoints are set on `.ldpy` lines; a breakpoint aimed *inside* a
+multi-line `g{ ... }` island only binds on the island's first line (the
+graph is one expression). This is what the VS Code extension launches on F5.
+
+## Shadow mode
 
 ```text
 python -m ldpy.debug program.ldpy                       # build + run shadow
@@ -40,4 +54,6 @@ translate to `None`.
 
 ## In VS Code
 
-Use **ldpy: Debug current file (shadow)** — it does the above for you.
+Press **F5** (debug type « Linked-Data Python ») : the extension starts a
+debugpy session on `python -m ldpy.debug --run` — breakpoints set in the
+`.ldpy` bind directly, no translation involved.
