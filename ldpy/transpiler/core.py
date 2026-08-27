@@ -59,6 +59,8 @@ def _name_char(c):
 
 
 class TranspileResult:
+    """Résultat de transpile() : code généré, map, préfixes, warnings."""
+
     def __init__(self, code, lmap, prefixes, base, warnings):
         self.code = code            # source Python généré
         self.map = lmap             # LanguageMap
@@ -217,6 +219,7 @@ class Transpiler:
     # ------------------------------------------------------------------
 
     def run(self):
+        """Transpile le fichier entier ; retourne un TranspileResult."""
         self._scan()
         self._close_copy()
         code = "".join(self.out)
@@ -664,6 +667,12 @@ class Transpiler:
         if not m:
             return False
         kind = m.group(1)
+        # une « déclaration ratée » (préfixe non ASCII, ponctuation absente…)
+        # ne doit PAS retomber silencieusement sur le cas décorateur : la fin
+        # de ligne déclencherait des îlots et produirait du code massacré.
+        eol = t.find("\n", self.i)
+        line_rest = t[self.i:eol if eol != -1 else self.n]
+        looks_like_decl = re.search(r"<[^<>\s]*>\s*\.\s*$", line_rest)
         # validation en avant (sans consommer)
         j = self.i + 1 + len(kind)
         j = self._skip_ws_ahead(j)
@@ -673,9 +682,17 @@ class Transpiler:
             prefix = nm.group(0) if nm else ""
             j = nm.end() if nm else j
             if j >= self.n or t[j] != ":":
+                if looks_like_decl:
+                    self._error("déclaration @prefix invalide — le nom de "
+                                "préfixe doit être un identifiant ASCII "
+                                "([A-Za-z_][A-Za-z0-9_]*) suivi de ':' "
+                                "(voir DESIGN_CHOICES/ldpy/010)")
                 return False  # décorateur nommé prefix
             j = self._skip_ws_ahead(j + 1)
         if j >= self.n or t[j] != "<":
+            if looks_like_decl:
+                self._error("déclaration @%s invalide — IRI '<...>' attendue"
+                            % kind)
             return False
         end = self._iriref_end(j)
         if end is None:

@@ -12,6 +12,8 @@ import json
 
 
 class Segment:
+    """Un segment de correspondance source/généré (copy, island:*, synthetic)."""
+
     __slots__ = ("kind", "src", "gen")
 
     def __init__(self, kind, src, gen):
@@ -23,6 +25,7 @@ class Segment:
         return "Segment(%r, src=%r, gen=%r)" % (self.kind, self.src, self.gen)
 
     def to_dict(self):
+        """Forme JSON du segment."""
         d = {"kind": self.kind, "gen": list(self.gen)}
         if self.src is not None:
             d["src"] = list(self.src)
@@ -49,12 +52,16 @@ def _translate_copy(range_from, range_to, line, col):
 
 
 class LanguageMap:
+    """Correspondance bidirectionnelle .ldpy <-> Python généré
+    (liste ordonnée de Segments ; voir DESIGN_CHOICES/ldpy/005)."""
+
     def __init__(self, source_name="<ldpy>", generated_name=None):
         self.source_name = source_name
         self.generated_name = generated_name
         self.segments = []  # ordonnés en positions gen ET src croissantes
 
     def add(self, kind, src, gen):
+        """Ajoute un segment (ignore les segments vides des deux côtés)."""
         # ignore les segments vides des deux côtés
         if src is not None and src[:2] == src[2:] and gen[:2] == gen[2:]:
             return
@@ -98,6 +105,7 @@ class LanguageMap:
     # -- sérialisation ------------------------------------------------------
 
     def to_dict(self):
+        """Forme JSON (version 1, format maison)."""
         return {
             "version": 1,
             "source": self.source_name,
@@ -106,10 +114,12 @@ class LanguageMap:
         }
 
     def to_json(self, **kw):
+        """Sérialise en JSON (kwargs passés à json.dumps)."""
         return json.dumps(self.to_dict(), **kw)
 
     @classmethod
     def from_dict(cls, d):
+        """Reconstruit une map depuis sa forme JSON."""
         m = cls(d.get("source", "<ldpy>"), d.get("generated"))
         for sd in d.get("segments", []):
             src = tuple(sd["src"]) if "src" in sd else None
@@ -118,6 +128,7 @@ class LanguageMap:
 
     @classmethod
     def from_json(cls, s):
+        """Reconstruit une map depuis une chaîne JSON."""
         return cls.from_dict(json.loads(s))
 
 

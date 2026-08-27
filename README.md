@@ -1,92 +1,76 @@
 # Linked-Data Python
 
-The Linked-Data Python package allow to run .ldpy scripts, run a ldpy interactive console, and import .ldpy library modules.
+Linked-Data Python (**ldpy**) extends the syntax of Python with the
+primitives of the Semantic Web: prefix and base declarations, IRIs, prefixed
+names, RDF literals, SPARQL-style variables, and RDF graphs written in
+Turtle's own notation — interpolated with arbitrary Python expressions.
 
 ![](https://gitlab.com/coswot/ldpy/-/raw/master/ldpyIcon.png)
 
-## Installation
+```text
+@prefix sosa: <http://www.w3.org/ns/sosa/> .
+@base <http://example.org/building/> .
 
-You can install the Linked-Data Python 
-```
-pip install linked-data-python
-```
-
-## The Linked-Data Python syntax
-
-The extension ["linked-data-python" for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=MaximeLefrancois.linked-data-python) enables the syntax highlighting for Linked-Data Python source files (extensions .ldpy).
-
-The Linked-Data Python grammar only uses grammar rules supported by MicroPython 1.18, and adds support for Linked Data languages primitives and constructs: 
-
-- prefix declaration statements: `@prefix ex: <http://example.org/> .`
-- base declaration statements: `@base <http://example.org/> .`
-- IRIs: `<http://example.org/>
-- Prefixed names: `ex:Person` 
-- RDF literals: `"hello"^^xsd:string`, `f"hello {world}"@en`
-- RDF graphs: `g{ ex:Person a owl:Class ; rdfs:label "Person"@en }`
-
-Furthermore, it allows:
-
-- formatted IRIs: `f<http://example/org/{ id }/>`
-- formatted nodes in RDF graphs: `f{ ex:Person ex:age ?{ age } }`
-
-Example programs are available in the `examples` folder of the source code repository.
-
-
-# How to use
-
-## In the command line
-
-The Linked-Data Python package is a command line application, name `ldpy`. It can also be run as `python -m ldpy`.
-
-```
-$ python -m ldpy -h
-usage: __main__.py [-h] [-v] [-l] [-p] [-s] [-i] [-m MODULE | source]
-
-ldpy extends the Python syntax with primitives from the Semantic Web such as namespaces, RDF terms, and RDF graphs.
-
-If no source is given, ldpy will start an interactive console.
-
-positional arguments:
-  source                Program read from script file. The file extension may be .ldpy or .py.
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -v, --version         only displays the current version.
-  -l, --debug-lexer     print the lexer output
-  -p, --debug-parser    print the parser output
-  -s, --show_changes    shows the transformed code before it is executed.
-  -i                    starts the interactive console after executing a source
-  -m MODULE, --module MODULE
-                        Run library module as a script. The module may be a .ldpy or a .py file.
+def observation(sensor, value):
+    return g{ f<sensor/{sensor}> a sosa:Sensor ;
+                  sosa:madeObservation [ sosa:hasSimpleResult {value} ] }
 ```
 
-## As a module
+`.ldpy` files are **transpiled to plain Python** by an *island parser*: the
+Python is copied verbatim (every valid Python file is a valid ldpy file,
+returned byte-identical), only the RDF islands are parsed and rewritten. The
+transpiler is ~1 500 lines with no parsing dependency and sustains
+56 000–110 000 source lines/s depending on island density.
 
-```
-import ldpy
+## Quick start
 
-ldpy.config.debug_ldpy = True # print transformed source  
-ldpy.config.debug_lexer = False # print tokens
-ldpy.config.debug_parser = False # print syntax tree
-
-ldpy.transform_source(source) # transform a Linked-Data Python source into a Python source
-```
-
-## Run from the source code
-
-### 1. Dependencies
-
-```
-# cd ldpy
-pip install -r requirements.txt
+```text
+pip install rdflib                      # runtime backend
+python -m ldpy program.ldpy             # run a file
+python -m ldpy                          # interactive console
+python -m ldpy.lsp                      # language server (LSP, stdio)
+python -m ldpy.debug program.ldpy       # debug via the shadow .py + debugpy
 ```
 
-### 2. Generate the parser
+From Python: `import ldpy; ldpy.install()` then `import yourmodule` finds
+`yourmodule.ldpy` on `sys.path`.
 
-Generate the `SWPythonLexer`, `SWPythonParser`, and `SWPythonVisitor` using ANTLR4:
+## Documentation
 
-```
-# cd ldpy
-antlr4 -o ldpy/rewriter/antlr -package ldpy.rewriter.antlr -Xexact-output-dir -Dlanguage=Python3 -visitor -no-listener grammars/LDPython.g4
-```
+The documentation lives in [`docs/`](docs/README.md), organised by the
+[Diátaxis](https://diataxis.fr/) framework:
 
+- **[Tutorial](docs/tutorials/getting-started.md)** — first steps, hands on.
+- **How-to guides** — [run & import](docs/how-to/run-and-import.md),
+  [VS Code](docs/how-to/use-vscode.md), [debugging](docs/how-to/debug.md),
+  [language server](docs/how-to/language-server.md).
+- **Reference** — [the language](docs/reference/language.md) (islands,
+  disambiguation, scoping), [CLI](docs/reference/cli.md),
+  [Python API](docs/reference/api.md),
+  [language map formats](docs/reference/language-map.md).
+- **Explanation** — [island parsing](docs/explanation/island-parsing.md),
+  [emission & semantics](docs/explanation/emission-and-semantics.md),
+  [tooling architecture](docs/explanation/tooling.md).
+
+Every code block in the documentation is executed by the test suite.
+
+## Tooling
+
+- **VS Code extension** (`vscode-ldpy`): highlighting (TextMate + LSP
+  semantic tokens), diagnostics as you type, completion/hover/definition,
+  run and debug commands.
+- **Language server**: dependency-free, LSP over stdio ; delegates Python
+  intelligence to an unmodified `pylsp` through the language map.
+- **Debugging**: `ldpy.build` materialises real `.py` shadow files (+ language
+  maps, JSON and Source Map v3) ; `debugpy` runs on them unchanged.
+- **Benchmark harness** (`bench/`): seeded random program generator and
+  reproducible throughput campaigns.
+
+## Project
+
+- Tests: `python -m pytest tests/ -q` (330+ tests: byte-identity over the
+  CPython stdlib, golden transpilation, RDF isomorphism against RDFLib as an
+  oracle, LSP end-to-end, executable documentation).
+- Licence: MIT. Author: Maxime Lefrançois (Mines Saint-Étienne).
+- The 2023 ANTLR-based release (v1, PyPI 0.0.4) is preliminary work,
+  superseded by this island-parsing rewrite on branch `v2-island-parser`.

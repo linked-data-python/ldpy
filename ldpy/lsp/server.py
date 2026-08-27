@@ -32,6 +32,8 @@ FORWARDED = {
 
 
 class Document:
+    """Un document .ldpy ouvert : texte, version, résultat de transpilation."""
+
     __slots__ = ("uri", "text", "version", "result",
                  "native_diags", "py_diags")
 
@@ -45,6 +47,8 @@ class Document:
 
 
 class LdpyServer:
+    """Le serveur LSP : couche native + délégation au backend Python."""
+
     def __init__(self, reader, writer, backend="pylsp", backend_argv=None):
         self.endpoint = Endpoint(reader, writer)
         self.docs = {}              # uri -> Document
@@ -131,6 +135,7 @@ class LdpyServer:
     # ------------------------------------------------------------- boucle
 
     def serve(self):
+        """Boucle principale : lit stdin, répartit, répond ; sort sur exit."""
         while True:
             try:
                 msg = read_message(self.endpoint.reader)

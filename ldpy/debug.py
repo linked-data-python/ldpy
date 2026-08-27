@@ -22,6 +22,7 @@ from ldpy.transpiler.linemap import LanguageMap
 
 
 def load_map(map_path):
+    """Charge une LanguageMap depuis un fichier .ldpy.map (JSON)."""
     with open(map_path, "r", encoding="utf-8") as f:
         return LanguageMap.from_json(f.read())
 

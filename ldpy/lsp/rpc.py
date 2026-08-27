@@ -10,7 +10,7 @@ import threading
 
 
 class RpcClosed(Exception):
-    pass
+    """Le flux JSON-RPC est terminé (EOF ou corps tronqué)."""
 
 
 def read_message(stream):
@@ -34,6 +34,7 @@ def read_message(stream):
 
 
 def write_message(stream, msg):
+    """Écrit un message avec son en-tête Content-Length."""
     body = json.dumps(msg, ensure_ascii=False).encode("utf-8")
     stream.write(b"Content-Length: %d\r\n\r\n" % len(body))
     stream.write(body)
@@ -54,10 +55,12 @@ class Endpoint:
         self._pending = {}          # id -> threading.Event + slot réponse
 
     def send(self, msg):
+        """Écrit un message brut (écriture sérialisée par verrou)."""
         with self._wlock:
             write_message(self.writer, msg)
 
     def notify(self, method, params=None):
+        """Envoie une notification (sans id)."""
         self.send({"jsonrpc": "2.0", "method": method,
                    "params": params if params is not None else {}})
 
@@ -92,6 +95,7 @@ class Endpoint:
         return False
 
     def respond(self, rid, result=None, error=None):
+        """Répond à la requête entrante d'id ``rid``."""
         msg = {"jsonrpc": "2.0", "id": rid}
         if error is not None:
             msg["error"] = error

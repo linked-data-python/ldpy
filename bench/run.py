@@ -40,6 +40,7 @@ def best_of(fn, reps):
 
 
 def v2_lps(src, reps=3):
+    """Débit v2 (lignes source/s), meilleur de ``reps``."""
     dt = best_of(lambda: transpile(src, "<bench>"), reps)
     return src.count("\n") / dt
 
@@ -63,6 +64,7 @@ def v1_transform():
 
 
 def v1_lps(src, reps=1):
+    """Débit v1 ANTLR (lignes source/s), ou None si indisponible/rejeté."""
     tf = v1_transform()
     if tf is None:
         return None
@@ -77,6 +79,7 @@ def v1_lps(src, reps=1):
 # ------------------------------------------------------------------ campagnes
 
 def campaign_density(quick):
+    """Débit en fonction de la densité d'îlots (0 -> 100 %)."""
     size = 500 if quick else 2000
     densities = [0.0, 0.25, 1.0] if quick else \
         [0.0, 0.05, 0.10, 0.25, 0.50, 0.75, 1.0]
@@ -95,6 +98,7 @@ def campaign_density(quick):
 
 
 def campaign_size(quick):
+    """Débit en fonction de la taille du fichier (linéarité attendue)."""
     sizes = [200, 2000] if quick else [200, 1000, 5000, 20000, 50000]
     rows = []
     for n in sizes:
@@ -108,6 +112,7 @@ def campaign_size(quick):
 
 
 def campaign_graphsize(quick):
+    """Débit en fonction du nombre de triplets par graphe (amortissement)."""
     triples = [1, 20] if quick else [1, 5, 20, 100]
     rows = []
     for t in triples:
@@ -139,6 +144,7 @@ def campaign_transparency(quick):
 
 
 def campaign_v1(quick):
+    """v1 (ANTLR) contre v2 sur les MÊMES fichiers v1-compatibles."""
     size = 200 if quick else 400
     densities = [0.25] if quick else [0.0, 0.10, 0.25, 0.50]
     seeds = [0] if quick else [0, 1]
@@ -166,6 +172,7 @@ def campaign_v1(quick):
 
 
 def write_csv(path, rows, cols):
+    """Écrit ``rows`` (dicts) en CSV, colonnes ``cols``."""
     with open(path, "w", encoding="utf-8") as f:
         f.write(",".join(cols) + "\n")
         for r in rows:

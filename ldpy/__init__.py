@@ -22,5 +22,7 @@ def transform_source(source, filename="<ldpy>"):
 
 
 def instantiateBGP(input, solutionMappings, initialGraph=None):
+    """Instancie un patron de graphe avec des solution mappings
+    (réexport de ldpy.runtime.instantiateBGP, compat v1)."""
     from ldpy.runtime import instantiateBGP as _f
     return _f(input, solutionMappings, initialGraph)

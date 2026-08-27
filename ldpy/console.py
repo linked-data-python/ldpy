@@ -24,6 +24,9 @@ BANNER = ("ldpy %s — console Linked-Data Python (Python %s)\n"
 
 
 class LdpyConsole(code.InteractiveConsole):
+    """Console interactive : transpile chaque entrée avant compilation ;
+    les @prefix/@base de niveau zéro persistent entre les entrées."""
+
     def __init__(self, locals=None, filename="<console>",
                  prefixes=None, base=None):
         if locals is None:
@@ -37,6 +40,8 @@ class LdpyConsole(code.InteractiveConsole):
         self._base = base
 
     def runsource(self, source, filename=None, symbol="single"):
+        """Transpile puis compile une entrée ; True = entrée incomplète
+        (îlot ou bloc Python non terminé), False = traitée."""
         filename = filename or self.filename
         t = Transpiler(source, filename, emit_prelude=False)
         t.prefixes = dict(self._prefixes)
@@ -68,6 +73,7 @@ class LdpyConsole(code.InteractiveConsole):
 
 
 def interact(locals=None, prefixes=None, base=None):
+    """Ouvre la console ldpy (bannière, Ctrl-D pour sortir)."""
     console = LdpyConsole(locals=locals, prefixes=prefixes, base=base)
     banner = BANNER % (ldpy.__version__, sys.version.split()[0])
     try:

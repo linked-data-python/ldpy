@@ -20,18 +20,24 @@ CODES = {}  # chemin .ldpy -> source Python généré
 
 
 class LdpyLoader(importlib.abc.SourceLoader):
+    """Chargeur de modules .ldpy : transpile puis compile la source."""
+
     def __init__(self, fullname, path):
         self.fullname = fullname
         self.path = path
 
     def get_filename(self, fullname):
+        """Chemin du fichier .ldpy (API importlib)."""
         return self.path
 
     def get_data(self, path):
+        """Octets bruts du fichier source (API importlib)."""
         with open(path, "rb") as f:
             return f.read()
 
     def source_to_code(self, data, path, *, _optimize=-1):
+        """Transpile la source ldpy puis compile le Python obtenu ;
+        enregistre la LanguageMap dans MAPS pour les tracebacks."""
         source = data.decode("utf-8") if isinstance(data, bytes) else data
         result = transpile(source, path)
         for w in result.warnings:
@@ -43,7 +49,10 @@ class LdpyLoader(importlib.abc.SourceLoader):
 
 
 class LdpyFinder(importlib.abc.MetaPathFinder):
+    """Finder sys.meta_path : résout `import mod` vers `mod.ldpy`."""
+
     def find_spec(self, fullname, path=None, target=None):
+        """Cherche <nom>.ldpy sur sys.path (ou le path du paquet)."""
         name = fullname.rpartition(".")[2]
         for entry in (path if path is not None else sys.path):
             if not isinstance(entry, str):
@@ -70,6 +79,7 @@ def install():
 
 
 def uninstall():
+    """Retire le finder .ldpy de sys.meta_path."""
     global _finder
     if _finder is not None:
         try:

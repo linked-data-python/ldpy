@@ -11,6 +11,7 @@ def shadow_uri(uri):
 
 
 def unshadow_uri(uri):
+    """URI .ldpy d'origine d'une URI d'ombre (inverse de shadow_uri)."""
     if uri.endswith(".shadow.py"):
         return uri[:-len(".shadow.py")]
     return uri
@@ -25,6 +26,7 @@ def pos_to_py(lmap, pos):
 
 
 def pos_to_ldpy(lmap, pos):
+    """Position LSP .py -> .ldpy (None si synthétique)."""
     r = lmap.to_src(pos["line"], pos["character"])
     if r is None:
         return None

@@ -27,6 +27,7 @@ class PythonBackend:
     # -- cycle de vie -------------------------------------------------------
 
     def start(self):
+        """Démarre le sous-processus et fait la poignée de main initialize."""
         self.proc = subprocess.Popen(
             self.argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL)
@@ -64,6 +65,7 @@ class PythonBackend:
             pass
 
     def stop(self):
+        """Arrêt propre (shutdown/exit), kill en dernier recours."""
         if not self.proc:
             return
         try:
@@ -75,21 +77,25 @@ class PythonBackend:
         self.proc = None
 
     def alive(self):
+        """Le sous-processus backend tourne-t-il encore ?"""
         return self.proc is not None and self.proc.poll() is None
 
     # -- documents fantômes -------------------------------------------------
 
     def open_shadow(self, uri, text, version=1):
+        """didOpen du document fantôme Python chez le backend."""
         self.endpoint.notify("textDocument/didOpen", {"textDocument": {
             "uri": uri, "languageId": "python",
             "version": version, "text": text}})
 
     def change_shadow(self, uri, text, version):
+        """didChange (synchronisation complète) du document fantôme."""
         self.endpoint.notify("textDocument/didChange", {
             "textDocument": {"uri": uri, "version": version},
             "contentChanges": [{"text": text}]})
 
     def close_shadow(self, uri):
+        """didClose du document fantôme."""
         self.endpoint.notify("textDocument/didClose",
                              {"textDocument": {"uri": uri}})
 
@@ -105,6 +111,8 @@ class PythonBackend:
 
 
 class BackendError(Exception):
+    """Erreur JSON-RPC renvoyée par le backend délégué."""
+
     def __init__(self, error):
         super().__init__(error.get("message", "erreur backend"))
         self.error = error
