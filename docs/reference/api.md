@@ -68,6 +68,22 @@ import ldpy
   `(code, prefixes, map)`;
 - `ldpy.transpile` — re-export of the above.
 
+## `ldpy.sparql`
+
+Deferred SPARQL expressions (the `e{...}` / `e<...>` islands compile to
+these). `Expression(sm)` / `.evaluate(sm)` return an RDF term or raise
+`SparqlError`; `.ebv(sm)` returns a Python bool. Mappings accept `str` or
+`Variable` keys and Python or RDF values.
+
+```python
+import sys
+from ldpy.transpiler import transpile
+code = transpile("adult = e{ ?age >= 18 }\n").code
+ns = {}
+exec(code, ns)
+assert ns["adult"].ebv(age=21) is True
+```
+
 ## `ldpy.debug`
 
 - `translate_breakpoints(map, lines_1based)` — `.ldpy` → shadow lines;
