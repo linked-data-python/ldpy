@@ -1,8 +1,9 @@
 """Sémantique @prefix/@base (fiche 004) et ordre d'évaluation (fiche 003)."""
 
+import pytest
 from rdflib import URIRef
 
-from ldpy.transpiler import transpile
+from ldpy.transpiler import transpile, LdpySyntaxError
 
 
 P = "@prefix ex: <http://example.org/ns#> .\n"
@@ -18,28 +19,32 @@ def test_prefix_lexical_scope_from_declaration(run):
     assert any("redéclaration" in str(w) for w in result.warnings)
 
 
-def test_prefix_in_if_false_still_resolves_statically(run):
+def test_prefix_in_if_false_scoped_to_block(run):
+    """Fiche 004 (révision) : la portée est le bloc — un préfixe déclaré dans
+    un if ne s'applique qu'au corps du if ; après le bloc, il est inconnu."""
     src = """\
 if False:
     @prefix cond: <http://cond/> .
-x = cond:y
+    y = cond:in_scope
+z = 1
 """
     g, result = run(src)
-    assert g["x"] == URIRef("http://cond/y")
-    assert any("bloc" in str(w) for w in result.warnings)
-    # la liaison runtime, elle, n'a pas eu lieu
-    assert "cond" not in g["__namespaces__"]
+    assert "cond" not in g["__namespaces__"]   # la branche n'a pas tourné
+    r2 = transpile("if False:\n    @prefix c: <http://c/> .\nx = c:y\n")
+    assert "x = c:y" in r2.code                # hors de portée : intact
+    assert any("hors de portée" in str(w) for w in r2.warnings)
 
 
-def test_prefix_in_loop_warns_once_per_declaration(run):
+def test_prefix_in_loop_scoped_to_block(run):
     src = """\
+results = []
 for i in range(3):
     @prefix loop: <http://loop/> .
-    x = loop:item
+    results.append(loop:item)
 """
     g, result = run(src)
-    assert g["x"] == URIRef("http://loop/item")
-    assert sum("bloc" in str(w) for w in result.warnings) == 1
+    assert g["results"] == [URIRef("http://loop/item")] * 3
+    assert result.warnings == []               # plus de warning « dans un bloc »
 
 
 def test_base_applies_lexically(run):

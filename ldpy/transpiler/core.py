@@ -95,6 +95,12 @@ class Transpiler:
         self.operand = True         # un opérande peut commencer ici
         self.stmt_start = True      # début de ligne logique (hors espaces)
         self.after_dot = False
+        # portée par bloc des @prefix/@base (fiche 004, révision 2026-08-27) :
+        # chaque déclaration empile (indent, kind, nom, avait_prev, prev) ;
+        # une instruction moins indentée dépile et restaure.
+        self._scope_stack = []
+        self._retired = {}          # préfixe sorti de portée -> ligne de décl.
+        self._prefix_col = {}       # préfixe -> indentation de sa déclaration
 
     # ------------------------------------------------------------------
     # primitives de position / émission
@@ -222,6 +228,9 @@ class Transpiler:
             c = t[self.i]
             if stops is not None and self.depth == entry_depth and c in stops:
                 return
+            if self.stmt_start and self.depth == 0 and not self._sub \
+                    and c not in " \t\r\n\\#":
+                self._unwind_scopes(self.src_col)
             if c == "\n":
                 self._copy(1)
                 if self.depth == 0:
@@ -244,7 +253,8 @@ class Transpiler:
                 self.operand = False
                 self.stmt_start = False
             elif c == "@":
-                if self.stmt_start and self._try_prefix_or_base():
+                if self.stmt_start and not self._sub \
+                        and self._try_prefix_or_base():
                     continue
                 self._copy(1)
                 self.operand = True
@@ -451,6 +461,14 @@ class Transpiler:
                 gen = self._take_pname(in_island=False)
                 self._end_island("pname", mark, gen)
                 return
+        # préfixe sorti de portée : le texte reste du Python (R3), on avertit
+        if operand_here and nxt == ":" and name not in self.prefixes \
+                and name in self._retired:
+            after = t[m.end() + 1] if m.end() + 1 < self.n else ""
+            if _name_start(after) or after == "{":
+                self._warn("le préfixe '%s:' est hors de portée ici (sa "
+                           "déclaration est dans un bloc terminé) ; le texte "
+                           "est laissé tel quel" % name)
 
         self._copy(len(name))
         if name in KEYWORDS:
@@ -661,27 +679,50 @@ class Transpiler:
         if k >= self.n or t[k] != ".":
             return False
         # consommation effective
-        indented = self.src_col > 0
+        decl_col = self.src_col          # indentation de la déclaration
         mark = self._begin_island()
         iri = t[j + 1:end - 1]
         self._take(k + 1 - self.i)
         resolved = self._resolve(iri)
         if kind == "base":
+            if decl_col > 0:
+                self._scope_stack.append((decl_col, "base", None,
+                                          True, self.base))
             self.base = resolved
             gen = "__base__ = %r" % resolved
         else:
+            # redéclaration au même niveau après usage : warning ;
+            # shadowing dans un bloc plus profond : légitime, silencieux.
             if prefix in self.prefixes and prefix in self._prefix_used \
-                    and self.prefixes[prefix] != resolved:
+                    and self.prefixes[prefix] != resolved \
+                    and decl_col <= self._prefix_col.get(prefix, 0):
                 self._warn("redéclaration du préfixe '%s:' après usage "
                            "(nouvelle IRI : %s)" % (prefix, resolved))
+            if decl_col > 0:
+                self._scope_stack.append((decl_col, "prefix", prefix,
+                                          prefix in self.prefixes,
+                                          (self.prefixes.get(prefix),
+                                           self._prefix_col.get(prefix))))
             self.prefixes[prefix] = resolved
+            self._prefix_col[prefix] = decl_col
             gen = "__namespaces__[%r] = %s.Namespace(%r)" % (
                 prefix, RUNTIME_ALIAS, resolved)
-        if indented:
-            self._warn("'@%s' dans un bloc : sa portée reste lexicale "
-                       "(fichier entier), pas dynamique" % kind)
         self._end_island(kind, mark, gen)
         return True
+
+    def _unwind_scopes(self, col):
+        """Ferme les portées des déclarations plus indentées que l'instruction
+        qui commence à la colonne `col` (fin de leur bloc)."""
+        while self._scope_stack and col < self._scope_stack[-1][0]:
+            _, kind, name, had, prev = self._scope_stack.pop()
+            if kind == "base":
+                self.base = prev
+            elif had:
+                self.prefixes[name], self._prefix_col[name] = prev
+            else:
+                self.prefixes.pop(name, None)
+                self._prefix_col.pop(name, None)
+                self._retired.setdefault(name, self.src_line)
 
     def _skip_ws_ahead(self, j):
         t = self.text
