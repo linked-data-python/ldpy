@@ -184,3 +184,20 @@ def test_namespace_bindings_on_graph(run, prefixes):
 def test_nested_graph_via_fnode(run, prefixes):
     g, _ = run(prefixes + "gr = g{ ex:s ex:n ?{ len(g{ ex:a ex:b 1 }) } }\n")
     assert (URIRef(EX + "s"), URIRef(EX + "n"), Literal(1)) in g["gr"]
+
+
+def test_namespace_manager_shared_and_invalidated(run, prefixes):
+    """Optimisation issue de l'étude KGC : le NamespaceManager cosmétique est
+    partagé entre les graphes d'un même état de __namespaces__ (lier les
+    préfixes coûtait ~100x la création du graphe, payé à chaque tour de
+    boucle), et invalidé quand la table change (portée par bloc)."""
+    src = prefixes + """\
+gs = [ g{ ex:s ex:p {i} } for i in range(50) ]
+nm_ids = {id(x.namespace_manager) for x in gs}
+@prefix zz: <http://zz/> .
+g2 = g{ zz:a zz:b 1 }
+has_zz = dict(g2.namespace_manager.namespaces()).get("zz")
+"""
+    g, _ = run(src)
+    assert len(g["nm_ids"]) == 1                  # partagé
+    assert str(g["has_zz"]) == "http://zz/"       # invalidé puis reconstruit

@@ -76,15 +76,42 @@ def firi(*parts, base=None):
     return URIRef(iri)
 
 
+_NM_CACHE = {}
+
+
+def _nm_for(namespaces):
+    """NamespaceManager COSMÉTIQUE partagé pour un état donné du dict
+    __namespaces__ : lier les préfixes coûte ~100x la création du graphe,
+    et un g{...} évalué dans une boucle paie ce prix à chaque tour
+    (constat de l'étude KGC). Le manager est mis en cache et rattaché aux
+    graphes produits — même motif de partage qu'instantiateBGP. Le cache est
+    invalidé par instantané du contenu (l'identité seule ne suffit pas :
+    portée par bloc, fiche 004)."""
+    if not namespaces:
+        return None
+    key = id(namespaces)
+    snap = tuple(sorted((p, str(u)) for p, u in namespaces.items()))
+    hit = _NM_CACHE.get(key)
+    if hit is not None and hit[0] == snap:
+        return hit[1]
+    holder = rdflib.Graph()
+    nm = holder.namespace_manager
+    for prefix, ns in namespaces.items():
+        nm.bind(prefix, ns, replace=True)
+    _NM_CACHE[key] = (snap, nm)
+    return nm
+
+
 def graph(namespaces, base, *triples):
     """Construit un rdflib.Graph à partir de triplets aplatis.
 
-    namespaces : dict prefix -> Namespace (liaisons de sérialisation) ;
-    base : IRI de base lexicale (str ou None) ;
+    namespaces : dict prefix -> Namespace (liaisons de sérialisation,
+    partagées via _nm_for) ; base : IRI de base lexicale (str ou None) ;
     triples : tuples (s, p, o) pouvant contenir des placeholders bn(i)."""
     g = rdflib.Graph(base=base)
-    for prefix, ns in (namespaces or {}).items():
-        g.namespace_manager.bind(prefix, ns, replace=True)
+    nm = _nm_for(namespaces)
+    if nm is not None:
+        g.namespace_manager = nm
     bnodes = {}
     slots = {}
 
