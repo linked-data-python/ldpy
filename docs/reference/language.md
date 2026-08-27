@@ -16,11 +16,18 @@ valid Python program is a valid ldpy program with unchanged meaning.
 | Formatted IRI | `f<http://e/{expr}/y>` | `URIRef` built by interpolation |
 | Formatted node | `f{expr}`, `?{expr}` | any value, coerced to an RDF term |
 | Graph | `g{ ex:s a ex:C ; ex:p 1, "x" }` | `rdflib.Graph` |
+| Data-keyed blank node | `_:{expr}` *(in graphs)* | `BNode` with deterministic identity |
 
 Inside `g{ ... }` the notation is Turtle's: `a` for `rdf:type`, `;` and `,`
 lists, `[ ... ]` blank-node property lists, `( ... )` collections, `_:b`
 labels (scoped to the island), `#` comments — plus `{expr}` interpolations in
-any term position.
+any term position. An interpolation may carry a glued RDF suffix —
+`{expr}@en` (language tag) or `{expr}^^xsd:integer` (datatype) — and
+`_:{expr}` denotes a blank node whose identity derives from the value:
+equal values give the same node, across graphs and across sources (the
+R2RML deduplication/join idiom). A tuple key is canonically encoded and
+hashed, so `_:{(fname, lname)}` cannot collide with `_:{fname + lname}`;
+unlike `_:b` labels, which stay fresh at each evaluation.
 
 ```ldpy
 @prefix ex:  <http://example.org/ns#> .

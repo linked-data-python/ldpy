@@ -862,7 +862,7 @@ class Transpiler:
             if self._peek() != "}":
                 self._error("'}' attendu pour fermer ?{...}")
             self._take(1)
-            return _impure("%s.node((%s))" % (RUNTIME_ALIAS, expr.strip()), gctx)
+            return _impure(self._interp_with_suffix(expr), gctx)
         m = _NAME_RE.match(self.text, self.i)
         if not m:
             self._error("nom de variable attendu après '%s'" % sigil)
@@ -914,6 +914,15 @@ class Transpiler:
             return head, True
         if c == "_" and self._peek(1) == ":":
             self._take(2)
+            if self._peek() == "{":
+                # _:{expr} : bnode à identité déterministe issue des données
+                self._take(1)
+                expr = self._scan_embedded_expr("}")
+                if self._peek() != "}":
+                    self._error("'}' attendu pour fermer _:{...}")
+                self._take(1)
+                return _impure("%s.bnode((%s))" % (RUNTIME_ALIAS,
+                                                   expr.strip()), gctx), False
             m = _NAME_RE.match(t, self.i)
             if not m:
                 self._error("étiquette de nœud anonyme attendue après '_:'")
@@ -925,9 +934,10 @@ class Transpiler:
             if self._peek() != "}":
                 self._error("'}' attendu")
             self._take(1)
-            return _impure("%s.node((%s))" % (RUNTIME_ALIAS, expr.strip()), gctx), False
+            return _impure(self._interp_with_suffix(expr), gctx), False
         if c in "?$":
-            return self._g_var(gctx), False
+            term = self._g_var(gctx)
+            return term, False
         if c == "<":
             iri = self._take_iriref()
             return "%s.URIRef(%r)" % (RUNTIME_ALIAS, self._resolve(iri)), False
@@ -957,6 +967,24 @@ class Transpiler:
                 return RUNTIME_ALIAS + ".node(False)", False
             return _maybe_impure(self._take_pname(in_island=True), gctx), False
         self._error("terme RDF attendu")
+
+    def _interp_with_suffix(self, expr):
+        """Terme interpolé de graphe, avec suffixe RDF optionnel COLLÉ :
+        {expr}@lang -> Literal(expr, lang=...) ; {expr}^^dt -> Literal(expr,
+        datatype=dt) ; sinon node(expr). (Accepté par Maxime le 2026-08-27 —
+        friction relevée par l'étude KGC, cas RMLTC0015a.)"""
+        expr = expr.strip()
+        if self._peek() == "@":
+            m = _LANGTAG_RE.match(self.text, self.i)
+            if m:
+                self._take(m.end() - self.i)
+                return "%s.Literal((%s), lang=%r)" % (
+                    RUNTIME_ALIAS, expr, m.group(1))
+        if self.text[self.i:self.i + 2] == "^^":
+            self._take(2)
+            dt = self._parse_term_after_hats()
+            return "%s.Literal((%s), datatype=%s)" % (RUNTIME_ALIAS, expr, dt)
+        return "%s.node((%s))" % (RUNTIME_ALIAS, expr)
 
     def _g_literal(self):
         """Chaîne (± préfixe f/r/b) ± @lang / ^^type, dans un graphe."""

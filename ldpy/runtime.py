@@ -23,7 +23,7 @@ _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 
 __all__ = [
     "RDF", "URIRef", "BNode", "Literal", "Variable", "Namespace",
-    "node", "bn", "slot", "firi", "graph", "instantiateBGP",
+    "node", "bn", "slot", "firi", "bnode", "graph", "instantiateBGP",
 ]
 
 
@@ -59,6 +59,37 @@ class slot:
 
     def __repr__(self):
         return "slot(%d)" % self.index
+
+
+_BNODE_SAFE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_\-]*\Z")
+
+
+def bnode(value):
+    """Nœud anonyme à IDENTITÉ DÉTERMINISTE issue des données : l'îlot
+    ``_:{expr}`` (fiche 003, révision).
+
+    - un BNode passe tel quel ;
+    - une chaîne qui est une étiquette sûre (lettres/chiffres/_/-) devient
+      l'étiquette elle-même : ``_:{key}`` == BNode(key) ;
+    - tout le reste — tuples notamment — est encodé canoniquement puis haché
+      (question de Maxime sur les collisions : ``_:{(fname, lname)}`` ne
+      collisionne pas avec ``_:{fname + lname}``, et l'étiquette produite
+      reste sérialisable en N-Triples).
+
+    À la différence de ``_:label`` (frais à chaque évaluation, portée
+    l'îlot), ``_:{expr}`` désigne LE MÊME nœud partout où la valeur est
+    égale — c'est l'idiome de déduplication et de jointure par bnode de
+    R2RML (cas RMLTC0012a/b)."""
+    if isinstance(value, BNode):
+        return value
+    if isinstance(value, str) and _BNODE_SAFE.match(value):
+        return BNode(value)
+    if isinstance(value, tuple):
+        canon = "\x1f".join("%d:%s" % (len(str(p)), p) for p in value)
+    else:
+        canon = "%s:%r" % (type(value).__name__, value)
+    import hashlib
+    return BNode("b" + hashlib.md5(canon.encode("utf-8")).hexdigest())
 
 
 def node(value):

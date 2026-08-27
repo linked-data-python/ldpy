@@ -62,7 +62,7 @@ def observation(sensor_id, value):
 
 graphs = [observation(i, 20 + i) for i in range(3)]
 assert [len(x) for x in graphs] == [3, 3, 3]
-print(len(x))
+print(len(graphs[0]))
 ```
 
 `f<...>` is a *formatted IRI* — the counterpart of Python's f-string for IRIs.

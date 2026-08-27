@@ -201,3 +201,106 @@ has_zz = dict(g2.namespace_manager.namespaces()).get("zz")
     g, _ = run(src)
     assert len(g["nm_ids"]) == 1                  # partagé
     assert str(g["has_zz"]) == "http://zz/"       # invalidé puis reconstruit
+
+
+def test_interpolated_bnode_deterministic_identity(run, prefixes):
+    """_:{expr} : identité déterministe issue des données — l'idiome de
+    déduplication/jointure de R2RML (cas RMLTC0012a/b de l'étude KGC)."""
+    src = prefixes + """\
+rows = [("Bob", "Smith", "30"), ("Sue", "Jones", "20"), ("Bob", "Smith", "30")]
+gr = Graph = None
+from rdflib import Graph
+gr = Graph()
+for fname, lname, amount in rows:
+    gr += g{ _:{fname + lname + amount} ex:amount {amount} }
+subjects = {s for s, _, _ in gr}
+"""
+    g, _ = run(src)
+    assert len(g["subjects"]) == 2          # doublon fusionné
+    assert len(g["gr"]) == 2
+
+
+def test_interpolated_bnode_tuple_avoids_collision(run, prefixes):
+    """Question de Maxime : un tuple comme clé — encodage canonique haché,
+    pas de collision entre ("Bob","bySmith") et ("Bobby","Smith"), et
+    l'étiquette produite reste sérialisable."""
+    src = prefixes + """\
+a = g{ _:{("Bob", "bySmith")} ex:p 1 }
+b = g{ _:{("Bobby", "Smith")} ex:p 1 }
+c = g{ _:{("Bob", "bySmith")} ex:q 2 }
+sa = next(iter(a))[0]
+sb = next(iter(b))[0]
+sc = next(iter(c))[0]
+nt = (a + c).serialize(format="nt")
+"""
+    g, _ = run(src)
+    assert g["sa"] != g["sb"]               # pas de collision
+    assert g["sa"] == g["sc"]               # déterministe
+    assert "_:b" in g["nt"]                 # étiquette N-Triples valide
+
+
+def test_interpolated_bnode_vs_static_label(run, prefixes):
+    """_:b statique = frais à chaque évaluation (portée l'îlot) ;
+    _:{'b'} = identité stable inter-évaluations. Les deux coexistent."""
+    src = prefixes + """\
+f1 = g{ _:b ex:p 1 }
+f2 = g{ _:b ex:p 1 }
+s1 = g{ _:{'b'} ex:p 1 }
+s2 = g{ _:{'b'} ex:p 1 }
+fresh = next(iter(f1))[0] != next(iter(f2))[0]
+stable = next(iter(s1))[0] == next(iter(s2))[0]
+"""
+    g, _ = run(src)
+    assert g["fresh"] and g["stable"]
+
+
+def test_interpolated_bnode_shared_subject_single_eval(run, prefixes):
+    src = prefixes + """\
+calls = []
+def key():
+    calls.append(1)
+    return "k1"
+gr = g{ _:{key()} ex:p 1 ; ex:q 2 }
+"""
+    g, _ = run(src)
+    assert len(g["calls"]) == 1
+    assert len({s for s, _, _ in g["gr"]}) == 1
+
+
+def test_interp_language_suffix(run, prefixes):
+    """{expr}@lang — accepté par Maxime (friction RMLTC0015a)."""
+    src = prefixes + """\
+name = "Irlande"
+gr = g{ ex:IE ex:label {name}@fr, {name.upper()}@fr-CA ; ex:n {name} }
+"""
+    g, _ = run(src)
+    vals = {o for _, _, o in g["gr"]}
+    assert Literal("Irlande", lang="fr") in vals
+    assert Literal("IRLANDE", lang="fr-CA") in vals
+    assert Literal("Irlande") in vals       # sans suffixe : node() inchangé
+
+
+def test_interp_datatype_suffix(run, prefixes):
+    src = prefixes + """\
+v = "42"
+gr = g{ ex:s ex:p {v}^^xsd:integer ; ex:q ?{v}^^<http://e/dt> }
+"""
+    g, _ = run(src)
+    vals = {o for _, _, o in g["gr"]}
+    assert Literal("42", datatype=URIRef(
+        "http://www.w3.org/2001/XMLSchema#integer")) in vals
+    assert Literal("42", datatype=URIRef("http://e/dt")) in vals
+
+
+def test_matmul_with_spaces_still_python_in_expr(run, prefixes):
+    """Le suffixe exige l'adjacence : '{expr} @ y' reste du Python (matmul
+    DANS l'expression), et un @ SÉPARÉ après l'accolade est une erreur ldpy
+    claire, pas un langtag silencieux."""
+    src = prefixes + """\
+class M:
+    def __matmul__(self, other):
+        return 7
+gr = g{ ex:s ex:p {M() @ M()} }
+"""
+    g, _ = run(src)
+    assert (None, None, Literal(7)) in g["gr"]
