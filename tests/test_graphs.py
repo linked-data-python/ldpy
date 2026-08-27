@@ -343,3 +343,46 @@ n = len(target)
     assert g["n"] == 10
     assert g["flushed_before"] is False        # jamais matérialisé...
     assert g["still_lazy"] is True             # ...même après le +=
+
+
+def test_emitted_graph_add_is_lazy_and_dedups(run, prefixes):
+    src = prefixes + """\
+g1 = g{ ex:a ex:p 1 . ex:c ex:p 3 }
+g2 = g{ ex:b ex:p 2 . ex:c ex:p 3 }
+gs = g1 + g2
+lazy = gs._pending is not None
+n = len(gs)                       # union : ex:c ex:p 3 une seule fois
+left_lazy = g1._pending is not None
+"""
+    g, _ = run(src)
+    assert g["lazy"] is True                   # somme sans matérialisation
+    assert g["n"] == 3
+    assert g["left_lazy"] is True              # opérandes intacts
+
+
+def test_emitted_graph_sum_stays_lazy(run, prefixes):
+    src = prefixes + """\
+from rdflib import Graph
+gs = sum((g{ ex:s{i} ex:p {i} } for i in range(50)), Graph())
+lazy = gs._pending is not None
+n = len(gs)
+ttl = gs.serialize(format="turtle")            # matérialise, avec préfixes
+"""
+    g, _ = run(src)
+    assert g["lazy"] is True                   # Graph() + g{} passe par __radd__
+    assert g["n"] == 50
+    assert "ex:s49" in g["ttl"]
+
+
+def test_emitted_graph_add_after_flush_still_correct(run, prefixes):
+    src = prefixes + """\
+g1 = g{ ex:a ex:p 1 }
+_ = g1.serialize(format="nt")                  # matérialise g1
+g2 = g{ ex:b ex:p 2 }
+gs = g1 + g2                                   # repli rdflib
+n = len(gs)
+gs2 = g2 + g1                                  # paresseux + matérialisé
+n2 = len(gs2)
+"""
+    g, _ = run(src)
+    assert g["n"] == 2 and g["n2"] == 2

@@ -237,6 +237,37 @@ class _EmittedGraph(rdflib.Graph):
             return len(dict.fromkeys(pending))
         return super().__len__()
 
+    def _merged(self, left, right):
+        """Nouveau graphe paresseux contenant left puis right (listes)."""
+        g = _EmittedGraph(base=self.base,
+                          identifier=rdflib.URIRef("urn:x-ldpy:g%d"
+                                                   % next(_graph_ids)))
+        nm = self._Graph__namespace_manager
+        if nm is not None:
+            g.namespace_manager = nm
+        g._pending = left + right
+        return g
+
+    def __add__(self, other):
+        """g1 + g2 paresseux : concatène les listes en attente, sans store.
+
+        L'addition compositionnelle (patrons qui retournent des sommes de
+        g{...}) devient O(total) au lieu de O(n²) en insertions de store ;
+        la déduplication (sémantique d'union) reste assurée au flush."""
+        pending = self._pending
+        if pending is not None and isinstance(other, rdflib.Graph):
+            if type(other) is _EmittedGraph and other._pending is not None:
+                return self._merged(pending, other._pending)
+            return self._merged(pending, list(other))
+        return super().__add__(other)
+
+    def __radd__(self, other):
+        """Graph() + g{...} (et donc sum(...)) sans matérialisation."""
+        pending = self._pending
+        if pending is not None and isinstance(other, rdflib.Graph):
+            return self._merged(list(other), pending)
+        return NotImplemented
+
 
 def graph(namespaces, base, *triples):
     """Construit un rdflib.Graph (sous-type paresseux) à partir de triplets

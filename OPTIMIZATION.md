@@ -54,6 +54,20 @@ matérialiser, donc `+=` transfère directement. Invisible sémantiquement
 testés) ; le couplage au nom privé de rdflib est assumé et gardé par la
 suite de tests.
 
+### 4. Addition paresseuse de graphes émis (`__add__`/`__radd__`)
+
+Motivé par l'étude OTTR (style compositionnel : des patrons-fonctions qui
+retournent des SOMMES de `g{...}`). `g1 + g2` payait la création d'un graphe
+rdflib + deux insertions de store complètes ; `sum(gs, Graph())` était
+quadratique (chaque étape re-matérialisait l'accumulé). Désormais, tant que
+les opérandes sont en attente, `+` concatène les listes de triplets (nouveau
+graphe paresseux, O(n)) ; `__radd__` couvre `Graph() + g{...}` — donc
+`sum()` — car Python essaie d'abord l'opérande de la sous-classe. La
+sémantique d'union (déduplication) reste assurée au flush/itération ;
+repli rdflib dès qu'un opérande est matérialisé. Mesure (banc OTTR,
+5 000 instances NamedPizza, processus froid) : 49,2 s → 4,3 s (×11,4),
+à parité avec Lutra (3,9 s) pour 6,3× moins de mémoire.
+
 ## Pistes explorées non retenues (à ce stade)
 
 - **Cache de `Literal`** : les valeurs viennent des données (illimitées) —
