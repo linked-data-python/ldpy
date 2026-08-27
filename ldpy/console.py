@@ -10,13 +10,46 @@ par bloc oblige, portée par bloc).
     $ python -m ldpy -i script.ldpy       # exécute puis ouvre la console
 """
 
+import atexit
 import code
 import codeop
+import os
 import sys
 
 import ldpy
 from ldpy.transpiler import LdpySyntaxError
 from ldpy.transpiler.core import Transpiler, PRELUDE
+
+HISTORY_FILE = os.path.join(os.path.expanduser("~"), ".ldpy_history")
+HISTORY_LENGTH = 1000
+
+
+def _setup_readline(locals):
+    """Édition de ligne (flèches, Ctrl-A/E...), historique persistant et
+    complétion Tab sur les noms de la console. Sans effet si le module
+    readline n'existe pas (Windows sans pyreadline)."""
+    try:
+        import readline
+        import rlcompleter
+    except ImportError:
+        return
+    readline.set_completer(rlcompleter.Completer(locals).complete)
+    if "libedit" in (getattr(readline, "__doc__", "") or ""):
+        readline.parse_and_bind("bind ^I rl_complete")   # macOS libedit
+    else:
+        readline.parse_and_bind("tab: complete")
+    try:
+        readline.read_history_file(HISTORY_FILE)
+    except OSError:
+        pass
+    readline.set_history_length(HISTORY_LENGTH)
+
+    def _save():
+        try:
+            readline.write_history_file(HISTORY_FILE)
+        except OSError:
+            pass
+    atexit.register(_save)
 
 BANNER = ("ldpy %s — console Linked-Data Python (Python %s)\n"
           "Les îlots RDF sont acceptés : @prefix, <iri>, ex:nom, g{ ... }, ?v")
@@ -74,6 +107,7 @@ class LdpyConsole(code.InteractiveConsole):
 def interact(locals=None, prefixes=None, base=None):
     """Ouvre la console ldpy (bannière, Ctrl-D pour sortir)."""
     console = LdpyConsole(locals=locals, prefixes=prefixes, base=base)
+    _setup_readline(console.locals)
     banner = BANNER % (ldpy.__version__, sys.version.split()[0])
     try:
         console.interact(banner=banner, exitmsg="")
