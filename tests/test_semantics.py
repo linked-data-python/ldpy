@@ -131,3 +131,42 @@ def test_prelude_after_future_import():
 def test_prelude_absent_without_islands():
     src = "x = 1\n"
     assert "ldpy.runtime" not in transpile(src).code
+
+
+def test_shared_interpolated_subject_evaluated_once(run):
+    """Un sujet interpolé partagé par une liste de propriétés ne doit être
+    évalué qu'une fois (sinon chaque triplet aurait un sujet différent)."""
+    src = P + """\
+calls = []
+def sid():
+    calls.append(1)
+    return "s%d" % len(calls)
+gr = g{ ex:{sid()} ex:p 1 ; ex:q 2 ; ex:r 3 }
+subjects = {str(s) for s, _, _ in gr}
+"""
+    g, _ = run(src)
+    assert len(g["calls"]) == 1
+    assert len(g["subjects"]) == 1
+    assert len(g["gr"]) == 3
+
+
+def test_shared_fnode_object_evaluated_once(run):
+    src = P + """\
+n = []
+def v():
+    n.append(1)
+    return len(n)
+gr = g{ ex:a ex:p ?{ v() } . ex:b ex:q ?{ v() } }
+"""
+    g, _ = run(src)
+    assert len(g["n"]) == 2   # deux occurrences distinctes : deux évaluations
+
+
+def test_repeated_subject_still_one_bnode(run):
+    src = P + """\
+sensor = "t1"
+gr = g{ f<http://e/{sensor}> ex:p 1 ; ex:q 2 }
+subjects = {str(s) for s, _, _ in gr}
+"""
+    g, _ = run(src)
+    assert g["subjects"] == {"http://e/t1"}

@@ -481,6 +481,12 @@ class Transpiler:
     def _take_iriref(self):
         end = self._iriref_end(self.i)
         if end is None:
+            j = self.i + 1
+            while j < self.n and self.text[j] not in "\n>":
+                j += 1
+            if "{" in self.text[self.i:j]:
+                self._error("interpolation dans une IRI : écrire f<...{expr}...> "
+                            "(IRI formatée) et non <...{expr}...>")
             self._error("IRI '<...>' non terminée")
         return self._take(end - self.i)[1:-1]
 
@@ -706,6 +712,7 @@ class Transpiler:
         if self._peek() != "}":
             self._error("'}' attendu pour fermer g{...}")
         self._take(1)
+        triples = _share_impure(triples, gctx)
         base_repr = repr(self.base) if self.base else "None"
         args = ["__namespaces__", base_repr]
         args += ["(%s, %s, %s)" % tr for tr in triples]
@@ -769,22 +776,22 @@ class Transpiler:
             if self._peek() != "}":
                 self._error("'}' attendu")
             self._take(1)
-            return "%s.node((%s))" % (RUNTIME_ALIAS, expr.strip())
+            return _impure("%s.node((%s))" % (RUNTIME_ALIAS, expr.strip()), gctx)
         if c in "?$":
-            return self._g_var()
+            return self._g_var(gctx)
         if c == "<":
             iri = self._take_iriref()
             return "%s.URIRef(%r)" % (RUNTIME_ALIAS, self._resolve(iri))
         if c == "f" and self._peek(1) == "<":
-            return self._take_firi()
+            return _maybe_impure(self._take_firi(), gctx)
         if c == "f" and self._peek(1) == "{":
-            return self._take_fnode()
+            return _impure(self._take_fnode(), gctx)
         if _name_start(c) or c == ":":
-            return self._take_pname(in_island=True)
+            return _maybe_impure(self._take_pname(in_island=True), gctx)
         self._error("prédicat attendu (IRI, nom préfixé, 'a', variable ou "
                     "interpolation)")
 
-    def _g_var(self):
+    def _g_var(self, gctx):
         sigil = self._take(1)
         if self._peek() == "{":
             self._take(1)
@@ -792,7 +799,7 @@ class Transpiler:
             if self._peek() != "}":
                 self._error("'}' attendu pour fermer ?{...}")
             self._take(1)
-            return "%s.node((%s))" % (RUNTIME_ALIAS, expr.strip())
+            return _impure("%s.node((%s))" % (RUNTIME_ALIAS, expr.strip()), gctx)
         m = _NAME_RE.match(self.text, self.i)
         if not m:
             self._error("nom de variable attendu après '%s'" % sigil)
@@ -855,16 +862,16 @@ class Transpiler:
             if self._peek() != "}":
                 self._error("'}' attendu")
             self._take(1)
-            return "%s.node((%s))" % (RUNTIME_ALIAS, expr.strip()), False
+            return _impure("%s.node((%s))" % (RUNTIME_ALIAS, expr.strip()), gctx), False
         if c in "?$":
-            return self._g_var(), False
+            return self._g_var(gctx), False
         if c == "<":
             iri = self._take_iriref()
             return "%s.URIRef(%r)" % (RUNTIME_ALIAS, self._resolve(iri)), False
         if c == "f" and self._peek(1) == "<":
-            return self._take_firi(), False
+            return _maybe_impure(self._take_firi(), gctx), False
         if c == "f" and self._peek(1) == "{":
-            return self._take_fnode(), False
+            return _impure(self._take_fnode(), gctx), False
         if c in "\"'" or (c and c in "rbfuRBFU" and self._peek(1) in "\"'"):
             return self._g_literal(), False
         if c.isdigit() or c in "+-" or (c == "." and self._peek(1).isdigit()):
@@ -885,7 +892,7 @@ class Transpiler:
             if word in ("False", "false"):
                 self._take(len(word))
                 return RUNTIME_ALIAS + ".node(False)", False
-            return self._take_pname(in_island=True), False
+            return _maybe_impure(self._take_pname(in_island=True), gctx), False
         self._error("terme RDF attendu")
 
     def _g_literal(self):
@@ -984,9 +991,75 @@ class Transpiler:
         return "\n".join(lines)
 
 
+class _Term(str):
+    """Expression de terme RDF, portant l'identite de son occurrence source.
+
+    Deux `?{ v() }` ecrits a deux endroits differents sont deux occurrences
+    distinctes (donc deux evaluations), meme si leur texte est identique ;
+    le meme sujet reutilise par une liste de proprietes est UNE occurrence."""
+
+    __slots__ = ("occ",)
+
+    def __new__(cls, text, occ=None):
+        t = str.__new__(cls, text)
+        t.occ = occ
+        return t
+
+
+def _maybe_impure(expr, gctx):
+    """f-IRI et nom prefixe : impurs seulement s'ils portent une interpolation
+    (sinon le transpileur a deja produit une URIRef constante)."""
+    if expr.startswith(RUNTIME_ALIAS + ".firi("):
+        return _impure(expr, gctx)
+    return expr
+
+
+def _impure(expr, gctx):
+    """Marque une expression de terme qui embarque du Python interpole : son
+    evaluation peut avoir des effets de bord, elle doit n'avoir lieu qu'une
+    fois par occurrence source."""
+    gctx.occ += 1
+    return _Term(expr, gctx.occ)
+
+
+def _share_impure(triples, gctx):
+    """Un terme interpole partage par plusieurs triplets (typiquement le sujet
+    d'une liste de proprietes) ne doit etre evalue qu'une fois : on l'emet a sa
+    premiere occurrence dans `slot(i, expr)` et on le rappelle par `slot(i)`.
+
+    Sans cela, `g{ ex:{f()} ex:p 1 ; ex:q 2 }` appellerait f() deux fois et
+    produirait deux sujets differents. Voir DESIGN_CHOICES/ldpy/003."""
+    counts = {}
+    for tr in triples:
+        for expr in tr:
+            occ = getattr(expr, "occ", None)
+            if occ is not None:
+                counts[occ] = counts.get(occ, 0) + 1
+    shared = {o for o, n in counts.items() if n > 1}
+    if not shared:
+        return triples
+    seen = {}
+    out = []
+    for tr in triples:
+        new_tr = []
+        for expr in tr:
+            occ = getattr(expr, "occ", None)
+            if occ in shared:
+                if occ not in seen:
+                    seen[occ] = len(seen)
+                    new_tr.append("%s.slot(%d, %s)" % (RUNTIME_ALIAS, seen[occ], expr))
+                else:
+                    new_tr.append("%s.slot(%d)" % (RUNTIME_ALIAS, seen[occ]))
+            else:
+                new_tr.append(str(expr))
+        out.append(tuple(new_tr))
+    return out
+
+
 class _GraphCtx:
     def __init__(self):
         self.counter = 0
+        self.occ = 0
         self.labels = {}
 
     def new_bnode(self):

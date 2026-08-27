@@ -162,3 +162,11 @@ def test_error_position_is_reported():
         assert e.filename == "f.ldpy"
     else:
         raise AssertionError("LdpySyntaxError attendue")
+
+
+def test_interpolation_in_plain_iri_suggests_firi():
+    """Diagnostic : <.../{x}> est une erreur fréquente ; le message doit
+    orienter vers la forme f<...> plutôt que dire « IRI non terminée »."""
+    with pytest.raises(LdpySyntaxError) as e:
+        transpile(P + "gr = g{ <sensor/{s}> ex:p 1 }\n")
+    assert "f<" in str(e.value)

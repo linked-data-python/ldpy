@@ -23,7 +23,7 @@ _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 
 __all__ = [
     "RDF", "URIRef", "BNode", "Literal", "Variable", "Namespace",
-    "node", "bn", "firi", "graph", "instantiateBGP",
+    "node", "bn", "slot", "firi", "graph", "instantiateBGP",
 ]
 
 
@@ -40,6 +40,25 @@ class bn:
 
     def __repr__(self):
         return "bn(%d)" % self.index
+
+
+class slot:
+    """Terme partage par plusieurs triplets d'un meme g{...}.
+
+    Un terme issu d'une interpolation (`ex:{expr}`, `f<...{expr}...>`, `{expr}`)
+    qui sert de sujet a plusieurs triplets ne doit etre evalue QU'UNE FOIS :
+    l'expression est emise a sa premiere occurrence, `slot(i)` la rappelle
+    ensuite. Voir DESIGN_CHOICES/ldpy/003."""
+
+    __slots__ = ("index", "value", "bound")
+
+    def __init__(self, index, *value):
+        self.index = index
+        self.bound = bool(value)
+        self.value = value[0] if value else None
+
+    def __repr__(self):
+        return "slot(%d)" % self.index
 
 
 def node(value):
@@ -67,8 +86,13 @@ def graph(namespaces, base, *triples):
     for prefix, ns in (namespaces or {}).items():
         g.namespace_manager.bind(prefix, ns, replace=True)
     bnodes = {}
+    slots = {}
 
     def _term(t):
+        if isinstance(t, slot):
+            if t.bound:
+                slots[t.index] = node(t.value)
+            return slots[t.index]
         if isinstance(t, bn):
             if t.index not in bnodes:
                 bnodes[t.index] = BNode()
