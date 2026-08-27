@@ -4,7 +4,8 @@ Un seul passage sur le source : le Python est recopié verbatim, seuls les îlot
 RDF sont parsés (descente récursive) et réécrits en UNE expression Python
 s'appuyant sur le runtime ldpy (importé sous l'alias réservé `_ldpy_`).
 
-Spécification : DESIGN_CHOICES/ldpy/001..005 (racine du projet de recherche).
+La conception est expliquée dans docs/explanation/ ; la référence du
+langage dans docs/reference/language.md.
 
 Limitations assumées (documentées) :
 - le contenu des chaînes Python est opaque (pas d'îlot dans une f-string) ;
@@ -98,7 +99,7 @@ class Transpiler:
         self.operand = True         # un opérande peut commencer ici
         self.stmt_start = True      # début de ligne logique (hors espaces)
         self.after_dot = False
-        # portée par bloc des @prefix/@base (fiche 004, révision 2026-08-27) :
+        # portée par bloc des @prefix/@base  :
         # chaque déclaration empile (indent, kind, nom, avait_prev, prev) ;
         # une instruction moins indentée dépile et restaure.
         self._scope_stack = []
@@ -691,7 +692,7 @@ class Transpiler:
                     self._error("déclaration @prefix invalide — le nom de "
                                 "préfixe doit être un identifiant ASCII "
                                 "([A-Za-z_][A-Za-z0-9_]*) suivi de ':' "
-                                "(voir DESIGN_CHOICES/ldpy/010)")
+                                "(docs/reference/language.md)")
                 return False  # décorateur nommé prefix
             j = self._skip_ws_ahead(j + 1)
         if j >= self.n or t[j] != "<":
@@ -976,8 +977,7 @@ class Transpiler:
     def _interp_with_suffix(self, expr):
         """Terme interpolé de graphe, avec suffixe RDF optionnel COLLÉ :
         {expr}@lang -> Literal(expr, lang=...) ; {expr}^^dt -> Literal(expr,
-        datatype=dt) ; sinon node(expr). (Accepté par Maxime le 2026-08-27 —
-        friction relevée par l'étude KGC, cas RMLTC0015a.)"""
+        datatype=dt) ; sinon node(expr).."""
         expr = expr.strip()
         if self._peek() == "@":
             m = _LANGTAG_RE.match(self.text, self.i)
@@ -1017,7 +1017,7 @@ class Transpiler:
         return "%s.Literal(%s)" % (RUNTIME_ALIAS, string_text)
 
     # ------------------------------------------------------------------
-    # nœuds expression SPARQL : e{ ... } et e<...> (fiche 007, phase 2)
+    # nœuds expression SPARQL : e{ ... } et e<...> 
     # ------------------------------------------------------------------
 
     _E_BUILTINS = frozenset((
@@ -1455,7 +1455,7 @@ def _share_impure(triples, gctx):
     premiere occurrence dans `slot(i, expr)` et on le rappelle par `slot(i)`.
 
     Sans cela, `g{ ex:{f()} ex:p 1 ; ex:q 2 }` appellerait f() deux fois et
-    produirait deux sujets differents. Voir DESIGN_CHOICES/ldpy/003."""
+    produirait deux sujets differents. Voir docs/explanation/emission-and-semantics.md."""
     counts = {}
     for tr in triples:
         for expr in tr:

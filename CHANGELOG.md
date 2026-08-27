@@ -1,20 +1,30 @@
 ## Release Notes
 
-All notable changes to the "linked-data-python" are documented below.
+### [0.1.0] — en préparation
 
-## [0.0.3] - 2023-02-24
+Réécriture complète (« v2 ») : l'implémentation ANTLR historique est
+remplacée par un **island parser** écrit à la main — le Python est recopié
+verbatim, seuls les îlots RDF sont parsés.
 
-- use `ideas` import hooks to enable using `.ldpy` files from import statements
-- added interactive ldpy console
-- added line mapping to point to the right line in the `.ldpy` file on error
-- corrected small bugs in the parser
+- **Langage** : @prefix/@base à portée par bloc ; IRIs, noms préfixés
+  (préfixes déclarés), littéraux RDF (`"x"@en`, `"1"^^xsd:int`), variables
+  `?v`/`$v`, IRIs formatées `f<...{expr}...>`, nœuds formatés `f{expr}` /
+  `?{expr}`, graphes `g{ ... }` en notation Turtle avec interpolations
+  `{expr}` (et suffixes `@lang` / `^^dt`), nœuds anonymes à identité
+  déterministe `_:{expr}`, **expressions SPARQL différées** `e{ ... }` et
+  IRIs différées `e<...>`.
+- **Sûreté** : tout fichier Python pur ressort **byte-identique** (vérifié
+  sur la stdlib CPython) ; règles de désambiguïsation documentées et testées.
+- **Performance** : 56 000–110 000 lignes source/s selon la densité d'îlots
+  (~×500 vs l'implémentation historique) ; runtime de matérialisation
+  optimisé (voir OPTIMIZATION.md).
+- **Outillage** : language map bidirectionnel (JSON + Source Map v3),
+  import hook sans dépendance, console interactive, `ldpy-build`
+  (fichiers fantômes), `ldpy-debug` (debugpy), serveur LSP `ldpy-lsp`
+  (diagnostics natifs + request forwarding vers pylsp), extension VS Code.
+- **Packaging** : `pyproject.toml`, dépendance unique `rdflib` ;
+  extras `[lsp]`, `[debug]`, `[dev]`, `[docs]`.
 
-## [0.0.2] - 2022-04-30
+### [0.0.4] / [0.0.3] — 2023 (implémentation historique, ANTLR)
 
-- corrected many small bugs
-- added many examples
-- add `-d` functionality
-
-## [0.0.1] - 2022-04-29
-
-- Initial release
+Voir l'archive : https://gitlab.com/coswot/ldpy

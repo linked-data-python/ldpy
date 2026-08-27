@@ -1,4 +1,4 @@
-"""Règles de désambiguïsation (DESIGN_CHOICES/ldpy/002) : chaque règle est
+"""Règles de désambiguïsation (docs/reference/language.md) : chaque règle est
 testée dans les deux sens (transformé / laissé intact)."""
 
 import pytest

@@ -1,4 +1,4 @@
-"""Nœuds expression SPARQL e{...} / e<...> (fiche 007, phase 2).
+"""Nœuds expression SPARQL e{...} / e<...> .
 
 Sémantique différée : e{} construit une Expression évaluée plus tard contre
 un solution mapping, avec la sémantique d'erreur de SPARQL 1.1."""

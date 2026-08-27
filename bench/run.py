@@ -2,15 +2,12 @@
 
     python -m bench.run [--quick] [--out bench/results]
 
-Quatre campagnes, sur des fichiers issus de bench.generator (graines fixées,
+Trois campagnes, sur des fichiers issus de bench.generator (graines fixées,
 reproductibles) :
 
 - ``density``   : débit en fonction de la densité d'îlots (0 -> 100 %) ;
 - ``size``      : débit en fonction de la taille du fichier (linéarité) ;
 - ``graphsize`` : débit en fonction de la taille des graphes g{...} ;
-- ``v1``        : v1 (ANTLR) contre v2 (island parsing) sur les MÊMES
-  fichiers, en syntaxe v1-compatible.
-
 Sorties : results.json + un CSV par campagne (consommés par l'article).
 Le chronométrage est un meilleur-de-N sur transpile() seul (pas d'E/S).
 """
@@ -123,54 +120,6 @@ def campaign_graphsize(quick):
     return rows
 
 
-def campaign_transparency(quick):
-    """Combien de fichiers PYTHON PUR (densité 0, avec leurres) chaque
-    version accepte-t-elle inchangés ? v2 : identité par construction ;
-    v1 : le lexer ANTLR peut rejeter du Python valide (a<b>c lu comme IRI)."""
-    n = 4 if quick else 20
-    rejected = 0
-    for seed in range(n):
-        src, _ = generate(n_lines=150, island_density=0.0, seed=seed)
-        body = "\n".join(l for l in src.split("\n")
-                         if not l.startswith("@prefix"))
-        assert transpile(body, "<t>").code == body     # v2 : identité
-        if v1_transform() is not None:
-            try:
-                v1_transform()(body, "<t>")
-            except Exception:
-                rejected += 1
-    print("  %d/%d fichiers Python purs rejetés par v1 (v2 : 0)" % (rejected, n))
-    return {"files": n, "v1_rejected": rejected}
-
-
-def campaign_v1(quick):
-    """v1 (ANTLR) contre v2 sur les MÊMES fichiers v1-compatibles."""
-    size = 200 if quick else 400
-    densities = [0.25] if quick else [0.0, 0.10, 0.25, 0.50]
-    seeds = [0] if quick else [0, 1]
-    rows = []
-    for d in densities:
-        v1s, v2s = [], []
-        for s in seeds:
-            src, _ = generate(n_lines=size, island_density=d,
-                              v1_compat=True, seed=s)
-            r1 = v1_lps(src)
-            if r1 is not None:
-                v1s.append(r1)
-            v2s.append(v2_lps(src))
-        row = {"density": d,
-               "v1_lps": sum(v1s) / len(v1s) if v1s else None,
-               "v2_lps": sum(v2s) / len(v2s),
-               "v1_files_ok": len(v1s), "files": len(seeds)}
-        row["speedup"] = row["v2_lps"] / row["v1_lps"] if v1s else None
-        rows.append(row)
-        print("  densité %.2f : v1 %s l/s, v2 %7.0f l/s%s" % (
-            d, ("%7.0f" % row["v1_lps"]) if v1s else "   (nd)",
-            row["v2_lps"],
-            (", x%.0f" % row["speedup"]) if row["speedup"] else ""))
-    return rows
-
-
 def write_csv(path, rows, cols):
     """Écrit ``rows`` (dicts) en CSV, colonnes ``cols``."""
     with open(path, "w", encoding="utf-8") as f:
@@ -198,10 +147,6 @@ def main(argv=None):
     results["size"] = campaign_size(args.quick)
     print("— taille des graphes —")
     results["graphsize"] = campaign_graphsize(args.quick)
-    print("— v1 (ANTLR) vs v2 —")
-    results["v1"] = campaign_v1(args.quick)
-    print("— transparence (Python pur) —")
-    results["transparency"] = campaign_transparency(args.quick)
 
     with open(os.path.join(args.out, "results.json"), "w") as f:
         json.dump(results, f, indent=1)
@@ -211,8 +156,6 @@ def main(argv=None):
               ["lines", "ms", "lps"])
     write_csv(os.path.join(args.out, "graphsize.csv"), results["graphsize"],
               ["triples", "lps"])
-    write_csv(os.path.join(args.out, "v1v2.csv"), results["v1"],
-              ["density", "v1_lps", "v2_lps", "speedup"])
     print("résultats écrits dans", args.out)
     return 0
 

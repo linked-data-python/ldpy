@@ -10,8 +10,9 @@ usage), et paramétré par :
 - ``graph_triples``  : nombre moyen de triplets par graphe g{...} ;
 - ``nest_depth``     : profondeur max des nœuds anonymes imbriqués ;
 - ``mix``            : poids relatifs des sortes d'îlots ;
-- ``v1_compat``      : n'émettre que la syntaxe acceptée par la v1 ANTLR
-  (espace après ``g{``, pas d'interpolation nue ``{x}`` ni ``?{...}``) ;
+- ``v1_compat``      : n'émettre que la syntaxe qu'acceptait aussi la
+  première implémentation (historique ; conservé pour reproduire les
+  comparaisons publiées) ;
 - ``seed``           : même graine -> même fichier, octet pour octet.
 
 Le générateur sert le banc de débit (bench.run) ET les tests de robustesse
@@ -214,10 +215,9 @@ class _Gen:
             l, self.rng.randrange(3, 10), self.rng.randrange(3)))
 
     def _w_decoys(self):
-        # les pièges de la fiche 002 : comparaisons chaînées, slices, dicts.
-        # En mode v1_compat, pas de « a<b>c » : la v1 (ANTLR) le lexe comme
-        # une IRI et REJETTE ce Python valide — mesuré par la campagne de
-        # transparence de bench.run.
+        # les pièges de la docs/reference/language.md : comparaisons chaînées, slices, dicts.
+        # En mode v1_compat, pas de « a<b>c » (l'implémentation historique
+        # le lexait comme une IRI).
         b = self.fresh("b")
         choices = [
             "%s = list(range(9))[%d:%d]" % (b, self.rng.randrange(3),

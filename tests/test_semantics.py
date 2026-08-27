@@ -1,4 +1,4 @@
-"""Sémantique @prefix/@base (fiche 004) et ordre d'évaluation (fiche 003)."""
+"""Sémantique @prefix/@base (portée par bloc) et ordre d'évaluation (docs/explanation/emission-and-semantics.md)."""
 
 import pytest
 from rdflib import URIRef
@@ -79,7 +79,7 @@ def test_namespaces_dict_at_runtime(run):
 
 
 def test_lazy_evaluation_short_circuit(run):
-    """fiche 003 : cond or g{...} ne doit PAS évaluer les interpolations."""
+    """docs/explanation/emission-and-semantics.md : cond or g{...} ne doit PAS évaluer les interpolations."""
     src = P + """\
 calls = []
 def side_effect():

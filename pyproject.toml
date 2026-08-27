@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "linked-data-python"
+version = "0.1.0.dev0"
+description = "Python extended with Semantic Web primitives: IRIs, RDF literals and Turtle-notation graphs as expressions, transpiled by island parsing."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Maxime Lefrançois", email = "maxime.lefrancois@emse.fr" }]
+requires-python = ">=3.10"
+keywords = ["rdf", "semantic-web", "turtle", "sparql", "transpiler",
+            "linked-data", "knowledge-graph"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Pre-processors",
+    "Topic :: Text Processing :: Markup",
+]
+dependencies = ["rdflib>=6.0"]
+
+[project.optional-dependencies]
+# délégation du language server à un vrai serveur Python (request forwarding)
+lsp = ["python-lsp-server", "pyflakes"]
+# débogage des fichiers fantômes
+debug = ["debugpy"]
+dev = ["pytest"]
+docs = ["mkdocs", "mkdocs-material"]
+
+[project.scripts]
+ldpy = "ldpy.__main__:main"
+ldpy-lsp = "ldpy.lsp.server:main"
+ldpy-build = "ldpy.build:main"
+ldpy-debug = "ldpy.debug:main"
+
+[project.urls]
+Homepage = "https://gitlab.emse.fr/maxime.lefrancois/linked-data-python"
+Documentation = "https://linked-data-python.readthedocs.io/"
+Source = "https://gitlab.emse.fr/maxime.lefrancois/linked-data-python"
+
+[tool.setuptools.packages.find]
+include = ["ldpy*"]
+
+[tool.pytest.ini_options]
+markers = ["slow: tests lents (benchmarks, corpus)"]
+testpaths = ["tests"]

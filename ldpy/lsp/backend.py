@@ -1,6 +1,6 @@
 """Backend Python délégué : un vrai serveur LSP Python (pylsp) en
 sous-processus, à qui le serveur ldpy transmet les requêtes traduites
-(fiche lsp/101 — request forwarding, PAS de fork).
+(request forwarding, PAS de fork).
 
 Le backend ne voit QUE les documents fantômes : pour chaque .ldpy ouvert,
 un didOpen/didChange du Python transpilé sous l'URI <uri>.shadow.py.

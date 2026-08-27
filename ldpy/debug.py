@@ -1,4 +1,4 @@
-"""Débogage des fichiers .ldpy via debugpy sur les .py fantômes (fiche 101).
+"""Débogage des fichiers .ldpy via debugpy sur les .py fantômes (docs/explanation/tooling.md).
 
 Principe : PAS d'adaptateur DAP à écrire. `ldpy.build` matérialise un vrai
 fichier Python + ses maps ; debugpy s'exécute dessus tel quel. Ce module

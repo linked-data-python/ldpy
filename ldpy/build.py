@@ -5,7 +5,7 @@
   - <module>.ldpy.map  (language map JSON)
 
 C'est le socle du debugging (debugpy s'exécute sur les .py fantômes) et du
-language server (fiches DESIGN_CHOICES lsp/101 et ldpy/005)."""
+language server (voir docs/explanation/tooling.md)."""
 
 import os
 import sys
@@ -31,7 +31,7 @@ def build_file(src_path, out_dir, rel=None):
         f.write(result.code)
     with open(map_path, "w", encoding="utf-8") as f:
         f.write(result.map.to_json(indent=1))
-    # Source Map v3 (fiche 005, révision) : pour l'outillage standard
+    # Source Map v3  : pour l'outillage standard
     with open(py_path + ".map", "w", encoding="utf-8") as f:
         f.write(result.map.to_sourcemap_v3_json())
     return py_path, map_path, result

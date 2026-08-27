@@ -1,4 +1,4 @@
-"""Jeux de caractères Python vs Turtle/SPARQL (fiche DESIGN_CHOICES/ldpy/010).
+"""Jeux de caractères Python vs Turtle/SPARQL (fiche docs/reference/language.md).
 
 Les deux ensembles sont INCOMPARABLES (mesuré sur le BMP : 3 400 caractères
 Turtle-seulement dont '-', 4 Python-seulement : ª µ º ⁔). Ces tests figent le
@@ -49,13 +49,13 @@ def test_decorator_named_prefix_still_untouched():
 
 def test_turtle_only_char_rejected_in_island():
     # U+02C2 est dans PN_CHARS_BASE (Turtle) mais pas un identifiant Python :
-    # v2 le refuse — choix documenté (fiche 010), pas un accident
+    # v2 le refuse — choix documenté (docs/reference/language.md), pas un accident
     with pytest.raises(LdpySyntaxError):
         transpile(P + "gr = g{ ex:a˂b ex:p 1 }\n")
 
 
 def test_python_only_chars_do_not_leak_into_pnames(run):
     # µ (U+00B5) est un identifiant Python mais PAS dans PN_CHARS :
-    # v2 l'accepte en continuation locale (règle Python assumée, fiche 010)
+    # v2 l'accepte en continuation locale (règle Python assumée, docs/reference/language.md)
     g, _ = run(P + "t = ex:aµb\n")
     assert str(g["t"]) == "http://e/aµb"

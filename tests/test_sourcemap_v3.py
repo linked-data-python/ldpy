@@ -1,4 +1,4 @@
-"""Export Source Map v3 (fiche 005, révision) — vérifié par un décodeur
+"""Export Source Map v3  — vérifié par un décodeur
 indépendant écrit dans ce fichier de test."""
 
 import json

@@ -5,7 +5,7 @@ Le code généré par le transpileur importe ce module sous l'alias réservé
 le backend par défaut ; la façade permet un backend alternatif (urdflib /
 implémentation MicroPython) sans changer le code généré.
 
-Voir DESIGN_CHOICES/ldpy/003 (émission) et 008 (runtime).
+Les choix d'émission et de runtime sont expliqués dans docs/explanation/.
 """
 
 import itertools
@@ -20,7 +20,7 @@ _URI_CACHE = {}
 def URIRef(value, base=None):
     """rdflib.URIRef avec cache (clé = la chaîne). Les IRI émises par le
     transpileur sont des CONSTANTES du programme : sans cache, chaque tour de
-    boucle sur un g{...} les reconstruisait (mesuré sur l'étude KGC). Le
+    boucle sur un g{...} les reconstruisait (voir OPTIMIZATION.md). Le
     cache est borné par le texte des programmes ; garde-fou à 1M entrées pour
     les usages dynamiques via l'API."""
     if base is not None:
@@ -89,7 +89,7 @@ class slot:
     Un terme issu d'une interpolation (`ex:{expr}`, `f<...{expr}...>`, `{expr}`)
     qui sert de sujet a plusieurs triplets ne doit etre evalue QU'UNE FOIS :
     l'expression est emise a sa premiere occurrence, `slot(i)` la rappelle
-    ensuite. Voir DESIGN_CHOICES/ldpy/003."""
+    ensuite. Voir docs/explanation/emission-and-semantics.md."""
 
     __slots__ = ("index", "value", "bound")
 
@@ -107,13 +107,13 @@ _BNODE_SAFE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_\-]*\Z")
 
 def bnode(value):
     """Nœud anonyme à IDENTITÉ DÉTERMINISTE issue des données : l'îlot
-    ``_:{expr}`` (fiche 003, révision).
+    ``_:{expr}`` .
 
     - un BNode passe tel quel ;
     - une chaîne qui est une étiquette sûre (lettres/chiffres/_/-) devient
       l'étiquette elle-même : ``_:{key}`` == BNode(key) ;
     - tout le reste — tuples notamment — est encodé canoniquement puis haché
-      (question de Maxime sur les collisions : ``_:{(fname, lname)}`` ne
+      (``_:{(fname, lname)}`` ne
       collisionne pas avec ``_:{fname + lname}``, et l'étiquette produite
       reste sérialisable en N-Triples).
 
@@ -150,7 +150,7 @@ _PASSTHROUGH = frozenset((rdflib.URIRef, Literal, BNode, Variable, bn))
 def node(value):
     """Coercition d'une valeur Python en terme RDF (fnode / interpolations).
     Dispatch sur le type exact d'abord : le chemin isinstance/ABC de rdflib
-    dominait le profil de matérialisation (étude KGC)."""
+    dominait le profil de matérialisation (voir OPTIMIZATION.md)."""
     if type(value) in _PASSTHROUGH:
         return value
     if isinstance(value, (Node, bn)):
@@ -174,10 +174,10 @@ def _nm_for(namespaces):
     """NamespaceManager COSMÉTIQUE partagé pour un état donné du dict
     __namespaces__ : lier les préfixes coûte ~100x la création du graphe,
     et un g{...} évalué dans une boucle paie ce prix à chaque tour
-    (constat de l'étude KGC). Le manager est mis en cache et rattaché aux
+    (voir OPTIMIZATION.md). Le manager est mis en cache et rattaché aux
     graphes produits — même motif de partage qu'instantiateBGP. Le cache est
     invalidé par instantané du contenu (l'identité seule ne suffit pas :
-    portée par bloc, fiche 004)."""
+    portée par bloc, portée par bloc)."""
     if not namespaces:
         return None
     key = id(namespaces)
@@ -203,8 +203,7 @@ class _EmittedGraph(rdflib.Graph):
     tout accès interne de rdflib matérialise d'abord. Mais ``__iter__``
     sert la liste SANS matérialiser : ``cible += g{...}`` transfère alors
     les triplets directement — UNE insertion de store au lieu de deux
-    (goulot mesuré par l'étude KGC : la moitié du coût de matérialisation
-    par lignes)."""
+    (goulot mesuré : la moitié du coût de matérialisation par lignes)."""
 
     __slots__ = ("_real_store", "_pending")
 

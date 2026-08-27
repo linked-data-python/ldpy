@@ -7,12 +7,10 @@ code. It assumes you know some Python and have seen RDF/Turtle before.
 ## 1. Install
 
 ```text
-pip install rdflib          # the default runtime backend
 git clone git@gitlab.emse.fr:maxime.lefrancois/linked-data-python.git
 cd linked-data-python
+pip install -e .            # rdflib comes with it; add [lsp,debug] for tooling
 ```
-
-(Until the 0.1.0 PyPI release, run from the repository with `PYTHONPATH=.`)
 
 ## 2. A first expression
 
@@ -83,6 +81,21 @@ Or import it from plain Python — modules transpile on import:
 >>> import obs
 >>> obs.observation("s1", 21.5).serialize(format="turtle")
 ```
+
+## 6. Deferred expressions
+
+Everything so far evaluates immediately. `e{ ... }` builds a **deferred**
+SPARQL expression instead, evaluated later against variable bindings — the
+tool for filters over solution mappings:
+
+```ldpy
+adult = e{ ?age >= 18 && BOUND(?name) }
+people = [{"age": 12}, {"age": 30, "name": "Ana"}]
+grown = [p for p in people if adult.ebv(p)]
+assert grown == [{"age": 30, "name": "Ana"}]
+```
+
+See the [SPARQL expressions reference](../reference/sparql-expressions.md).
 
 ## Where to next
 

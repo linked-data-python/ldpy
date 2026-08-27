@@ -1,11 +1,11 @@
 """Serveur LSP Linked-Data Python — mince, par request-forwarding.
 
-Architecture (fiche lsp/101, révisée 2026-08-27) :
+Architecture (voir docs/explanation/tooling.md) :
 
 - ZÉRO dépendance : JSON-RPC/framing maison (ldpy/lsp/rpc.py), pas de pygls.
 - Couche NATIVE : diagnostics du transpileur (erreurs + warnings de portée),
   hover sur les îlots, semantic tokens des îlots (complément précis de la
-  coloration TextMate, fiche vscode/102).
+  coloration TextMate, docs/how-to/use-vscode.md).
 - Couche DÉLÉGUÉE : pour chaque .ldpy, un document fantôme Python est
   maintenu chez un VRAI serveur LSP Python (pylsp, non forké, sous-processus) ;
   completion, definition, references, signatureHelp — et hover hors îlot —

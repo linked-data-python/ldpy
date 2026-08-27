@@ -16,6 +16,13 @@ def observation(sensor, value):
                   sosa:madeObservation [ sosa:hasSimpleResult {value} ] }
 ```
 
+Deferred SPARQL expressions complete the picture:
+
+```text
+adult = e{ ?age >= 18 && BOUND(?name) }
+adult.ebv({"age": 20, "name": "Ana"})    # True — evaluated against a mapping
+```
+
 `.ldpy` files are **transpiled to plain Python** by an *island parser*: the
 Python is copied verbatim (every valid Python file is a valid ldpy file,
 returned byte-identical), only the RDF islands are parsed and rewritten. The
@@ -26,12 +33,12 @@ transpiler is ~1 500 lines with no parsing dependency and sustains
 
 ```text
 git clone git@gitlab.emse.fr:maxime.lefrancois/linked-data-python.git
-cd linked-data-python
-pip install rdflib                      # runtime backend
-python -m ldpy program.ldpy             # run a file
-python -m ldpy                          # interactive console
-python -m ldpy.lsp                      # language server (LSP, stdio)
-python -m ldpy.debug program.ldpy       # debug via the shadow .py + debugpy
+cd linked-data-python && pip install -e .       # or: pip install -e .[lsp,debug]
+
+ldpy program.ldpy             # run a file
+ldpy                          # interactive console
+ldpy-lsp                      # language server (LSP, stdio)
+ldpy-debug program.ldpy       # debug via the shadow .py + debugpy
 ```
 
 From Python: `import ldpy; ldpy.install()` then `import yourmodule` finds

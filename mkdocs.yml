@@ -1,0 +1,53 @@
+site_name: Linked-Data Python
+site_description: >-
+  Python extended with Semantic Web primitives — IRIs, RDF literals and
+  Turtle-notation graphs as expressions, transpiled by island parsing.
+site_url: https://linked-data-python.readthedocs.io/
+repo_url: https://gitlab.emse.fr/maxime.lefrancois/linked-data-python
+edit_uri: -/blob/main/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle: { icon: material/weather-sunny, name: Light mode }
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: README.md
+  - Tutorial:
+      - Getting started: tutorials/getting-started.md
+  - How-to guides:
+      - Run and import: how-to/run-and-import.md
+      - Deferred SPARQL expressions: how-to/sparql-expressions.md
+      - Visual Studio Code: how-to/use-vscode.md
+      - Debugging: how-to/debug.md
+      - Language server: how-to/language-server.md
+  - Reference:
+      - The language: reference/language.md
+      - SPARQL expressions: reference/sparql-expressions.md
+      - Command line: reference/cli.md
+      - Python API: reference/api.md
+      - Language map formats: reference/language-map.md
+  - Explanation:
+      - Island parsing: explanation/island-parsing.md
+      - Emission and semantics: explanation/emission-and-semantics.md
+      - Tooling architecture: explanation/tooling.md

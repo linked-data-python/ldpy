@@ -1,8 +1,0 @@
-include CHANGELOG.md
-include LICENSE.md
-include README.md
-include ldpyIcon.png
-recursive-include ldpy *.py
-recursive-include examples *.ldpy
-graft test
-global-exclude *.pyc *$py.class

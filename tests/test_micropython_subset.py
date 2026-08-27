@@ -1,7 +1,7 @@
-"""Compatibilité MicroPython du code ÉMIS (fiche 008, commentaire de Maxime).
+"""Compatibilité MicroPython du code ÉMIS (voir docs/explanation/).
 
-Maxime : « on peut se passer de MicroPython dans le cas général, mais s'assurer
-que le code généré par la transpilation est compatible MicroPython ».
+Contrat : on peut se passer de MicroPython dans le cas général, mais le code
+généré par la transpilation doit rester compatible MicroPython.
 
 Vérification à deux niveaux :
 1. les remplacements d'îlots et le prélude ne produisent que des nœuds AST

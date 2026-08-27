@@ -1,4 +1,4 @@
-"""Console interactive (fiche 008, révision) : écrire du ldpy directement
+"""Console interactive (docs/explanation/micropython, révision) : écrire du ldpy directement
 dans l'interpréteur, sans le paquet `ideas`."""
 
 import os

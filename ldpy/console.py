@@ -1,11 +1,10 @@
-"""Console interactive Linked-Data Python (fiche 008, révision 2026-08-27).
+"""Console interactive Linked-Data Python .
 
-Répond au commentaire de Maxime sur la fiche 008 : l'intérêt du paquet `ideas`
-en v1 était d'entrer dans l'interpréteur et d'y écrire directement du ldpy.
+L'intérêt du paquet `ideas` en v1 était d'entrer dans l'interpréteur et d'y écrire directement du ldpy.
 Cette console le permet sans `ideas` : chaque entrée est transpilée puis
 compilée ; l'état des @prefix/@base de niveau zéro persiste d'une entrée à
 l'autre (les déclarations faites dans un bloc meurent avec l'entrée, portée
-par bloc oblige, fiche 004).
+par bloc oblige, portée par bloc).
 
     $ python -m ldpy                      # console
     $ python -m ldpy -i script.ldpy       # exécute puis ouvre la console

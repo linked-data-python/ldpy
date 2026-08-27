@@ -1,6 +1,6 @@
 """Language map segment-level entre un source .ldpy et le Python généré.
 
-Voir DESIGN_CHOICES/ldpy/005-language-map.md.
+Voir docs/reference/language-map.md.
 
 Positions 0-based, fins exclusives. Trois sortes de segments :
 - "copy"      : texte recopié verbatim -> traduction exacte des positions ;
@@ -53,7 +53,7 @@ def _translate_copy(range_from, range_to, line, col):
 
 class LanguageMap:
     """Correspondance bidirectionnelle .ldpy <-> Python généré
-    (liste ordonnée de Segments ; voir DESIGN_CHOICES/ldpy/005)."""
+    (liste ordonnée de Segments ; voir docs/reference/language-map.md)."""
 
     def __init__(self, source_name="<ldpy>", generated_name=None):
         self.source_name = source_name
@@ -133,7 +133,7 @@ class LanguageMap:
 
 
 # ---------------------------------------------------------------------------
-# Export Source Map v3 (fiche 005, révision 2026-08-27) : le format standard
+# Export Source Map v3  : le format standard
 # de l'outillage JavaScript, pour interopérer avec les outils qui le lisent.
 # https://tc39.es/ecma426/ — champs [genCol, srcIdx, srcLine, srcCol] en
 # base64-VLQ, en deltas ; une entrée « ; » par ligne générée.

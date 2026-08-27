@@ -1,4 +1,4 @@
-"""Sémantique d'évaluation des nœuds expression SPARQL (fiche 007, phase 2).
+"""Sémantique d'évaluation des nœuds expression SPARQL .
 
 `e{ <expression SPARQL> }` transpile vers un objet ``Expression`` DIFFÉRÉ :
 là où ``f{...}``/``?{...}`` s'évaluent immédiatement, une Expression s'évalue

@@ -3,8 +3,8 @@
 Ce document consigne les optimisations du **runtime** (`ldpy/runtime.py`)
 explorées pour la scalabilité de la matérialisation de graphes — le scénario
 « construction de graphes de connaissances » où un `g{...}` s'évalue à chaque
-ligne d'une source. Déclencheur : l'étude KGC (`../../kgc-study/`), qui
-compare ldpy à Morph-KGC sur une jointure RML mise à l'échelle
+ligne d'une source. Déclencheur : une étude compagne de construction de graphes de
+connaissances, qui compare ldpy à Morph-KGC sur une jointure RML mise à l'échelle
 (N = lignes de CSV ; « ×k » = avance de ldpy, meilleur-de-3, CPython 3.12).
 
 ## État des courbes successives
@@ -25,7 +25,7 @@ Micro-repère (`graph()` 1 triplet × 2000) : 0,262 s → 0,040 → 0,032 s.
 La liaison des préfixes coûtait ~100× la création du graphe et était payée à
 chaque évaluation. Un manager par ÉTAT de `__namespaces__`, mis en cache et
 rattaché aux graphes produits ; invalidation par instantané du contenu
-(portée par bloc, fiche 004). ×6,5 sur `graph()`.
+(portée par bloc, portée par bloc). ×6,5 sur `graph()`.
 
 ### 2. Caches de termes (commit de ce jour)
 
@@ -33,7 +33,7 @@ rattaché aux graphes produits ; invalidation par instantané du contenu
   constantes du programme, reconstruites sinon à chaque tour de boucle.
   Cache borné (garde-fou 1M) — les clés sont bornées par le texte des
   programmes. `firi` n'est PAS cachée (résultats uniques par ligne).
-- **`bnode()` mémoïsé** (suggestion de Maxime) : réutilisation de l'objet
+- **`bnode()` mémoïsé** (réutilisation d'objet) : réutilisation de l'objet
   BNode pour une étiquette déjà vue — les charges de déduplication repassent
   sans cesse sur les mêmes clés. Borné (1M).
 - **Pool d'instances `bn(i)`** (immuables, une par indice).
@@ -65,9 +65,9 @@ suite de tests.
   nature du langage (le g{...} par ligne est le POINT du langage) ; la
   paresse de `_EmittedGraph` en capture l'essentiel sans changer l'idiome.
 - **Lecture CSV** : hors runtime (côté programme utilisateur) ; noté pour
-  l'étude KGC (kgclib).
+  le banc de matérialisation (kgclib).
 
 ## Reproduire
 
 Micro : `python - <<'EOF' …` (voir tests) ; courbes : `python -m harness.perf`
-dans `kgc-study/evaluation/` (garde d'équivalence par isomorphisme incluse).
+du banc compagnon (garde d'équivalence par isomorphisme incluse).

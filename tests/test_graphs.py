@@ -187,7 +187,7 @@ def test_nested_graph_via_fnode(run, prefixes):
 
 
 def test_namespace_manager_shared_and_invalidated(run, prefixes):
-    """Optimisation issue de l'étude KGC : le NamespaceManager cosmétique est
+    """Optimisation de matérialisation : le NamespaceManager cosmétique est
     partagé entre les graphes d'un même état de __namespaces__ (lier les
     préfixes coûtait ~100x la création du graphe, payé à chaque tour de
     boucle), et invalidé quand la table change (portée par bloc)."""
@@ -205,7 +205,7 @@ has_zz = dict(g2.namespace_manager.namespaces()).get("zz")
 
 def test_interpolated_bnode_deterministic_identity(run, prefixes):
     """_:{expr} : identité déterministe issue des données — l'idiome de
-    déduplication/jointure de R2RML (cas RMLTC0012a/b de l'étude KGC)."""
+    déduplication/jointure de R2RML (cas RMLTC0012a/b de le banc de matérialisation)."""
     src = prefixes + """\
 rows = [("Bob", "Smith", "30"), ("Sue", "Jones", "20"), ("Bob", "Smith", "30")]
 gr = Graph = None
@@ -221,7 +221,7 @@ subjects = {s for s, _, _ in gr}
 
 
 def test_interpolated_bnode_tuple_avoids_collision(run, prefixes):
-    """Question de Maxime : un tuple comme clé — encodage canonique haché,
+    """Un tuple comme clé : encodage canonique haché,
     pas de collision entre ("Bob","bySmith") et ("Bobby","Smith"), et
     l'étiquette produite reste sérialisable."""
     src = prefixes + """\
@@ -268,7 +268,7 @@ gr = g{ _:{key()} ex:p 1 ; ex:q 2 }
 
 
 def test_interp_language_suffix(run, prefixes):
-    """{expr}@lang — accepté par Maxime (friction RMLTC0015a)."""
+    """{expr}@lang : suffixe de langue sur une interpolation."""
     src = prefixes + """\
 name = "Irlande"
 gr = g{ ex:IE ex:label {name}@fr, {name.upper()}@fr-CA ; ex:n {name} }

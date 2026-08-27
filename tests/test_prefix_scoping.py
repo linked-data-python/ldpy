@@ -1,6 +1,6 @@
-"""Portée par bloc de @prefix/@base (fiche 004, révision du 2026-08-27).
+"""Portée par bloc de @prefix/@base (portée par bloc, révision du 2026-08-27).
 
-Demande de Maxime : la portée d'une déclaration est le bloc englobant
+La portée d'une déclaration est le bloc englobant
 (suite d'un if/for/while/try, corps de fonction, corps de classe) ; au
 top-level, le reste du fichier. Les blocs plus profonds voient les
 déclarations englobantes ; la sortie du bloc restaure l'état antérieur.
@@ -279,8 +279,8 @@ def test_redeclaration_after_use_still_warns(run):
 
 def test_shadowing_in_block_is_silent(run):
     """Le shadowing dans un bloc plus profond est légitime : aucun warning.
-    (Le warning de redéclaration est réservé au même niveau, cf. Maxime
-    « oui ok » sur la fiche 004.)"""
+    (Le warning de redéclaration est réservé au même niveau, règle établie :
+    « oui ok » sur la portée par bloc.)"""
     src = """\
 @prefix p: <http://a/> .
 x = p:t

@@ -1,4 +1,4 @@
-"""Language server Linked-Data Python (fiche DESIGN_CHOICES/lsp/101).
+"""Language server Linked-Data Python (architecture : docs/explanation/tooling.md).
 
 Jalon 2 (implémenté) : diagnostics natifs du transpileur ET diagnostics
 Python du backend re-projetés, hover (îlots en natif, le reste délégué),
