@@ -119,3 +119,87 @@ class LanguageMap:
     @classmethod
     def from_json(cls, s):
         return cls.from_dict(json.loads(s))
+
+
+# ---------------------------------------------------------------------------
+# Export Source Map v3 (fiche 005, révision 2026-08-27) : le format standard
+# de l'outillage JavaScript, pour interopérer avec les outils qui le lisent.
+# https://tc39.es/ecma426/ — champs [genCol, srcIdx, srcLine, srcCol] en
+# base64-VLQ, en deltas ; une entrée « ; » par ligne générée.
+# ---------------------------------------------------------------------------
+
+_B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+
+def _vlq(value):
+    """Encode un entier signé en base64-VLQ (zigzag + groupes de 5 bits)."""
+    v = (value << 1) if value >= 0 else ((-value << 1) | 1)
+    out = []
+    while True:
+        digit = v & 0x1F
+        v >>= 5
+        if v:
+            digit |= 0x20
+        out.append(_B64[digit])
+        if not v:
+            return "".join(out)
+
+
+def _mapping_points(lmap):
+    """Points (gen_line, gen_col, src_line, src_col), triés, dédoublonnés.
+
+    Un point par début d'îlot ; pour un segment copy, un point par ligne
+    générée couverte (granularité standard des débogueurs)."""
+    points = {}
+    for seg in lmap.segments:
+        if seg.src is None:
+            continue
+        gl0, gc0, gl1, gc1 = seg.gen
+        sl0, sc0, _, _ = seg.src
+        if seg.kind == "copy":
+            # fin exclusive : si le segment finit colonne 0, sa dernière
+            # « ligne » est vide et ne porte aucun point
+            last = gl1 if gc1 > 0 else gl1 - 1
+            for l in range(gl0, last + 1):
+                gcol = gc0 if l == gl0 else 0
+                scol = sc0 if l == gl0 else 0
+                points.setdefault((l, gcol), (sl0 + (l - gl0), scol))
+        else:
+            points.setdefault((gl0, gc0), (sl0, sc0))
+    return sorted((g[0], g[1], s[0], s[1]) for g, s in points.items())
+
+
+def _to_sourcemap_v3(self):
+    """Retourne le dict Source Map v3 équivalent à cette map."""
+    points = _mapping_points(self)
+    lines = []
+    prev_gcol = prev_sline = prev_scol = 0
+    cur_line = 0
+    buf = []
+    for gline, gcol, sline, scol in points:
+        while cur_line < gline:
+            lines.append(",".join(buf))
+            buf = []
+            prev_gcol = 0
+            cur_line += 1
+        seg = (_vlq(gcol - prev_gcol) + _vlq(0) +
+               _vlq(sline - prev_sline) + _vlq(scol - prev_scol))
+        buf.append(seg)
+        prev_gcol, prev_sline, prev_scol = gcol, sline, scol
+    lines.append(",".join(buf))
+    return {
+        "version": 3,
+        "file": self.generated_name or "",
+        "sources": [self.source_name],
+        "names": [],
+        "mappings": ";".join(lines),
+    }
+
+
+def _to_sourcemap_v3_json(self, **kw):
+    import json as _json
+    return _json.dumps(self.to_sourcemap_v3(), **kw)
+
+
+LanguageMap.to_sourcemap_v3 = _to_sourcemap_v3
+LanguageMap.to_sourcemap_v3_json = _to_sourcemap_v3_json

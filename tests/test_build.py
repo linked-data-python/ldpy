@@ -18,6 +18,8 @@ def test_build_file(tmp_path):
     m = json.load(open(map_path))
     assert m["version"] == 1
     assert m["generated"] == py_path
+    v3 = json.load(open(py_path + ".map"))
+    assert v3["version"] == 3 and v3["sources"] == [str(src)]
     # le .py fantôme est exécutable
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     env = dict(os.environ, PYTHONPATH=repo)
@@ -35,6 +37,7 @@ def test_build_tree_mixed(tmp_path):
     assert not errors
     assert (out / "pkg" / "a.py").is_file()
     assert (out / "pkg" / "a.ldpy.map").is_file()
+    assert (out / "pkg" / "a.py.map").is_file()      # Source Map v3
     assert (out / "pkg" / "b.py").read_text() == "Y = 1\n"
 
 
