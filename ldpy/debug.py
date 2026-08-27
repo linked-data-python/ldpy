@@ -1,13 +1,16 @@
-"""Débogage des fichiers .ldpy via debugpy sur les .py fantômes (docs/explanation/tooling.md).
+"""Débogage des fichiers .ldpy (docs/explanation/tooling.md).
 
-Principe : PAS d'adaptateur DAP à écrire. `ldpy.build` matérialise un vrai
-fichier Python + ses maps ; debugpy s'exécute dessus tel quel. Ce module
-fournit :
+Principe : PAS d'adaptateur DAP à écrire. Deux modes :
 
-- le lanceur : `python -m ldpy.debug fichier.ldpy [--listen H:P] [-- args]`
-  (build du fichier puis exécution du fantôme, sous debugpy si demandé) ;
-- la traduction de breakpoints pour l'outillage (extension VS Code) :
-  lignes .ldpy <-> lignes du fantôme, via le LanguageMap.
+- **direct** (`--run`, fiche DESIGN_CHOICES/ldpy/011) : le .ldpy est compilé
+  en coordonnées source (compile_mapped) et exécuté DANS ce processus. Lancé
+  sous debugpy (par l'extension VS Code : `python -m debugpy ... -m
+  ldpy.debug --run f.ldpy`), les breakpoints posés dans le .ldpy se lient
+  directement — pas de fantôme, pas de traduction ;
+- **fantôme** : `ldpy.build` matérialise un vrai fichier Python + ses maps ;
+  debugpy (ou tout outil Python) s'exécute dessus tel quel
+  (`python -m ldpy.debug fichier.ldpy [--listen H:P] [-- args]`), et
+  `--breakpoints` traduit lignes .ldpy <-> lignes fantôme pour l'outillage.
 """
 
 import argparse
@@ -17,8 +20,8 @@ import subprocess
 import sys
 
 from ldpy.build import build_file, DEFAULT_OUT
-from ldpy.transpiler import LdpySyntaxError
-from ldpy.transpiler.linemap import LanguageMap
+from ldpy.transpiler import LdpySyntaxError, transpile
+from ldpy.transpiler.linemap import LanguageMap, compile_mapped
 
 
 def load_map(map_path):
@@ -54,12 +57,41 @@ def translate_frames(lmap, lines_1based):
     return out
 
 
+def run_direct(source_path, script_args):
+    """Mode direct : compile le .ldpy en coordonnées source et l'exécute ici
+    même. Sous debugpy, les breakpoints du .ldpy se lient sans traduction."""
+    import ldpy
+    src_path = os.path.abspath(source_path)
+    with open(src_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    try:
+        result = transpile(source, src_path)
+    except LdpySyntaxError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    for w in result.warnings:
+        print(str(w), file=sys.stderr)
+    ldpy.install()
+    from ldpy.importer import MAPS
+    MAPS[src_path] = result.map
+    code = compile_mapped(result.code, result.map, src_path)
+    sys.argv = [src_path] + list(script_args)
+    g = {"__name__": "__main__", "__file__": src_path}
+    exec(code, g)
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="ldpy.debug",
-        description="Transpile un .ldpy et exécute son fantôme Python, "
+        description="Exécute un .ldpy en mode déboguable : --run (direct, "
+                    "coordonnées source) ou via son fantôme Python, "
                     "sous debugpy si --listen est fourni.")
     parser.add_argument("source", help="fichier .ldpy")
+    parser.add_argument("--run", action="store_true",
+                        help="exécution directe dans ce processus, code "
+                             "compilé en coordonnées .ldpy (pour debugpy : "
+                             "breakpoints directement dans le .ldpy)")
     parser.add_argument("-o", "--out", default=DEFAULT_OUT,
                         help="répertoire fantôme (défaut : %(default)s)")
     parser.add_argument("--listen", metavar="HOTE:PORT",
@@ -81,6 +113,9 @@ def main(argv=None):
         argv = argv[:cut]
     args = parser.parse_args(argv)
     args.args = args.args + script_args
+
+    if args.run:
+        return run_direct(args.source, args.args)
 
     try:
         py_path, map_path, result = build_file(

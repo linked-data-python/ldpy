@@ -6,11 +6,13 @@ Usage :
     python -m ldpy -t source.ldpy    # transpile seulement (stdout)
 """
 
-import sys
 import argparse
+import os
+import sys
 
 import ldpy
 from ldpy.transpiler import transpile, LdpySyntaxError
+from ldpy.transpiler.linemap import compile_mapped
 
 
 def main(argv=None):
@@ -63,9 +65,12 @@ def main(argv=None):
 
     ldpy.install()
     from ldpy.importer import MAPS
-    MAPS[args.source] = result.map
-    code = compile(result.code, args.source, "exec", dont_inherit=True)
-    g = {"__name__": "__main__", "__file__": args.source}
+    src_path = os.path.abspath(args.source)
+    MAPS[args.source] = MAPS[src_path] = result.map
+    # compilation remappée : tracebacks, pdb et debugpy parlent en
+    # coordonnées .ldpy (fiche DESIGN_CHOICES/ldpy/011)
+    code = compile_mapped(result.code, result.map, src_path)
+    g = {"__name__": "__main__", "__file__": src_path}
     exec(code, g)
     if args.interactive:
         from ldpy.console import interact

@@ -133,6 +133,57 @@ class LanguageMap:
 
 
 # ---------------------------------------------------------------------------
+# Compilation « remappée » : le code généré est compilé avec les numéros de
+# ligne DU SOURCE .ldpy (via la map), si bien que tracebacks, pdb et debugpy
+# parlent directement en coordonnées .ldpy (fiche DESIGN_CHOICES/ldpy/011).
+# ---------------------------------------------------------------------------
+
+
+def remap_ast_lines(tree, lmap):
+    """Réécrit lineno/end_lineno de chaque nœud de l'AST du code GÉNÉRÉ vers
+    les lignes du source .ldpy. Une ligne générée sans origine (prélude
+    synthétique) est rabattue sur la ligne 1 ; l'intérieur d'un îlot replié
+    est rabattu sur la ligne de début de l'îlot. Les colonnes sont conservées
+    telles quelles (co_positions approximatives sur les lignes réécrites)."""
+    import ast
+    cache = {}
+
+    def src_line(gen_1based):
+        if gen_1based not in cache:
+            s = lmap.src_line_for_gen_line(gen_1based - 1)
+            cache[gen_1based] = (s + 1) if s is not None else None
+        return cache[gen_1based]
+
+    for node in ast.walk(tree):
+        lineno = getattr(node, "lineno", None)
+        if lineno is None:
+            continue
+        new_lineno = src_line(lineno) or 1
+        node.lineno = new_lineno
+        end = getattr(node, "end_lineno", None)
+        if end is not None:
+            new_end = src_line(end) or new_lineno
+            node.end_lineno = max(new_end, new_lineno)
+    return tree
+
+
+def compile_mapped(gen_code, lmap, filename, mode="exec",
+                   dont_inherit=True, optimize=-1):
+    """Compile le code Python généré avec `filename` (le .ldpy) et les numéros
+    de ligne du source, via `remap_ast_lines`. En cas d'échec inattendu de
+    l'analyse AST, retombe sur une compilation ordinaire (lignes générées)."""
+    import ast
+    try:
+        tree = ast.parse(gen_code, filename, mode)
+    except SyntaxError:
+        return compile(gen_code, filename, mode,
+                       dont_inherit=dont_inherit, optimize=optimize)
+    remap_ast_lines(tree, lmap)
+    return compile(tree, filename, mode,
+                   dont_inherit=dont_inherit, optimize=optimize)
+
+
+# ---------------------------------------------------------------------------
 # Export Source Map v3  : le format standard
 # de l'outillage JavaScript, pour interopérer avec les outils qui le lisent.
 # https://tc39.es/ecma426/ — champs [genCol, srcIdx, srcLine, srcCol] en

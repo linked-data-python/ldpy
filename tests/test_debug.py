@@ -8,6 +8,7 @@ import sys
 import pytest
 
 from ldpy.transpiler import transpile
+from ldpy.transpiler.linemap import compile_mapped
 from ldpy.debug import translate_breakpoints, translate_frames
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -108,6 +109,53 @@ def test_runtime_error_positions_are_in_shadow(tmp_path):
     p = run_debug(tmp_path, [], src="@prefix e: <http://e/> .\nboom()\n")
     assert p.returncode != 0
     assert "prog.py" in p.stderr and "boom" in p.stderr
+
+
+# ------------------------------------------------- mode direct (fiche 011)
+
+def test_compile_mapped_filename_and_lines():
+    """Le code object porte le nom du .ldpy et les numéros de ligne SOURCE :
+    l'intérieur de l'îlot multiligne (ligne générée 4) est rabattu sur la
+    ligne source 3 (début du g{...}), la ligne 4 source n'est exécutable
+    nulle part."""
+    r = transpile(SRC, "p.ldpy")
+    code = compile_mapped(r.code, r.map, "p.ldpy")
+    assert code.co_filename == "p.ldpy"
+    lines = {l for (_, _, l) in code.co_lines() if l is not None}
+    assert {2, 3, 5} <= lines
+    assert 4 not in lines
+
+
+def test_run_direct_output(tmp_path):
+    p = run_debug(tmp_path, ["--run"])
+    assert p.returncode == 0, p.stderr
+    assert p.stdout.strip() == "2"
+
+
+def test_run_direct_passes_argv(tmp_path):
+    p = run_debug(tmp_path, ["--run", "--", "bonjour"],
+                  src="import sys\nprint(sys.argv[1])\n")
+    assert "bonjour" in p.stdout
+
+
+def test_run_direct_traceback_points_to_ldpy(tmp_path):
+    """LE contrat du mode direct : le traceback nomme le .ldpy et SES lignes
+    (le boom() en ligne source 3, pas la ligne générée 4)."""
+    p = run_debug(tmp_path, ["--run"],
+                  src="@prefix e: <http://e/> .\n\nboom()\n")
+    assert p.returncode != 0
+    assert 'prog.ldpy", line 3' in p.stderr
+
+
+def test_main_module_traceback_is_source_mapped(tmp_path):
+    """`python -m ldpy` compile aussi en coordonnées source (fiche 011)."""
+    f = tmp_path / "prog.ldpy"
+    f.write_text("@prefix e: <http://e/> .\n\nboom()\n")
+    env = dict(os.environ, PYTHONPATH=REPO)
+    p = subprocess.run([sys.executable, "-m", "ldpy", str(f)],
+                       capture_output=True, text=True, env=env, timeout=120)
+    assert p.returncode != 0
+    assert 'prog.ldpy", line 3' in p.stderr
 
 
 @pytest.mark.skipif(not HAS_DEBUGPY, reason="debugpy non installé")

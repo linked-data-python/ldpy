@@ -4,8 +4,10 @@ Usage :
     import ldpy ; ldpy.install()
     import monmodule        # trouve monmodule.ldpy sur sys.path
 
-Les LanguageMap des modules importés sont conservées dans MAPS (clé : chemin du
-fichier .ldpy) pour la traduction des tracebacks (install_excepthook)."""
+Les modules .ldpy sont compilés en coordonnées SOURCE (compile_mapped,
+fiche DESIGN_CHOICES/ldpy/011) : tracebacks, pdb et debugpy pointent
+directement les lignes du .ldpy. Les LanguageMap des modules importés sont
+conservées dans MAPS (clé : chemin du fichier .ldpy) pour l'outillage."""
 
 import sys
 import os
@@ -36,16 +38,19 @@ class LdpyLoader(importlib.abc.SourceLoader):
             return f.read()
 
     def source_to_code(self, data, path, *, _optimize=-1):
-        """Transpile la source ldpy puis compile le Python obtenu ;
-        enregistre la LanguageMap dans MAPS pour les tracebacks."""
+        """Transpile la source ldpy puis la compile en coordonnées SOURCE
+        (compile_mapped, fiche 011) : les tracebacks, pdb et debugpy pointent
+        directement les lignes du .ldpy. La LanguageMap est gardée dans MAPS
+        pour l'outillage."""
         source = data.decode("utf-8") if isinstance(data, bytes) else data
         result = transpile(source, path)
         for w in result.warnings:
             print(str(w), file=sys.stderr)
         MAPS[path] = result.map
         CODES[path] = result.code
-        return compile(result.code, path, "exec",
-                       dont_inherit=True, optimize=_optimize)
+        from ldpy.transpiler.linemap import compile_mapped
+        return compile_mapped(result.code, result.map, path,
+                              dont_inherit=True, optimize=_optimize)
 
 
 class LdpyFinder(importlib.abc.MetaPathFinder):
@@ -99,23 +104,7 @@ def translate_lineno(path, gen_line_1based):
 
 
 def install_excepthook():
-    """Traduit les numéros de ligne des frames .ldpy dans les tracebacks."""
-    prev = sys.excepthook
-
-    def hook(etype, value, tb):
-        import traceback
-        entries = traceback.extract_tb(tb)
-        rewritten = []
-        for fr in entries:
-            src_line = translate_lineno(fr.filename, fr.lineno or 0)
-            if src_line is not None:
-                fr = traceback.FrameSummary(fr.filename, src_line, fr.name)
-            rewritten.append(fr)
-        print("Traceback (most recent call last):", file=sys.stderr)
-        for line in traceback.format_list(rewritten):
-            sys.stderr.write(line)
-        for line in traceback.format_exception_only(etype, value):
-            sys.stderr.write(line)
-
-    sys.excepthook = hook
-    return prev
+    """OBSOLÈTE (conservé pour compatibilité) : depuis la compilation
+    remappée (fiche 011), les code objects portent déjà les numéros de ligne
+    du .ldpy — les tracebacks sont corrects sans réécriture. Ne fait rien."""
+    return sys.excepthook
