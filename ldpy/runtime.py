@@ -8,9 +8,29 @@ implémentation MicroPython) sans changer le code généré.
 Voir DESIGN_CHOICES/ldpy/003 (émission) et 008 (runtime).
 """
 
+import itertools
+
 import rdflib
-from rdflib import RDF, URIRef, BNode, Literal, Variable, Namespace
+from rdflib import RDF, BNode, Literal, Variable, Namespace
 from rdflib.term import Node
+
+_URI_CACHE = {}
+
+
+def URIRef(value, base=None):
+    """rdflib.URIRef avec cache (clé = la chaîne). Les IRI émises par le
+    transpileur sont des CONSTANTES du programme : sans cache, chaque tour de
+    boucle sur un g{...} les reconstruisait (mesuré sur l'étude KGC). Le
+    cache est borné par le texte des programmes ; garde-fou à 1M entrées pour
+    les usages dynamiques via l'API."""
+    if base is not None:
+        return rdflib.URIRef(value, base)
+    u = _URI_CACHE.get(value)
+    if u is None:
+        if len(_URI_CACHE) > 1_000_000:
+            return rdflib.URIRef(value)
+        u = _URI_CACHE.setdefault(value, rdflib.URIRef(value))
+    return u
 
 try:
     from urllib.parse import urljoin as _urljoin
@@ -31,12 +51,22 @@ class bn:
     """Placeholder de nœud anonyme dans un appel graph().
 
     L'indice est déterministe (position syntaxique dans le g{...} source) ;
-    graph() crée un BNode frais par indice À CHAQUE évaluation."""
+    graph() crée un BNode frais par indice À CHAQUE évaluation. Les
+    instances, immuables, sont mises en pool (une par indice)."""
 
     __slots__ = ("index",)
+    _pool = {}
+
+    def __new__(cls, index):
+        inst = cls._pool.get(index)
+        if inst is None:
+            inst = super().__new__(cls)
+            object.__setattr__(inst, "index", index)
+            cls._pool[index] = inst
+        return inst
 
     def __init__(self, index):
-        self.index = index
+        pass
 
     def __repr__(self):
         return "bn(%d)" % self.index
@@ -83,17 +113,35 @@ def bnode(value):
     if isinstance(value, BNode):
         return value
     if isinstance(value, str) and _BNODE_SAFE.match(value):
-        return BNode(value)
+        return _bnode_cached(value)
     if isinstance(value, tuple):
         canon = "\x1f".join("%d:%s" % (len(str(p)), p) for p in value)
     else:
         canon = "%s:%r" % (type(value).__name__, value)
     import hashlib
-    return BNode("b" + hashlib.md5(canon.encode("utf-8")).hexdigest())
+    return _bnode_cached("b" + hashlib.md5(canon.encode("utf-8")).hexdigest())
+
+
+def _bnode_cached(label, _cache={}):
+    """Réutilise l'objet BNode existant pour une étiquette déjà vue (les
+    charges de déduplication repassent sans cesse sur les mêmes clés)."""
+    b = _cache.get(label)
+    if b is None:
+        if len(_cache) > 1_000_000:
+            return BNode(label)
+        b = _cache.setdefault(label, BNode(label))
+    return b
+
+
+_PASSTHROUGH = frozenset((rdflib.URIRef, Literal, BNode, Variable, bn))
 
 
 def node(value):
-    """Coercition d'une valeur Python en terme RDF (fnode / interpolations)."""
+    """Coercition d'une valeur Python en terme RDF (fnode / interpolations).
+    Dispatch sur le type exact d'abord : le chemin isinstance/ABC de rdflib
+    dominait le profil de matérialisation (étude KGC)."""
+    if type(value) in _PASSTHROUGH:
+        return value
     if isinstance(value, (Node, bn)):
         return value
     return Literal(value)
@@ -107,6 +155,7 @@ def firi(*parts, base=None):
     return URIRef(iri)
 
 
+_graph_ids = itertools.count()
 _NM_CACHE = {}
 
 
@@ -133,13 +182,62 @@ def _nm_for(namespaces):
     return nm
 
 
+class _EmittedGraph(rdflib.Graph):
+    """Graphe émis par g{...}, à matérialisation PARESSEUSE.
+
+    Les triplets attendent dans une liste ; le store n'est peuplé qu'au
+    premier accès réel. rdflib lit son stockage par l'attribut privé
+    ``_Graph__store`` : une PROPRIÉTÉ du même nom (data descriptor, donc
+    prioritaire sur l'attribut d'instance) est l'unique point de passage —
+    tout accès interne de rdflib matérialise d'abord. Mais ``__iter__``
+    sert la liste SANS matérialiser : ``cible += g{...}`` transfère alors
+    les triplets directement — UNE insertion de store au lieu de deux
+    (goulot mesuré par l'étude KGC : la moitié du coût de matérialisation
+    par lignes)."""
+
+    __slots__ = ("_real_store", "_pending")
+
+    def __init__(self, *args, **kw):
+        self._real_store = None
+        self._pending = None
+        super().__init__(*args, **kw)
+
+    @property
+    def _Graph__store(self):
+        pending = self._pending
+        if pending:
+            self._pending = None
+            self._real_store.addN(
+                (s, p, o, self) for s, p, o in dict.fromkeys(pending))
+        return self._real_store
+
+    @_Graph__store.setter
+    def _Graph__store(self, store):
+        self._real_store = store
+
+    def __iter__(self):
+        pending = self._pending
+        if pending is not None:
+            return iter(dict.fromkeys(pending))
+        return super().__iter__()
+
+    def __len__(self):
+        pending = self._pending
+        if pending is not None:
+            return len(dict.fromkeys(pending))
+        return super().__len__()
+
+
 def graph(namespaces, base, *triples):
-    """Construit un rdflib.Graph à partir de triplets aplatis.
+    """Construit un rdflib.Graph (sous-type paresseux) à partir de triplets
+    aplatis.
 
     namespaces : dict prefix -> Namespace (liaisons de sérialisation,
     partagées via _nm_for) ; base : IRI de base lexicale (str ou None) ;
     triples : tuples (s, p, o) pouvant contenir des placeholders bn(i)."""
-    g = rdflib.Graph(base=base)
+    g = _EmittedGraph(base=base,
+                      identifier=rdflib.URIRef("urn:x-ldpy:g%d"
+                                               % next(_graph_ids)))
     nm = _nm_for(namespaces)
     if nm is not None:
         g.namespace_manager = nm
@@ -147,18 +245,21 @@ def graph(namespaces, base, *triples):
     slots = {}
 
     def _term(t):
-        if isinstance(t, slot):
+        tt = type(t)
+        if tt in _PASSTHROUGH:
+            if tt is bn:
+                b = bnodes.get(t.index)
+                if b is None:
+                    b = bnodes[t.index] = BNode()
+                return b
+            return t
+        if tt is slot:
             if t.bound:
                 slots[t.index] = node(t.value)
             return slots[t.index]
-        if isinstance(t, bn):
-            if t.index not in bnodes:
-                bnodes[t.index] = BNode()
-            return bnodes[t.index]
         return node(t)
 
-    for s, p, o in triples:
-        g.add((_term(s), _term(p), _term(o)))
+    g._pending = [(_term(s), _term(p), _term(o)) for s, p, o in triples]
     return g
 
 

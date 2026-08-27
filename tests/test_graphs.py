@@ -304,3 +304,42 @@ gr = g{ ex:s ex:p {M() @ M()} }
 """
     g, _ = run(src)
     assert (None, None, Literal(7)) in g["gr"]
+
+
+def test_emitted_graph_lazy_semantics(run, prefixes):
+    """La matérialisation paresseuse des g{...} est invisible : itération
+    dédupliquée, len ensembliste, requêtes, sérialisation, mutation après
+    lecture — tout se comporte comme un Graph ordinaire."""
+    src = prefixes + """\
+gr = g{ ex:s ex:p 1 . ex:s ex:p 1 ; ex:q 2 }
+n0 = len(gr)
+l0 = len(list(gr))
+member = (ex:s, ex:p, ?{1}) in gr
+sparql = len(list(gr.query("SELECT ?o WHERE { ?s ?p ?o }")))
+gr.add((ex:z, ex:p, ?{9}))
+n1 = len(gr)
+ttl = gr.serialize(format="turtle")
+"""
+    g, _ = run(src)
+    assert g["n0"] == 2 and g["l0"] == 2       # dédupliqué partout
+    assert g["member"] is True
+    assert g["sparql"] == 2
+    assert g["n1"] == 3
+    assert "ex:q" in g["ttl"] or "q" in g["ttl"]
+
+
+def test_emitted_graph_iadd_transfers_without_flush(run, prefixes):
+    src = prefixes + """\
+from rdflib import Graph
+target = Graph()
+for i in range(10):
+    tmp = g{ ex:s{i} ex:p {i} }
+    flushed_before = tmp._pending is None
+    target += tmp
+    still_lazy = tmp._pending is not None
+n = len(target)
+"""
+    g, _ = run(src)
+    assert g["n"] == 10
+    assert g["flushed_before"] is False        # jamais matérialisé...
+    assert g["still_lazy"] is True             # ...même après le +=
