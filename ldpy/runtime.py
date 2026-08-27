@@ -44,7 +44,18 @@ _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 __all__ = [
     "RDF", "URIRef", "BNode", "Literal", "Variable", "Namespace",
     "node", "bn", "slot", "firi", "bnode", "graph", "instantiateBGP",
+    "sparql",
 ]
+
+
+def __getattr__(name):
+    """Charge ldpy.sparql à la demande (évite un import circulaire :
+    sparql importe node() d'ici)."""
+    if name == "sparql":
+        from ldpy import sparql as _s
+        globals()["sparql"] = _s
+        return _s
+    raise AttributeError(name)
 
 
 class bn:

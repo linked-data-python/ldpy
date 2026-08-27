@@ -17,6 +17,8 @@ valid Python program is a valid ldpy program with unchanged meaning.
 | Formatted node | `f{expr}`, `?{expr}` | any value, coerced to an RDF term |
 | Graph | `g{ ex:s a ex:C ; ex:p 1, "x" }` | `rdflib.Graph` |
 | Data-keyed blank node | `_:{expr}` *(in graphs)* | `BNode` with deterministic identity |
+| SPARQL expression | `e{ ?age >= 18 && BOUND(?n) }` | a **deferred** `Expression` |
+| Deferred IRI | `e<http://e/p/{?n}>` | a deferred `Expression` yielding a `URIRef` |
 
 Inside `g{ ... }` the notation is Turtle's: `a` for `rdf:type`, `;` and `,`
 lists, `[ ... ]` blank-node property lists, `( ... )` collections, `_:b`
@@ -57,6 +59,34 @@ Three rules keep the extension unambiguous with Python (design record 002):
 Residual collisions, documented and testable: with `ex` a *declared* prefix,
 `arr[ex:b]` and `{ex:b}` read as prefixed names — write spaces (`arr[ex : b]`)
 to force the Python reading.
+
+## Deferred SPARQL expressions: `e{ ... }` and `e<...>`
+
+Where `f{...}`/`?{...}` evaluate immediately, `e{...}` builds a **deferred**
+expression, evaluated later against a *solution mapping* — the natural tool
+for filters and templates over `instantiateBGP`-style bindings:
+
+```ldpy
+adult = e{ ?age >= 18 && BOUND(?name) }
+rows = [{"age": 12}, {"age": 30, "name": "Ana"}]
+kept = [r for r in rows if adult.ebv(r) ]
+assert len(kept) == 1
+iri = e<http://example.org/person/{?name}>
+assert str(iri(name="Ana Lu")) == "http://example.org/person/Ana%20Lu"
+```
+
+The expression language is SPARQL 1.1's: `||`, `&&`, `!`, comparisons,
+`IN`/`NOT IN`, arithmetic with numeric promotion (`7/2` is an `xsd:decimal`),
+a Python-style ternary (`v if cond else w`), and the core built-ins (`STR`,
+`LANG`, `DATATYPE`, `IRI`, `BOUND`, `CONCAT`, `UCASE`, `LCASE`, `STRLEN`,
+`SUBSTR`, `STRSTARTS`, `STRENDS`, `CONTAINS`, `STRBEFORE`, `STRAFTER`,
+`REPLACE`, `REGEX`, `ABS`, `ROUND`, `CEIL`, `FLOOR`, `IF`, `COALESCE`,
+`SAMETERM`, `ISIRI`, `ISBLANK`, `ISLITERAL`, `ISNUMERIC`, `LANGMATCHES`).
+Errors follow SPARQL's three-valued logic: an unbound variable is an error,
+absorbed only by `||`/`&&`/`IF`/`COALESCE`. `{expr}` interpolations inside
+`e{}` are re-evaluated at each evaluation. Mappings accept `str` or
+`Variable` keys, plain Python or RDF values. `e{...}` islands are not (yet)
+valid inside `g{...}` graphs.
 
 ## Scope of `@prefix` and `@base`
 

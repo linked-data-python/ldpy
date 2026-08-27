@@ -448,11 +448,16 @@ class Transpiler:
                 gen = self._take_fnode()
                 self._end_island("fnode", mark, gen)
                 return
-            self._error("e{...} (nœuds expression SPARQL) : "
-                        "réservé, prévu en phase 2")
+            mark = self._begin_island()
+            gen = self._take_enode()
+            self._end_island("enode", mark, gen)
+            return
         if nxt == "<" and name in ("f", "e") and operand_here:
             if name == "e":
-                self._error("e<...> (e-IRI SPARQL) : réservé, prévu en phase 2")
+                mark = self._begin_island()
+                gen = self._take_eiri()
+                self._end_island("eiri", mark, gen)
+                return
             saved = (self.i, self.src_line, self.src_col)
             mark = self._begin_island()
             gen = self._try_take_firi()
@@ -1010,6 +1015,337 @@ class Transpiler:
             return "%s.Literal(%s, datatype=%s)" % (
                 RUNTIME_ALIAS, string_text, dt)
         return "%s.Literal(%s)" % (RUNTIME_ALIAS, string_text)
+
+    # ------------------------------------------------------------------
+    # nœuds expression SPARQL : e{ ... } et e<...> (fiche 007, phase 2)
+    # ------------------------------------------------------------------
+
+    _E_BUILTINS = frozenset((
+        "STR", "LANG", "DATATYPE", "IRI", "URI", "BNODE", "CONCAT", "UCASE",
+        "LCASE", "STRLEN", "SUBSTR", "STRSTARTS", "STRENDS", "CONTAINS",
+        "STRBEFORE", "STRAFTER", "REPLACE", "REGEX", "ABS", "ROUND", "CEIL",
+        "FLOOR", "SAMETERM", "ISIRI", "ISURI", "ISBLANK", "ISLITERAL",
+        "ISNUMERIC", "LANGMATCHES", "ENCODE_FOR_IRI",
+    ))
+
+    def _take_enode(self):
+        """Sur 'e{'. Émet _ldpy_.sparql.expr(lambda __sm__: <corps>, src)."""
+        start = self.i
+        self._take(2)
+        self._e_ws()
+        body = self._e_expr()
+        self._e_ws()
+        if self._peek() != "}":
+            self._error("'}' attendu pour fermer e{...}")
+        self._take(1)
+        src_text = self.text[start + 2:self.i - 1].strip()
+        return "%s.sparql.expr(lambda __sm__: %s, src=%r)" % (
+            RUNTIME_ALIAS, body, src_text)
+
+    def _take_eiri(self):
+        """Sur 'e<'. IRI différée : gabarit dont les trous sont des
+        expressions SPARQL (STR + encodage IRI-safe à l'évaluation)."""
+        start = self.i
+        self._take(2)
+        parts = []
+        static = []
+        while True:
+            c = self._peek()
+            if c == "":
+                self._error("e-IRI non terminée")
+            if c == ">":
+                self._take(1)
+                break
+            if c == "{":
+                self._take(1)
+                if static:
+                    parts.append(repr("".join(static)))
+                    static = []
+                self._e_ws()
+                parts.append(self._e_expr())
+                self._e_ws()
+                if self._peek() != "}":
+                    self._error("'}' attendu dans la e-IRI")
+                self._take(1)
+                continue
+            if not _is_iri_char(c):
+                self._error("caractère %r interdit dans une e-IRI" % c)
+            static.append(self._take(1))
+        if static:
+            parts.append(repr("".join(static)))
+        src_text = self.text[start:self.i]
+        base = ", base=%r" % self.base if self.base else ""
+        return ("%s.sparql.expr(lambda __sm__: %s.sparql.build_iri((%s,)%s), "
+                "src=%r)" % (RUNTIME_ALIAS, RUNTIME_ALIAS,
+                             ", ".join(parts), base, src_text))
+
+    def _e_ws(self):
+        t = self.text
+        while self.i < self.n:
+            c = t[self.i]
+            if c in " \t\r\n":
+                self._take(1)
+            elif c == "#":
+                j = t.find("\n", self.i)
+                self._take((j if j != -1 else self.n) - self.i)
+            else:
+                break
+
+    def _e_kw(self, word):
+        """Consomme le mot-clé s'il est là (frontière de mot), sinon False."""
+        t = self.text
+        if t.startswith(word, self.i) and not _name_char(
+                self._peek(len(word))):
+            self._take(len(word))
+            self._e_ws()
+            return True
+        return False
+
+    def _e_expr(self):
+        """expression := or ('if' or 'else' expression)?  (style dev-sparql)."""
+        val = self._e_or()
+        self._e_ws()
+        if self._e_kw("if"):
+            cond = self._e_or()
+            self._e_ws()
+            if not self._e_kw("else"):
+                self._error("'else' attendu dans l'expression conditionnelle")
+            other = self._e_expr()
+            return "%s.sparql.if_(%s, lambda: %s, lambda: %s)" % (
+                RUNTIME_ALIAS, cond, val, other)
+        return val
+
+    def _e_or(self):
+        val = self._e_and()
+        while True:
+            self._e_ws()
+            if self.text.startswith("||", self.i):
+                self._take(2)
+                self._e_ws()
+                val = "%s.sparql.or_(lambda: %s, lambda: %s)" % (
+                    RUNTIME_ALIAS, val, self._e_and())
+            else:
+                return val
+
+    def _e_and(self):
+        val = self._e_rel()
+        while True:
+            self._e_ws()
+            if self.text.startswith("&&", self.i):
+                self._take(2)
+                self._e_ws()
+                val = "%s.sparql.and_(lambda: %s, lambda: %s)" % (
+                    RUNTIME_ALIAS, val, self._e_rel())
+            else:
+                return val
+
+    _E_RELOPS = (("!=", "ne"), ("<=", "le"), (">=", "ge"),
+                 ("=", "eq"), ("<", "lt"), (">", "gt"))
+
+    def _e_rel(self):
+        val = self._e_add()
+        self._e_ws()
+        t = self.text
+        if self._e_kw("NOT"):
+            if not self._e_kw("IN"):
+                self._error("'IN' attendu après 'NOT'")
+            return "%s.sparql.not_in(%s, %s)" % (
+                RUNTIME_ALIAS, val, self._e_list())
+        if self._e_kw("IN"):
+            return "%s.sparql.in_(%s, %s)" % (
+                RUNTIME_ALIAS, val, self._e_list())
+        for op, fn in self._E_RELOPS:
+            if t.startswith(op, self.i):
+                self._take(len(op))
+                self._e_ws()
+                return "%s.sparql.%s(%s, %s)" % (
+                    RUNTIME_ALIAS, fn, val, self._e_add())
+        return val
+
+    def _e_list(self):
+        if self._peek() != "(":
+            self._error("'(' attendu après IN")
+        self._take(1)
+        items = []
+        self._e_ws()
+        while self._peek() != ")":
+            items.append(self._e_expr())
+            self._e_ws()
+            if self._peek() == ",":
+                self._take(1)
+                self._e_ws()
+        self._take(1)
+        return "(%s,)" % ", ".join(items) if items else "()"
+
+    def _e_add(self):
+        val = self._e_mul()
+        while True:
+            self._e_ws()
+            c = self._peek()
+            if c == "+" :
+                self._take(1)
+                self._e_ws()
+                val = "%s.sparql.add(%s, %s)" % (RUNTIME_ALIAS, val,
+                                                 self._e_mul())
+            elif c == "-":
+                self._take(1)
+                self._e_ws()
+                val = "%s.sparql.sub(%s, %s)" % (RUNTIME_ALIAS, val,
+                                                 self._e_mul())
+            else:
+                return val
+
+    def _e_mul(self):
+        val = self._e_unary()
+        while True:
+            self._e_ws()
+            c = self._peek()
+            if c == "*":
+                self._take(1)
+                self._e_ws()
+                val = "%s.sparql.mul(%s, %s)" % (RUNTIME_ALIAS, val,
+                                                 self._e_unary())
+            elif c == "/":
+                self._take(1)
+                self._e_ws()
+                val = "%s.sparql.div(%s, %s)" % (RUNTIME_ALIAS, val,
+                                                 self._e_unary())
+            else:
+                return val
+
+    def _e_unary(self):
+        c = self._peek()
+        if c == "!":
+            self._take(1)
+            self._e_ws()
+            return "%s.sparql.not_(%s)" % (RUNTIME_ALIAS, self._e_unary())
+        if c == "-":
+            self._take(1)
+            self._e_ws()
+            return "%s.sparql.neg(%s)" % (RUNTIME_ALIAS, self._e_unary())
+        if c == "+":
+            self._take(1)
+            self._e_ws()
+        return self._e_primary()
+
+    def _e_primary(self):
+        t = self.text
+        c = self._peek()
+        if c == "(":
+            self._take(1)
+            self._e_ws()
+            val = self._e_expr()
+            self._e_ws()
+            if self._peek() != ")":
+                self._error("')' attendu")
+            self._take(1)
+            return val
+        if c in "?$":
+            self._take(1)
+            m = _NAME_RE.match(t, self.i)
+            if not m:
+                self._error("nom de variable attendu")
+            return "%s.sparql.var(__sm__, %r)" % (
+                RUNTIME_ALIAS, self._take(len(m.group(0))))
+        if c == "{":
+            self._take(1)
+            expr = self._scan_embedded_expr("}")
+            if self._peek() != "}":
+                self._error("'}' attendu")
+            self._take(1)
+            return "%s.sparql.py((%s))" % (RUNTIME_ALIAS, expr.strip())
+        if c == "e" and self._peek(1) == "<":
+            inner = self._take_eiri()
+            return "(%s)(__sm__)" % inner       # e-IRI imbriquée : évaluée là
+        if c == "<":
+            iri = self._take_iriref()
+            return "%s.URIRef(%r)" % (RUNTIME_ALIAS, self._resolve(iri))
+        if c in "\"'":
+            start = self.i
+            end = self._string_end(self.i)
+            text = t[start:end]
+            self._take(end - self.i)
+            if self._peek() == "@":
+                m = _LANGTAG_RE.match(t, self.i)
+                if m:
+                    self._take(m.end() - self.i)
+                    return "%s.Literal(%s, lang=%r)" % (
+                        RUNTIME_ALIAS, text, m.group(1))
+            if t.startswith("^^", self.i):
+                self._take(2)
+                dt = self._parse_term_after_hats()
+                return "%s.Literal(%s, datatype=%s)" % (
+                    RUNTIME_ALIAS, text, dt)
+            return "%s.Literal(%s)" % (RUNTIME_ALIAS, text)
+        if c.isdigit() or (c == "." and self._peek(1).isdigit()):
+            j = self.i
+            while j < self.n and (t[j].isdigit() or t[j] in ".eE" or
+                                  (t[j] in "+-" and t[j-1] in "eE")):
+                j += 1
+            lex = self._take(j - self.i)
+            return "%s.sparql.number(%r)" % (RUNTIME_ALIAS, lex)
+        m = _NAME_RE.match(t, self.i)
+        if m:
+            word = m.group(0)
+            after = t[m.end()] if m.end() < self.n else ""
+            if word.upper() == "BOUND" and after == "(":
+                self._take(len(word) + 1)
+                self._e_ws()
+                if self._peek() not in "?$":
+                    self._error("BOUND attend une variable ?v")
+                self._take(1)
+                vm = _NAME_RE.match(t, self.i)
+                name = self._take(len(vm.group(0)))
+                self._e_ws()
+                if self._peek() != ")":
+                    self._error("')' attendu")
+                self._take(1)
+                return "%s.sparql.bound(__sm__, %r)" % (RUNTIME_ALIAS, name)
+            if word.upper() in ("IF", "COALESCE") and after == "(":
+                fn = word.upper()
+                self._take(len(word) + 1)
+                self._e_ws()
+                args = []
+                while self._peek() != ")":
+                    args.append(self._e_expr())
+                    self._e_ws()
+                    if self._peek() == ",":
+                        self._take(1)
+                        self._e_ws()
+                self._take(1)
+                if fn == "IF":
+                    if len(args) != 3:
+                        self._error("IF attend 3 arguments")
+                    return ("%s.sparql.if_(%s, lambda: %s, lambda: %s)"
+                            % (RUNTIME_ALIAS, *args))
+                return "%s.sparql.coalesce(%s)" % (
+                    RUNTIME_ALIAS,
+                    ", ".join("lambda: %s" % a for a in args))
+            if word.upper() in self._E_BUILTINS and after == "(":
+                fn = "ISIRI" if word.upper() == "ISURI" else word.upper()
+                if fn == "URI":
+                    fn = "IRI"
+                self._take(len(word) + 1)
+                self._e_ws()
+                args = []
+                while self._peek() != ")":
+                    args.append(self._e_expr())
+                    self._e_ws()
+                    if self._peek() == ",":
+                        self._take(1)
+                        self._e_ws()
+                self._take(1)
+                if fn == "IRI" and self.base:
+                    args.append("base=%r" % self.base)
+                return "%s.sparql.%s(%s)" % (RUNTIME_ALIAS, fn,
+                                             ", ".join(args))
+            if after == ":":
+                return self._take_pname(in_island=True)
+            if word in ("true", "false"):
+                self._take(len(word))
+                return "%s.Literal(%s)" % (RUNTIME_ALIAS,
+                                           word == "true")
+        self._error("expression SPARQL attendue")
 
     # ------------------------------------------------------------------
     # prélude
