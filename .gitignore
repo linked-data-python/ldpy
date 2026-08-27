@@ -8,3 +8,4 @@ grammars/.antlr/
 .ldpy-build/
 .pytest_cache/
 .venv/
+bench/results/
