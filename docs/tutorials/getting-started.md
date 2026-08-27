@@ -8,7 +8,8 @@ code. It assumes you know some Python and have seen RDF/Turtle before.
 
 ```text
 pip install rdflib          # the default runtime backend
-git clone https://gitlab.com/coswot/ldpy && cd ldpy   # branch v2-island-parser
+git clone git@gitlab.emse.fr:maxime.lefrancois/linked-data-python.git
+cd linked-data-python
 ```
 
 (Until the 0.1.0 PyPI release, run from the repository with `PYTHONPATH=.`)

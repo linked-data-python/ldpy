@@ -5,7 +5,7 @@ primitives of the Semantic Web: prefix and base declarations, IRIs, prefixed
 names, RDF literals, SPARQL-style variables, and RDF graphs written in
 Turtle's own notation — interpolated with arbitrary Python expressions.
 
-![](https://gitlab.com/coswot/ldpy/-/raw/master/ldpyIcon.png)
+![](ldpyIcon.png)
 
 ```text
 @prefix sosa: <http://www.w3.org/ns/sosa/> .
@@ -25,6 +25,8 @@ transpiler is ~1 500 lines with no parsing dependency and sustains
 ## Quick start
 
 ```text
+git clone git@gitlab.emse.fr:maxime.lefrancois/linked-data-python.git
+cd linked-data-python
 pip install rdflib                      # runtime backend
 python -m ldpy program.ldpy             # run a file
 python -m ldpy                          # interactive console
@@ -73,4 +75,5 @@ Every code block in the documentation is executed by the test suite.
   oracle, LSP end-to-end, executable documentation).
 - Licence: MIT. Author: Maxime Lefrançois (Mines Saint-Étienne).
 - The 2023 ANTLR-based release (v1, PyPI 0.0.4) is preliminary work,
-  superseded by this island-parsing rewrite on branch `v2-island-parser`.
+  superseded by this island-parsing rewrite (the `main` branch of this
+  repository; the 2023 code remains on the legacy gitlab.com/coswot/ldpy).

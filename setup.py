@@ -30,7 +30,7 @@ setup(
     description="The python package \"linked-data-python\" can execute .ldpy files and run an interactive ldpy console.",
     author="Maxime Lefrançois",
     author_email="maxime.lefrancois@emse.fr",
-    url="https://gitlab.com/coswot/ldpy",
+    url="https://gitlab.emse.fr/maxime.lefrancois/linked-data-python",
     license="MIT",
     platforms=["any"],
     python_requires=">=3.7",
