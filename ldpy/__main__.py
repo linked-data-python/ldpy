@@ -24,6 +24,8 @@ def main(argv=None):
                         help="affiche le code transformé avant exécution.")
     parser.add_argument("-t", "--transpile-only", action="store_true",
                         help="écrit le code transformé sur stdout, sans exécuter.")
+    parser.add_argument("-i", "--interactive", action="store_true",
+                        help="ouvre la console interactive après le script.")
     parser.add_argument("-m", "--map", action="store_true",
                         help="écrit aussi le language map (<source>.map).")
     parser.add_argument("source", nargs="?",
@@ -34,8 +36,9 @@ def main(argv=None):
         print("ldpy " + ldpy.__version__)
         return 0
     if not args.source:
-        parser.print_help()
-        return 1
+        from ldpy.console import interact
+        interact()
+        return 0
 
     with open(args.source, "r", encoding="utf-8") as f:
         source = f.read()
@@ -64,6 +67,9 @@ def main(argv=None):
     code = compile(result.code, args.source, "exec", dont_inherit=True)
     g = {"__name__": "__main__", "__file__": args.source}
     exec(code, g)
+    if args.interactive:
+        from ldpy.console import interact
+        interact(locals=g, prefixes=result.prefixes, base=result.base)
     return 0
 
 

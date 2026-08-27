@@ -70,8 +70,9 @@ class TranspileResult:
 class Transpiler:
     """Une instance par fichier. Usage : Transpiler(src, filename).run()."""
 
-    def __init__(self, text, filename="<ldpy>"):
+    def __init__(self, text, filename="<ldpy>", emit_prelude=True):
         self.text = text
+        self.emit_prelude = emit_prelude
         self.n = len(text)
         self.filename = filename
         self.i = 0
@@ -170,9 +171,13 @@ class Transpiler:
         self.stmt_start = False
 
     def _error(self, msg, line=None, col=None):
-        raise LdpySyntaxError(msg, self.filename,
+        exc = LdpySyntaxError(msg, self.filename,
                               self.src_line if line is None else line,
                               self.src_col if col is None else col)
+        # la console s'en sert pour distinguer « entrée incomplète » (îlot
+        # non fermé en fin de tampon) d'une vraie erreur de syntaxe
+        exc.at_eof = self.i >= self.n
+        raise exc
 
     def _warn(self, msg):
         self.warnings.append(LdpyWarning(msg, self.filename,
@@ -215,7 +220,7 @@ class Transpiler:
         self._scan()
         self._close_copy()
         code = "".join(self.out)
-        if self.uses_runtime:
+        if self.uses_runtime and self.emit_prelude:
             code = self._insert_prelude(code)
         return TranspileResult(code, self.map, dict(self.prefixes),
                                self.base, self.warnings)
