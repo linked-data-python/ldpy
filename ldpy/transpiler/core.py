@@ -472,15 +472,27 @@ class Transpiler:
         self._end_island("literal", mark, gen)
 
     def _parse_term_after_hats(self):
-        """Terme datatype juste après '^^' (collé) : iri, pname, firi, fnode."""
+        """Terme datatype juste après '^^' (collé) : iri, pname, firi,
+        interpolation {expr} (ou f{expr}, sa forme historique).
+
+        Un datatype est toujours un IRI : l'interpolation passe donc par
+        dtype() et non par node(), qui ferait un littéral d'une chaîne."""
         c = self._peek()
         if c == "<":
             iri = self._take_iriref()
             return "%s.URIRef(%r)" % (RUNTIME_ALIAS, self._resolve(iri))
         if c == "f" and self._peek(1) == "<":
             return self._take_firi()
-        if c == "f" and self._peek(1) == "{":
-            return self._take_fnode()
+        if c == "{" or (c == "f" and self._peek(1) == "{"):
+            if c == "f":
+                self._take(1)
+            self._take(1)  # consomme '{'
+            expr = self._scan_embedded_expr("}")
+            if self._peek() != "}":
+                self._error("'}' attendu pour fermer l'interpolation de "
+                            "type de donnée")
+            self._take(1)
+            return "%s.dtype((%s))" % (RUNTIME_ALIAS, expr.strip())
         if _name_start(c) or c == ":":
             return self._take_pname(in_island=True)
         self._error("type de donnée attendu après '^^'")

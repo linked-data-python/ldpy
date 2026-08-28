@@ -46,6 +46,8 @@ directly: `URIRef, Literal, Variable, Namespace, RDF` re-exports, plus
 
 - `node(value)` — coerce a Python value to an RDF term (terms pass through);
 - `firi(*parts, base=None)` — join parts, resolve against `base` if relative;
+- `dtype(value)` — coerce a value to a datatype IRI (`{expr}` after `^^`);
+  unlike `node`, a `str` becomes a `URIRef`, never a `Literal`;
 - `graph(namespaces, base, *triples)` — build an `rdflib.Graph` from flattened
   triples with `bn(i)`/`slot(i, expr)` placeholders;
 - `instantiateBGP(graph, solution_mappings, initial=None)`.

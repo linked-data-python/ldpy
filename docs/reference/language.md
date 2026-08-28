@@ -24,7 +24,10 @@ Inside `g{ ... }` the notation is Turtle's: `a` for `rdf:type`, `;` and `,`
 lists, `[ ... ]` blank-node property lists, `( ... )` collections, `_:b`
 labels (scoped to the island), `#` comments — plus `{expr}` interpolations in
 any term position. An interpolation may carry a glued RDF suffix —
-`{expr}@en` (language tag) or `{expr}^^xsd:integer` (datatype) — and
+`{expr}@en` (language tag) or `{expr}^^xsd:integer` (datatype) — and the
+datatype may itself be interpolated, `{expr}^^{dt}`, for the generic case
+where the type is computed at run time (a datatype is always an IRI, so a
+string there is read as an IRI, not as a literal); and
 `_:{expr}` denotes a blank node whose identity derives from the value:
 equal values give the same node, across graphs and across sources (the
 R2RML deduplication/join idiom). A tuple key is canonically encoded and

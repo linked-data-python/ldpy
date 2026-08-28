@@ -140,3 +140,45 @@ r2 = f(ex:autre)
 def test_no_prelude_duplicated_lines():
     result = transpile("x = <http://e/a>\n")
     assert result.code.count("import ldpy.runtime") == 1
+
+
+# --- datatype interpolé {expr} ----------------------------------------------
+# Relevé par l'étude de corpus (fiche ldpy/012) : le code de sérialisation
+# générique calcule son datatype à l'exécution. `f{expr}` existait déjà ;
+# `{expr}`, la forme naturelle, manquait. Un datatype étant TOUJOURS un IRI,
+# l'interpolation passe par dtype() et non par node().
+
+def test_datatype_literal_interpolation(run, prefixes):
+    g, _ = run(prefixes + "dt = xsd:date\nx = \"2026-01-01\"^^{dt}\n")
+    assert g["x"] == Literal("2026-01-01", datatype=XSD.date)
+
+
+def test_datatype_interpolation_accepts_a_plain_string(run):
+    """Une chaîne est lue comme un IRI, pas comme un littéral (≠ node())."""
+    g, _ = run("dt = 'http://www.w3.org/2001/XMLSchema#integer'\n"
+               "x = \"7\"^^{dt}\n")
+    assert g["x"] == Literal("7", datatype=XSD.integer)
+    assert isinstance(g["x"].datatype, URIRef)
+
+
+def test_datatype_interpolation_on_fstring_and_in_graph(run, prefixes):
+    g, _ = run(prefixes +
+               "v = '2026-01-01'\ndt = xsd:date\n"
+               "x = f\"{v}\"^^{dt}\n"
+               "gr = g{ ex:s ex:p {v}^^{dt} }\n")
+    assert g["x"] == Literal("2026-01-01", datatype=XSD.date)
+    obj = list(g["gr"])[0][2]
+    assert obj == Literal("2026-01-01", datatype=XSD.date)
+
+
+def test_datatype_interpolation_expression(run, prefixes):
+    g, _ = run(prefixes + "t = False\n"
+               "x = \"1\"^^{xsd:integer if t else xsd:byte}\n")
+    assert g["x"].datatype == XSD.byte
+
+
+def test_datatype_interpolation_unclosed_is_an_error(run, prefixes):
+    import pytest
+    from ldpy.transpiler import LdpySyntaxError
+    with pytest.raises(LdpySyntaxError):
+        run(prefixes + "dt = xsd:date\nx = \"1\"^^{dt\n")

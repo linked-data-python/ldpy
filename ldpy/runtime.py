@@ -43,7 +43,7 @@ _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 
 __all__ = [
     "RDF", "URIRef", "BNode", "Literal", "Variable", "Namespace",
-    "node", "bn", "slot", "firi", "bnode", "graph", "instantiateBGP",
+    "node", "bn", "slot", "firi", "bnode", "dtype", "graph", "instantiateBGP",
     "sparql",
 ]
 
@@ -156,6 +156,19 @@ def node(value):
     if isinstance(value, (Node, bn)):
         return value
     return Literal(value)
+
+
+def dtype(value):
+    """Coercition d'une valeur en IRI de type de donnée ({expr} après '^^').
+
+    Un datatype est TOUJOURS un IRI : contrairement à node(), une chaîne est
+    donc lue comme un IRI et non comme un littéral. Accepte aussi un objet
+    exposant l'IRI par str() (URIRef, terme de DefinedNamespace)."""
+    if type(value) is rdflib.URIRef:
+        return value
+    if isinstance(value, str):
+        return URIRef(value)
+    return URIRef(str(value))
 
 
 def firi(*parts, base=None):
