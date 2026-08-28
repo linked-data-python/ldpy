@@ -386,3 +386,47 @@ n2 = len(gs2)
 """
     g, _ = run(src)
     assert g["n"] == 2 and g["n2"] == 2
+
+
+# --- point-virgule final (Turtle 1.1) ---------------------------------------
+# Turtle autorise des ';' surnuméraires en fin de predicateObjectList. Le cas
+# `; ]` était rejeté (relevé par l'étude de corpus, fiche ldpy/012 : un
+# copier-coller de Turtle valide doit transpiler).
+
+def test_trailing_semicolon_in_bnode_property_list(run, prefixes):
+    g, _ = run(prefixes + "gr = g{ ex:s ex:p [ ex:a 1 ; ] }\n")
+    expected = ttl('@prefix ex: <http://example.org/ns#> . '
+                   'ex:s ex:p [ ex:a 1 ] .')
+    assert isomorphic(g["gr"], expected)
+
+
+def test_repeated_trailing_semicolons_before_bracket(run, prefixes):
+    g, _ = run(prefixes + "gr = g{ ex:s ex:p [ ex:a 1 ; ex:b 2 ; ; ] }\n")
+    expected = ttl('@prefix ex: <http://example.org/ns#> . '
+                   'ex:s ex:p [ ex:a 1 ; ex:b 2 ] .')
+    assert isomorphic(g["gr"], expected)
+
+
+def test_repeated_semicolons_between_predicate_object_pairs(run, prefixes):
+    """';;' au milieu d'une liste est du Turtle valide (rdflib l'accepte)."""
+    g, _ = run(prefixes + "gr = g{ ex:s ex:p 1 ;; ex:q 2 }\n")
+    expected = ttl('@prefix ex: <http://example.org/ns#> . '
+                   'ex:s ex:p 1 ; ex:q 2 .')
+    assert isomorphic(g["gr"], expected)
+
+
+def test_trailing_semicolon_at_all_terminators(run, prefixes):
+    """Un ';' final est toléré devant '}', '.', ']' et un autre ';'."""
+    g, _ = run(prefixes +
+               'gr = g{ ex:s ex:p 1 ; . ex:t ex:q [ ex:r 2 ; ] ; }\n')
+    expected = ttl('@prefix ex: <http://example.org/ns#> . '
+                   'ex:s ex:p 1 . ex:t ex:q [ ex:r 2 ] .')
+    assert isomorphic(g["gr"], expected)
+
+
+def test_semicolon_still_requires_a_predicate_otherwise(run, prefixes):
+    """La tolérance ne doit pas avaler un prédicat manquant en milieu de liste."""
+    import pytest
+    from ldpy.transpiler import LdpySyntaxError
+    with pytest.raises(LdpySyntaxError):
+        run(prefixes + "gr = g{ ex:s ex:p 1 ; 2 }\n")

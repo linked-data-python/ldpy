@@ -897,12 +897,14 @@ class Transpiler:
                     continue
                 break
             if self._peek() == ";":
-                self._take(1)
-                self._g_ws()
-                if self._peek() in "}." or self._peek() in ";" or self._peek() == "":
-                    # point-virgule final toléré
-                    if self._peek() == ";":
-                        continue
+                # Turtle 1.1 : predicateObjectList autorise des ';'
+                # surnuméraires, aussi bien entre deux paires prédicat-objet
+                # qu'en fin de liste — y compris devant le ']' d'un nœud
+                # anonyme, qui manquait aux terminateurs (fiche ldpy/012).
+                while self._peek() == ";":
+                    self._take(1)
+                    self._g_ws()
+                if self._peek() in "}.]" or self._peek() == "":
                     return
                 continue
             return
