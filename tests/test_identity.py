@@ -73,3 +73,37 @@ def test_identity_single_copy_segment():
     assert kinds == ["copy"]
     assert result.map.to_src(1, 4) == (1, 4)
     assert result.map.to_gen(0, 2) == (0, 2)
+
+
+def _stdlib_corpus():
+    """Les fichiers .py des deux premiers niveaux de la bibliothèque standard."""
+    import sysconfig
+    std = sysconfig.get_paths()["stdlib"]
+    files = sorted(glob.glob(os.path.join(std, "*.py"))
+                   + glob.glob(os.path.join(std, "*", "*.py")))
+    return [f for f in files if os.path.sep + "test" not in f[len(std):]]
+
+
+def test_cpython_stdlib_round_trips_byte_for_byte():
+    """Transparence de l'hôte, mesurée sur la bibliothèque standard : chaque
+    fichier ressort identique au caractère près, sans erreur ni fausse
+    détection d'îlot. C'est le test qui rend vraie la promesse affichée dans
+    la documentation (docs/explanation/how-it-is-tested.md)."""
+    files = _stdlib_corpus()
+    if len(files) < 200:                      # installation tronquée (venv, CI)
+        pytest.skip("bibliothèque standard incomplète : %d fichiers" % len(files))
+    differ, failed, lines = [], [], 0
+    for path in files:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                src = f.read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        lines += src.count("\n")
+        try:
+            if transpile(src, path).code != src:
+                differ.append(path)
+        except Exception as exc:              # noqa: BLE001 — on veut le nom
+            failed.append("%s: %r" % (path, exc))
+    assert not differ and not failed, (differ[:5], failed[:5])
+    assert lines > 100000, lines              # le corpus est bien celui annoncé

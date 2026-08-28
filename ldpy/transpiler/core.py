@@ -45,6 +45,9 @@ STRING_PREFIXES = frozenset((
 _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 _LANGTAG_RE = re.compile(r"@([A-Za-z]+(?:-[A-Za-z0-9]+)*)")
 _NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+#: commentaire Python jusqu'à la fin de ligne (fiche 013, détection d'import)
+_COMMENT_RE = re.compile(r"#[^\n]*")
+
 _PYNAME_RE = re.compile(r"[^\W\d]\w*")      # identifiant Python (unicode)
 
 # --- Jeux de caractères Turtle (décision charsets, vérifiée par
@@ -863,8 +866,14 @@ class Transpiler:
 
     def _import_has_prefix_item(self):
         """Sur 'from' en début d'instruction : la liste d'import
-        contient-elle un nom préfixé (un ':' après le mot-clé import) ?"""
-        stmt = self._stmt_text_ahead(self.i)
+        contient-elle un nom préfixé (un ':' après le mot-clé import) ?
+
+        Les commentaires sont retirés d'abord : une liste parenthésée les
+        admet, et `# noqa: F401` porte un ':' sans qu'aucun préfixe ne soit
+        importé. Une liste d'import ne peut pas contenir de littéral chaîne,
+        donc retirer `#`→fin de ligne suffit. Hors commentaire, un ':' dans
+        une liste d'import n'est jamais du Python légal."""
+        stmt = _COMMENT_RE.sub("", self._stmt_text_ahead(self.i))
         m = re.search(r"\bimport\b", stmt)
         return m is not None and ":" in stmt[m.end():]
 
@@ -875,6 +884,7 @@ class Transpiler:
         decl_line = self.src_line
         mark = self._begin_island()
         t = self.text
+        start_i = self.i
         self._take(4)                                    # 'from'
         self._g_ws()
         mod_start = self.i
@@ -977,10 +987,22 @@ class Transpiler:
             self._prefix_col[target] = decl_col
             binds.append("%s = %s[%r]" % (var, nsvar, source))
             updates.append("%r: %s" % (target, var))
+        if not prefix_items:
+            # aucun préfixe finalement : l'instruction est du Python ordinaire
+            # et doit ressortir telle quelle (transparence de l'hôte, R3).
+            self._put(t[start_i:self.i])
+            if not self._sub:
+                sl, sc, gl, gc = mark
+                self.map.add("copy", (sl, sc, self.src_line, self.src_col),
+                             (gl, gc, self.gen_line, self.gen_col))
+            self.operand = False
+            self.stmt_start = False
+            return
         self._import_lines.append((decl_line, module))
         items = py_items + ["__namespaces__ as %s" % nsvar]
-        gen = "from %s import %s; %s; __namespaces__.update({%s})" % (
-            module, ", ".join(items), "; ".join(binds), ", ".join(updates))
+        gen = "; ".join(["from %s import %s" % (module, ", ".join(items))]
+                        + binds
+                        + ["__namespaces__.update({%s})" % ", ".join(updates)])
         self._end_island("import", mark, gen)
 
     def _imp_ws(self, paren):

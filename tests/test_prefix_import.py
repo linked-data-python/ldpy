@@ -229,3 +229,34 @@ def test_one_source_line_one_emitted_line():
     r = transpile(src)
     lines = [l for l in r.code.split("\n") if "from ldpypfx_vocab" in l]
     assert len(lines) == 1
+
+
+# --------------------------------------------------------- transparence (R3)
+# Régression trouvée par le test d'identité sur la bibliothèque standard :
+# zipfile/__init__.py était réécrit à cause d'un ':' DANS UN COMMENTAIRE de
+# liste d'import parenthésée (`# noqa: E402`).
+
+IMPORTS_SANS_PREFIXE = [
+    "from ._path import (  # noqa: E402\n    Path,\n)\n",
+    "from ._path import (\n    Path,\n\n    # used privately for tests\n"
+    "    CompleteDirs,  # noqa: F401\n)\n",
+    "from m import (a, b)  # type: ignore\n",
+    "from m import x  # see http://e/ : rien à importer\n",
+]
+
+
+@pytest.mark.parametrize("src", IMPORTS_SANS_PREFIXE)
+def test_import_sans_prefixe_est_identique(src):
+    """Un ':' de commentaire ne déclenche pas l'îlot d'import."""
+    result = transpile(src, "<t>")
+    assert result.code == src
+    assert result.warnings == []
+
+
+def test_import_avec_prefixe_et_commentaire():
+    """Le commentaire n'empêche pas de voir un vrai préfixe, et le code émis
+    reste compilable (jamais de ';' vide)."""
+    src = "from vocab import (  # noqa: E402\n    Path,\n    brick:,\n)\n"
+    result = transpile(src, "<t>")
+    assert "__namespaces__.update({'brick'" in result.code
+    compile(result.code, "<t>", "exec")
