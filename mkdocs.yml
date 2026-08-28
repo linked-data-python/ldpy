@@ -1,7 +1,7 @@
 site_name: Linked-Data Python
 site_description: >-
-  Python extended with Semantic Web primitives — IRIs, RDF literals and
-  Turtle-notation graphs as expressions, transpiled by island parsing.
+  Python extended with Semantic Web primitives — IRIs, RDF literals, Turtle
+  graphs, patterns and SPARQL as expressions, transpiled by island parsing.
 site_url: https://linked-data-python.readthedocs.io/
 repo_url: https://gitlab.emse.fr/maxime.lefrancois/linked-data-python
 edit_uri: -/blob/main/docs/
@@ -20,34 +20,63 @@ theme:
       toggle: { icon: material/weather-sunny, name: Light mode }
   features:
     - navigation.sections
+    - navigation.indexes
     - navigation.top
     - content.code.copy
+    - toc.follow
 
 markdown_extensions:
   - admonition
+  - attr_list
   - tables
   - toc:
       permalink: true
-  - pymdownx.highlight
+  # la coloration des blocs ``ldpy`` vient du lexer Pygments de ldpy lui-même
+  # (ldpy.pygments_lexer, enregistré par entry point) : il lit la language map,
+  # donc il colore exactement là où le transpileur voit un îlot.
+  - pymdownx.highlight:
+      anchor_linenums: true
+      use_pygments: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
   - pymdownx.superfences
+  - pymdownx.details
 
 nav:
   - Home: README.md
-  - Tutorial:
-      - Getting started: tutorials/getting-started.md
+  - Tutorials:
+      - First steps: tutorials/getting-started.md
+      - Build a knowledge graph: tutorials/build-a-knowledge-graph.md
   - How-to guides:
       - Run and import: how-to/run-and-import.md
-      - Deferred SPARQL expressions: how-to/sparql-expressions.md
+      - Build graphs from tables: how-to/build-graphs-from-tables.md
+      - Read and query a graph: how-to/query-a-graph.md
+      - Filter and template with e{ }: how-to/sparql-expressions.md
+      - Migrate from rdflib: how-to/migrate-from-rdflib.md
       - Visual Studio Code: how-to/use-vscode.md
       - Debugging: how-to/debug.md
       - Language server: how-to/language-server.md
+      - Highlight ldpy code: how-to/highlight-ldpy.md
   - Reference:
-      - The language: reference/language.md
+      - The language:
+          - reference/language/index.md
+          - Terms: reference/language/terms.md
+          - Declarations and scope: reference/language/declarations.md
+          - Graphs: reference/language/graphs.md
+          - The current graph: reference/language/current-graph.md
+          - Reading a graph: reference/language/querying.md
+          - Bindings and templates: reference/language/bindings.md
+          - Python → RDF coercion: reference/language/coercion.md
+          - Lexical rules and limits: reference/language/lexical.md
       - SPARQL expressions: reference/sparql-expressions.md
       - Command line: reference/cli.md
       - Python API: reference/api.md
       - Language map formats: reference/language-map.md
   - Explanation:
-      - Island parsing: explanation/island-parsing.md
+      - Why Linked-Data Python: explanation/why.md
+      - What real RDF code does: explanation/what-real-code-does.md
+      - Designing the syntax: explanation/designing-the-syntax.md
+      - Why island parsing: explanation/island-parsing.md
       - Emission and semantics: explanation/emission-and-semantics.md
       - Tooling architecture: explanation/tooling.md
+      - How this is tested: explanation/how-it-is-tested.md

@@ -1,6 +1,11 @@
 # Command-line reference
 
-## `python -m ldpy`
+Every entry point exists twice: as a console script installed with the package
+(`ldpy`, `ldpy-build`, `ldpy-debug`, `ldpy-lsp`) and as `python -m …`. They are
+the same programs; the module form is spelled out below because it works
+without the scripts being on `PATH`.
+
+## `python -m ldpy` — run, transpile, or open a console
 
 ```text
 python -m ldpy [-s] [-t] [-i] [-m] [source]
@@ -16,7 +21,7 @@ python -m ldpy [-s] [-t] [-i] [-m] [source]
 | `-m, --map` | also write `<source>.map` (language map JSON) |
 | `-v, --version` | print the version |
 
-## `python -m ldpy.build`
+## `python -m ldpy.build` — shadow files and maps
 
 ```text
 python -m ldpy.build SOURCE [-o OUT]      # file or directory (default OUT: .ldpy-build)
@@ -26,7 +31,7 @@ For each `module.ldpy`: writes `module.py` (shadow), `module.ldpy.map`
 (language map, JSON v1) and `module.py.map` (Source Map v3). Plain `.py`
 files in a tree are copied so mixed packages stay importable.
 
-## `python -m ldpy.debug`
+## `python -m ldpy.debug` — run under a debugger
 
 ```text
 python -m ldpy.debug --run SOURCE [-- args...]
@@ -40,7 +45,7 @@ the `.ldpy` lines directly. Without `--run`: builds the shadow then runs
 it — under debugpy when `--listen` is given. `--breakpoints` prints the
 `.ldpy`→shadow line table (JSON) and exits.
 
-## `python -m ldpy.lsp`
+## `python -m ldpy.lsp` — the language server
 
 ```text
 python -m ldpy.lsp [--backend pylsp|none]
@@ -48,7 +53,19 @@ python -m ldpy.lsp [--backend pylsp|none]
 
 LSP server on stdio. See [the language server guide](../how-to/language-server.md).
 
-## `python -m bench.run`
+## `pygmentize -l ldpy` — highlight
+
+The package registers a Pygments lexer, so any Pygments consumer can colour
+`.ldpy` once it is installed:
+
+```text
+pygmentize -l ldpy program.ldpy
+pygmentize -l ldpy -f html -O full -o out.html program.ldpy
+```
+
+See [how to highlight ldpy code](../how-to/highlight-ldpy.md).
+
+## `python -m bench.run` — throughput campaigns
 
 ```text
 python -m bench.run [--quick] [--out bench/results]

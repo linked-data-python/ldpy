@@ -1,4 +1,4 @@
-# How to filter and template with deferred expressions
+# How to filter and template with `e{ }`
 
 `e{...}` shines wherever bindings arrive as data: filtering solution
 mappings, instantiating templates, validating rows.
@@ -36,6 +36,20 @@ assert len(out) == 1
 mint = e<http://example.org/reading/{?sensor}/{?day}>
 iri = mint(sensor="s 1", day="2026-08-27")
 assert "s%201" in str(iri)
+```
+
+## Build a graph from bindings
+
+In term position inside `g{ }`, `+{ }` or `-{ }`, a deferred expression is
+evaluated against the current bindings — so a derived value needs no temporary
+variable and no `if`:
+
+```ldpy
+@prefix ex: <http://example.org/ns#> .
+@graph as out
+for @bindings in [{"s": ex:a, "v": 10}, {"s": ex:b}]:
+    +{ ?s ex:doubled e{ ?v * 2 } }
+assert len(out) == 1          # the row without ?v produced nothing
 ```
 
 ## Validate before you assert

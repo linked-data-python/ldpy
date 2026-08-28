@@ -61,7 +61,10 @@ directly: `URIRef, Literal, Variable, Namespace, RDF` re-exports, plus
 - `match(graph, patterns, project, bindings=None)` → `Match` — the `m{ }`
   island (lazy nested-loop join; `first()`, `one()`, `count()`);
 - `prepared(text, interps, namespaces, base, graph=None, bindings=None,
-  update=False)` → `PreparedQuery` — the `s{ }` island (lazy, cached);
+  update=False)` → `PreparedQuery` — the `s{ }` island (lazy, cached).
+  Iterating or truth-testing runs it; `execute()` runs it and returns rdflib's
+  result, which is what an `INSERT`/`DELETE` needs since it has no solutions
+  to iterate;
 - `Bindings` — mapping with str/Variable keys and RDF-coerced values;
   `as_bindings_iter(iterable)` — the `for @bindings in …` adapter;
 - `Coercion(rules)` — the Python → RDF coercion policy (also exported as
@@ -72,6 +75,25 @@ directly: `URIRef, Literal, Variable, Namespace, RDF` re-exports, plus
 from ldpy.runtime import node, firi, Literal
 assert node(42) == Literal(42)
 assert str(firi("http://e/", 7, "/x")) == "http://e/7/x"
+```
+
+## `ldpy.pygments_lexer`
+
+```python
+from ldpy.pygments_lexer import LdpyLexer
+```
+
+A Pygments lexer for `.ldpy`, built on the language map: `copy` segments go to
+Pygments' `PythonLexer`, island segments are tokenised by kind. Registered as a
+Pygments plugin (entry point `pygments.lexers`), so `get_lexer_by_name("ldpy")`
+finds it once the package is installed — see
+[how to highlight ldpy code](../how-to/highlight-ldpy.md).
+
+```python
+from pygments.lexers import get_lexer_by_name
+lexer = get_lexer_by_name("ldpy")
+tokens = list(lexer.get_tokens_unprocessed("g = g{ }\n"))
+assert "".join(v for _, _, v in tokens) == "g = g{ }\n"
 ```
 
 ## Top level `ldpy`

@@ -152,3 +152,10 @@ def test_subquery_braces_are_groups(run):
             { SELECT ?s WHERE { ?s a ex:Sensor } } } }))
         """))
     assert g["n"] == 2
+
+
+def test_update_par_execute_public(run):
+    """`execute()` est la forme publique : un UPDATE ne s'itère pas."""
+    g, _ = run(DATA + "s{ INSERT { ?s ex:seen 1 } WHERE { ?s a ex:Sensor } }"
+                      ".execute()\n")
+    assert len(g["g"]) > 2

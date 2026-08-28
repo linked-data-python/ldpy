@@ -84,8 +84,23 @@ person = e<http://example.org/person/{?name}/{?age + 1}>
 assert str(person(name="Ana Lu", age=20)) == "http://example.org/person/Ana%20Lu/21"
 ```
 
+## Where deferred expressions are used
+
+They are values, so anything can hold one — but three places consume them
+directly:
+
+- in **term position** inside `g{ }`, `+{ }` and `-{ }`, evaluated against the
+  [current bindings](language/bindings.md#e-in-term-position); a SPARQL error
+  leaves the term unbound and the triple is dropped;
+- as a **filter** over solution mappings, with `.ebv(sm)`;
+- as an **IRI template**, with `e<...>`, which percent-encodes its holes —
+  the form to mint IRIs from data.
+
 ## Limits
 
-- `e{...}` / `e<...>` are not (yet) valid as terms *inside* `g{...}` graphs.
 - Custom functions called by IRI are not supported; use a `{python}`
   interpolation instead.
+- `e{ }` is not accepted inside an `s{ }` query — there, interpolation in term
+  position does the job.
+- Aggregates (`COUNT`, `SUM`, …) belong to a query, not to an expression: use
+  [`s{ }`](language/querying.md#s-a-sparql-query).

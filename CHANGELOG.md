@@ -39,7 +39,39 @@ rdflib (fiches DESIGN_CHOICES/ldpy/013 à 020).
   ("uri",): URIRef, date: XSD.date})` — par champ puis par type, empilable
   par `with`, `install()` pour le module ; `node()` reste le point d'entrée
   unique, au coût inchangé sans politique.
-- Suite : 425 → 578 tests ; débit inchangé (~60 000 lignes/s).
+- **Coloration HTML** : le paquet enregistre un lexer Pygments
+  (`ldpy.pygments_lexer`) construit **sur la language map** — MkDocs, Sphinx et
+  `pygmentize` colorent `.ldpy` dès l'installation, et la coloration ne peut
+  pas diverger du transpileur (fiche 021).
+- **Documentation refondue** : page d'accueil qui montre le langage plutôt que
+  son plan ; référence du langage éclatée en huit pages, une par famille
+  d'îlots ; trois pages d'explication nouvelles — pourquoi ldpy, ce que fait le
+  vrai code RDF (l'étude de corpus, chiffres à l'appui), comment la syntaxe a
+  été conçue — et une page « comment tout cela est testé » qui dit aussi ce qui
+  ne l'est pas ; deux tutoriels, quatre guides pratiques nouveaux
+  (données tabulaires, lecture et requêtes, migration depuis rdflib,
+  coloration).
+
+**Corrections** (toutes trouvées en écrivant cette documentation, toutes avec
+tests de régression) :
+
+- **Transparence de l'hôte** : un `:` dans un *commentaire* de liste d'import
+  parenthésée déclenchait l'îlot d'import de préfixes, réécrivait l'instruction
+  et produisait du code non compilable. Le test d'identité tourne désormais sur
+  la bibliothèque standard de CPython (464 fichiers, ~260 000 lignes), qui est
+  ce qui l'a trouvé.
+- **Graphes paresseux** : une liste en attente **vide** n'éteignait pas le mode
+  paresseux, si bien que `g = g{ }` suivi de `g += g{…}` ou de `g.add(…)`
+  laissait le graphe vide. `__iadd__` devient paresseux au passage.
+- **Promotion numérique SPARQL** : la promotion portait sur le type du résultat
+  mais pas sur les opérandes — `xsd:double * xsd:decimal` levait un `TypeError`
+  Python, avalé en « terme non lié ».
+- **Expression différée en sujet partagé** : `+{ e<http://e/{?id}> ex:p 1 ;
+  ex:q 2 }` produisait un littéral portant le texte source de l'îlot ; le cas à
+  un seul triplet fonctionnait, ce qui rendait le défaut discret.
+- `PreparedQuery.execute()` : forme publique pour exécuter un îlot `s{ }`, ce
+  qu'exige un UPDATE (il n'a pas de solutions à itérer).
+- Suite : 425 → 867 tests ; débit inchangé (~60 000 lignes/s).
 
 ### [0.1.0] — en préparation
 

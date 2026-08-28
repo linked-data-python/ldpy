@@ -3,11 +3,14 @@
 ## Run a file
 
 ```text
-python -m ldpy program.ldpy            # transpile + execute
-python -m ldpy -s program.ldpy         # also print the generated Python
-python -m ldpy -t program.ldpy         # transpile only, to stdout
-python -m ldpy -i program.ldpy         # then drop into the console
+ldpy program.ldpy                      # transpile + execute
+ldpy -s program.ldpy                   # also print the generated Python
+ldpy -t program.ldpy                   # transpile only, to stdout
+ldpy -i program.ldpy                   # then drop into the console
 ```
+
+`ldpy` and `python -m ldpy` are the same command; the console script comes with
+the package.
 
 ## Import `.ldpy` modules from Python
 
