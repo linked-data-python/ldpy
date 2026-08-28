@@ -136,11 +136,25 @@ def _num_result(value, rank):
     return Literal(value, datatype=dt)
 
 
+def _promote(value, rank):
+    """Amène une valeur au type Python du rang visé — la promotion numérique
+    de SPARQL 1.1 s'applique aux OPÉRANDES, pas seulement au résultat : sans
+    elle, xsd:double * xsd:decimal serait un float fois un Decimal, que Python
+    refuse."""
+    if rank == 0:
+        return int(value)
+    if rank == 1:
+        from decimal import Decimal
+        return value if isinstance(value, Decimal) else Decimal(str(value))
+    return float(value)
+
+
 def _arith(a, b, op, div=False):
     va, vb = _numeric(a), _numeric(b)
     rank = max(_num_rank(a), _num_rank(b))
     if div and rank == 0:
         rank = 1                      # SPARQL : integer / integer -> decimal
+    va, vb = _promote(va, rank), _promote(vb, rank)
     try:
         return _num_result(op(va, vb), rank)
     except ZeroDivisionError:
@@ -163,13 +177,9 @@ def mul(a, b):
 
 
 def div(a, b):
-    """Opérateur / (integer/integer -> decimal)."""
-    from decimal import Decimal
-    def _d(x, y):
-        if isinstance(x, int) and isinstance(y, int):
-            return Decimal(x) / Decimal(y)
-        return x / y
-    return _arith(a, b, _d, div=True)
+    """Opérateur / (integer/integer -> decimal). Les opérandes sont promus au
+    rang du résultat, donc jamais deux int ici."""
+    return _arith(a, b, lambda x, y: x / y, div=True)
 
 
 def neg(a):

@@ -530,7 +530,11 @@ def _materializer(bindings=None, keep_vars=True):
             return t
         if tt is slot:
             if t.bound:
-                slots[t.index] = node(t.value)
+                # récursion, et non node() : la valeur partagée peut être
+                # elle-même un terme à matérialiser — une expression différée
+                # e{ … } / e<…> en position de sujet d'une liste
+                # prédicat-objet passe par ici (fiche 017).
+                slots[t.index] = _term(t.value)
             return slots[t.index]
         cls = _expr_class()
         if cls and tt is cls:
@@ -856,6 +860,14 @@ class PreparedQuery:
         if self.update:
             return self.graph.update(prep, initBindings=self._init_bindings())
         return self.graph.query(prep, initBindings=self._init_bindings())
+
+    def execute(self):
+        """Exécute la requête et rend le résultat de rdflib.
+
+        Itérer ou tester la valeur de vérité d'un îlot suffit pour SELECT,
+        ASK et CONSTRUCT. Un UPDATE, lui, ne rend rien à itérer : c'est la
+        forme qui le déclenche — `s{ INSERT … }.execute()`."""
+        return self._execute()
 
     def __iter__(self):
         return iter(self._execute())

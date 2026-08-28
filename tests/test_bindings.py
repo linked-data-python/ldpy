@@ -244,3 +244,27 @@ def test_sparql_receives_current_bindings(run):
         rows = list(s{ SELECT ?v WHERE { ?s ex:v ?v } })
         """))
     assert [tuple(r) for r in g["rows"]] == [(Literal(1),)]
+
+
+# ------------------------- expression différée en sujet d'une liste ; ou ,
+# Régression : le sujet PARTAGÉ d'une liste prédicat-objet passe par slot(),
+# qui appliquait node() à la valeur brute — une expression différée devenait
+# donc un Literal portant son propre texte source.
+
+def test_expression_differee_en_sujet_partage(run):
+    g, _ = run("@prefix ex: <http://e/> .\n"
+               "@graph as out\n"
+               "for @bindings in [{'id': 's1'}, {'id': 's2'}]:\n"
+               "    +{ e<http://e/{?id}> ex:p 1 ; ex:q 2 }\n")
+    out = g["out"]
+    subjects = {str(s) for s, p, o in out}
+    assert subjects == {"http://e/s1", "http://e/s2"}
+    assert len(out) == 4
+
+
+def test_iri_differee_en_sujet_d_un_graphe(run):
+    g, _ = run("@prefix ex: <http://e/> .\n"
+               "@bindings as b\n"
+               "b['id'] = 'x'\n"
+               "gr = g{ e<http://e/{?id}> ex:p 1 ; ex:q 2 }\n")
+    assert {str(s) for s, p, o in g["gr"]} == {"http://e/x"}

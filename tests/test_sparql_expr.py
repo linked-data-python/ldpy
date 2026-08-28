@@ -228,3 +228,28 @@ def test_bound_requires_variable():
 def test_e_name_stays_python():
     src = "e = 1\ny = e + 2\nf = e if e else 0\n"
     assert transpile(src).code == src
+
+
+# ------------------------------------------- promotion numérique des opérandes
+# Régression : le rang du RÉSULTAT était calculé, mais pas la conversion des
+# opérandes — xsd:double * xsd:decimal levait un TypeError Python (float fois
+# Decimal), avalé plus haut en « terme non lié » et donc silencieux.
+
+@pytest.mark.parametrize("expr,c,expected_dt,expected", [
+    ("?c * 1.8 + 32", ("21.5", XSD.double), XSD.double, "70.7"),
+    ("?c + 1", ("21.5", XSD.double), XSD.double, "22.5"),
+    ("?c / 2", ("21.5", XSD.double), XSD.double, "10.75"),
+    ("?c * 2", ("2", XSD.integer), XSD.integer, "4"),
+    ("?c + 0.5", ("2", XSD.integer), XSD.decimal, "2.5"),
+    ("?c * 1.5", ("2.0", XSD.float), XSD.float, "3.0"),
+])
+def test_promotion_des_operandes(expr, c, expected_dt, expected):
+    e = make("e1 = e{ %s }\n" % expr)["e1"]
+    got = e({"c": Literal(c[0], datatype=c[1])})
+    assert got.datatype == expected_dt
+    assert str(got) == expected
+
+
+def test_division_entiere_donne_un_decimal():
+    e = make("e1 = e{ 7 / 2 }\n")["e1"]
+    assert e({}).datatype == XSD.decimal and str(e({})) == "3.5"
