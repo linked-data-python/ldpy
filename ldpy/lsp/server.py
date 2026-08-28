@@ -23,6 +23,12 @@ from ldpy.lsp.rpc import Endpoint, read_message, RpcClosed
 from ldpy.lsp import translate as tr
 from ldpy.transpiler.linemap import snap_breakpoint_lines
 
+
+def fmt_default():
+    """Longueur de ligne par défaut, sans importer black."""
+    from ldpy.formatter import DEFAULT_LINE_LENGTH
+    return DEFAULT_LINE_LENGTH
+
 FORWARDED = {
     "textDocument/completion",
     "textDocument/definition",
@@ -50,12 +56,14 @@ class Document:
 class LdpyServer:
     """Le serveur LSP : couche native + délégation au backend Python."""
 
-    def __init__(self, reader, writer, backend="pylsp", backend_argv=None):
+    def __init__(self, reader, writer, backend="pylsp", backend_argv=None,
+                 line_length=None):
         self.endpoint = Endpoint(reader, writer)
         self.docs = {}              # uri -> Document
         self.backend_kind = backend
         self.backend_argv = backend_argv
         self.backend = None
+        self.line_length = line_length
         self._shutdown = False
 
     # ------------------------------------------------------------ backend
@@ -173,6 +181,7 @@ class LdpyServer:
                     "completionProvider": {
                         "triggerCharacters": [".", ":", "<", "?", "/"]},
                     "definitionProvider": True,
+                    "documentFormattingProvider": self._can_format(),
                     "referencesProvider": True,
                     "signatureHelpProvider": {
                         "triggerCharacters": ["(", ","]},
@@ -217,6 +226,9 @@ class LdpyServer:
                                  {"uri": uri, "diagnostics": []})
             return None
 
+        if method == "textDocument/formatting":
+            return self._format(params)
+
         if method == "ldpy/breakpointLines":
             # Rabat des lignes de points d'arrêt sur celles qui se lient
             # vraiment (intérieur d'un îlot multiligne -> début de l'îlot).
@@ -245,6 +257,40 @@ class LdpyServer:
         return None
 
     # ------------------------------------------------------------- natives
+
+    def _can_format(self):
+        """Le formateur délègue le Python à black (extra `[format]`) : on
+        n'annonce la capacité que si elle est réellement disponible."""
+        try:
+            from ldpy.formatter import _black
+            _black()
+            return True
+        except Exception:
+            return False
+
+    def _format(self, params):
+        """`textDocument/formatting` : un seul edit qui remplace tout.
+
+        Un document fautif ne se formate pas — on ne rend alors AUCUN edit
+        plutôt qu'un texte inventé ; les diagnostics disent déjà pourquoi."""
+        doc = self.docs.get(params["textDocument"]["uri"])
+        if doc is None:
+            return None
+        from ldpy.formatter import format_source, FormatterUnavailable
+        opts = params.get("options") or {}
+        width = (self.line_length
+                 or opts.get("ldpyLineLength")
+                 or fmt_default())
+        try:
+            new = format_source(doc.text, doc.uri, int(width))
+        except (LdpySyntaxError, FormatterUnavailable):
+            return None
+        if new == doc.text:
+            return []
+        lines = doc.text.split("\n")
+        end = {"line": len(lines) - 1, "character": len(lines[-1])}
+        return [{"range": {"start": {"line": 0, "character": 0}, "end": end},
+                 "newText": new}]
 
     def _hover(self, params):
         doc = self.docs.get(params["textDocument"]["uri"])
@@ -294,9 +340,12 @@ def main(argv=None):
     parser.add_argument("--backend", default="pylsp",
                         choices=["pylsp", "none"],
                         help="serveur Python délégué (défaut : pylsp)")
+    parser.add_argument("--line-length", type=int, default=None,
+                        help="longueur de ligne du formateur "
+                             "(défaut : celle de black)")
     args = parser.parse_args(argv)
     server = LdpyServer(sys.stdin.buffer, sys.stdout.buffer,
-                        backend=args.backend)
+                        backend=args.backend, line_length=args.line_length)
     server.serve()
 
 

@@ -36,6 +36,9 @@ dev = ["pytest"]
 # coloration syntaxique : lexer Pygments (fiche 023) — OPTIONNEL, rien dans
 # ldpy ne l'importe, Pygments le charge par entry point s'il est installé
 highlight = ["pygments>=2.14"]
+# formateur (fiche 024) — OPTIONNEL de la même façon : seul ldpy/formatter.py
+# importe black, et seulement à l'appel
+format = ["black>=24"]
 docs = ["mkdocs", "mkdocs-material", "pygments>=2.14"]
 
 [project.scripts]
@@ -43,6 +46,7 @@ ldpy = "ldpy.__main__:main"
 ldpy-lsp = "ldpy.lsp.server:main"
 ldpy-build = "ldpy.build:main"
 ldpy-debug = "ldpy.debug:main"
+ldpy-format = "ldpy.formatter:main"
 
 # le surligneur est le transpileur : le lexer lit la language map (fiche 023).
 # Enregistré comme plugin Pygments, il sert mkdocs, Sphinx et `pygmentize`.

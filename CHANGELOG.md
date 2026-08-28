@@ -39,6 +39,23 @@ rdflib (fiches DESIGN_CHOICES/ldpy/013 à 020).
   ("uri",): URIRef, date: XSD.date})` — par champ puis par type, empilable
   par `with`, `install()` pour le module ; `node()` reste le point d'entrée
   unique, au coût inchangé sans politique.
+- **Formateur** : `ldpy-format` (CLI, `--check`/`--diff`) et
+  `textDocument/formatting` côté serveur — donc « Format Document » et
+  `formatOnSave` dans tout éditeur LSP. Le Python est délégué à **black**
+  (extra `[format]`, îlots masqués par des substituts de même poids) ; les
+  îlots ne voient normaliser que leurs bordures, leur corps est recopié tel
+  quel. Trois propriétés testées sur toute la documentation : sans îlot, le
+  résultat est **exactement** celui de black ; formater est idempotent ;
+  l'AST du Python transpilé ne bouge pas (fiche 024).
+- **Débogage : un pas ne ment plus** (fiche vscode/103). Un harnais DAP
+  (`tests/dapclient.py`) pilote un vrai debugpy et mesure où le débogueur
+  s'arrête. Il a montré que le **lanceur** (`-m ldpy.debug`) apparaissait dans
+  la pile d'appels et attrapait le pas suivant la dernière ligne, et qu'un
+  point d'arrêt posé dans un îlot multiligne était annoncé « vérifié » sans
+  jamais se déclencher. `stepping_rules()` masque le lanceur toujours et le
+  runtime sous `justMyCode` ; `--probe` les publie pour l'outillage ;
+  `snap_breakpoint_lines()` rabat un point d'arrêt intenable, que l'extension
+  déplace visiblement.
 - **Coloration HTML** : le paquet enregistre un lexer Pygments
   (`ldpy.pygments_lexer`) construit **sur la language map** — MkDocs, Sphinx et
   `pygmentize` colorent `.ldpy` dès l'installation, et la coloration ne peut

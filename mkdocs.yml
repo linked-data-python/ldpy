@@ -56,6 +56,7 @@ nav:
       - Visual Studio Code: how-to/use-vscode.md
       - Debugging: how-to/debug.md
       - Language server: how-to/language-server.md
+      - Format ldpy code: how-to/format.md
       - Highlight ldpy code: how-to/highlight-ldpy.md
   - Reference:
       - The language:

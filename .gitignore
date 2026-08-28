@@ -9,3 +9,4 @@ grammars/.antlr/
 .pytest_cache/
 .venv/
 bench/results/
+site/

@@ -14,9 +14,56 @@ python -m debugpy --listen 127.0.0.1:5678 --wait-for-client \
        -m ldpy.debug --run program.ldpy
 ```
 
-Breakpoints are set on `.ldpy` lines; a breakpoint aimed *inside* a
-multi-line `g{ ... }` island only binds on the island's first line (the
-graph is one expression). This is what the VS Code extension launches on F5.
+Breakpoints are set on `.ldpy` lines. This is what the VS Code extension
+launches on F5.
+
+## What stepping guarantees
+
+One invariant governs every debugging gesture, and it is
+[measured, not asserted](../explanation/how-it-is-tested.md): **every stop
+selects a region of the `.ldpy` file, and every gesture changes it.** No stop
+lands on generated code with no source counterpart; no click leaves the
+highlight where it was.
+
+Two things would break it, and both are switched off by default:
+
+| | what it is | when you see it |
+|---|---|---|
+| the launcher | the frames of `ldpy/debug.py` that start your program | never — it is plumbing, hidden in both modes |
+| the runtime | `ldpy/runtime.py`, where `g{ ... }` actually builds the graph | only with `"justMyCode": false` |
+
+So `step in` on a line whose only call is an island behaves like `step over`,
+and stepping past the last line of your program **ends it** instead of
+revealing the launcher. Set `"justMyCode": false` in the launch configuration
+when you do want to walk into the runtime; the launcher stays hidden even
+then. The rules are computed by the package itself:
+
+```text
+$ python -m ldpy.debug --probe
+{"package": "/…/ldpy", "version": "…", "rules": {"justMyCode": […], "all": […]}}
+```
+
+Any DAP client can use them — pass them as `rules` in the `launch`/`attach`
+request. The VS Code extension does exactly that. (The `PYDEVD_FILTERS`
+environment variable looks like it would work and does not: the DAP request
+overwrites it.)
+
+## Breakpoints inside a multi-line island
+
+A multi-line `g{ ... }` is **one** expression, whose code carries the line
+where the island *starts*: no interior line is executable. A breakpoint
+placed there can never fire — and debugpy reports it as verified anyway, so
+the dot looks armed and stays silent.
+
+The VS Code extension therefore **moves the dot**, as soon as you place it, to
+the island's first line. Outside VS Code, do the same translation yourself:
+
+```python
+from ldpy.transpiler import transpile
+from ldpy.transpiler.linemap import snap_breakpoint_lines
+r = transpile("@prefix ex: <http://e/> .\ng = g{ ex:s ex:p 1 ;\n       ex:q 2 }\n", "m.ldpy")
+assert snap_breakpoint_lines(r.map, [2, 3]) == [2, 2]   # line 3 is interior
+```
 
 ## Shadow mode
 
@@ -48,12 +95,15 @@ assert translate_breakpoints(r.map, [3]) == [4]   # +1: the runtime prelude
 assert translate_frames(r.map, [4]) == [3]        # and back, for stack frames
 ```
 
-A breakpoint aimed *inside* a multi-line `g{ ... }` snaps to the line of the
-generated graph expression. Frames pointing at the synthetic prelude
-translate to `None`.
+Frames pointing at the synthetic prelude translate to `None`.
 
 ## In VS Code
 
-Press **F5** (debug type « Linked-Data Python ») : the extension starts a
-debugpy session on `python -m ldpy.debug --run` — breakpoints set in the
-`.ldpy` bind directly, no translation involved.
+Press **F5** (debug type "Linked-Data Python"): the extension starts a debugpy
+session on `python -m ldpy.debug --run` — breakpoints set in the `.ldpy` bind
+directly, no translation involved — with the stepping rules above applied and
+unplaceable breakpoints moved.
+
+Debugging goes through the **direct mode only**. The shadow is an inspection
+tool ("ldpy: Show transpiled Python"), not a debugging target: you would be
+stepping through a generated file instead of the one you wrote.

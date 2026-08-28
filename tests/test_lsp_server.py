@@ -33,12 +33,13 @@ class Client:
     """Client LSP minimal : un thread lit tout, les attentes ont un timeout
     (un test qui n'obtient pas sa réponse ÉCHOUE, il ne bloque pas la suite)."""
 
-    def __init__(self, backend="pylsp"):
+    def __init__(self, backend="pylsp", extra_argv=()):
         import queue
         import threading
         env = dict(os.environ, PYTHONPATH=REPO)
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "ldpy.lsp", "--backend", backend],
+            [sys.executable, "-m", "ldpy.lsp", "--backend", backend,
+             *extra_argv],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, cwd=REPO, env=env)
         self.next_id = 1
@@ -261,5 +262,78 @@ def test_native_only_mode_works_without_backend():
         assert c.request("textDocument/definition", {
             "textDocument": {"uri": URI},
             "position": {"line": 1, "character": 7}}) is None
+    finally:
+        c.close()
+
+
+# ------------------------------------------------------------- formatage
+
+HAS_BLACK = subprocess.run(
+    [sys.executable, "-c", "import black"], capture_output=True).returncode == 0
+
+MAL_FORMATE = """\
+@prefix   ex:   <http://example.org/ns#> .
+x=1
+g2 = g{ex:s ex:p 1}
+"""
+BIEN_FORMATE = """\
+@prefix ex: <http://example.org/ns#> .
+x = 1
+g2 = g{ ex:s ex:p 1 }
+"""
+
+
+@pytest.mark.skipif(not HAS_BLACK, reason="extra [format] non installé")
+def test_formatting_capability_annoncee(lsp):
+    assert lsp.caps["capabilities"]["documentFormattingProvider"] is True
+
+
+@pytest.mark.skipif(not HAS_BLACK, reason="extra [format] non installé")
+def test_formatting_rend_un_edit_couvrant_tout(lsp):
+    uri = "file:///virtuel/fmt.ldpy"
+    lsp.open(uri, MAL_FORMATE)
+    edits = lsp.request("textDocument/formatting", {
+        "textDocument": {"uri": uri},
+        "options": {"tabSize": 4, "insertSpaces": True}})
+    assert len(edits) == 1
+    assert edits[0]["newText"] == BIEN_FORMATE
+    assert edits[0]["range"]["start"] == {"line": 0, "character": 0}
+    # la portée couvre bien la fin du document
+    lignes = MAL_FORMATE.split("\n")
+    assert edits[0]["range"]["end"] == {"line": len(lignes) - 1,
+                                        "character": len(lignes[-1])}
+
+
+@pytest.mark.skipif(not HAS_BLACK, reason="extra [format] non installé")
+def test_formatting_ne_rend_rien_si_deja_formate(lsp):
+    uri = "file:///virtuel/fmt-ok.ldpy"
+    lsp.open(uri, BIEN_FORMATE)
+    assert lsp.request("textDocument/formatting", {
+        "textDocument": {"uri": uri}, "options": {}}) == []
+
+
+@pytest.mark.skipif(not HAS_BLACK, reason="extra [format] non installé")
+def test_formatting_refuse_un_document_fautif(lsp):
+    """On ne formate pas ce qu'on ne comprend pas : aucun edit, et le
+    document de l'utilisateur reste intact."""
+    uri = "file:///virtuel/fmt-bad.ldpy"
+    lsp.open(uri, "a = g{ foo:b a foo:C }\n")
+    assert lsp.request("textDocument/formatting", {
+        "textDocument": {"uri": uri}, "options": {}}) is None
+
+
+@pytest.mark.skipif(not HAS_BLACK, reason="extra [format] non installé")
+def test_formatting_honore_la_longueur_de_ligne():
+    """`--line-length` du serveur l'emporte : c'est le réglage de l'éditeur."""
+    c = Client(backend="none", extra_argv=["--line-length", "40"])
+    try:
+        c.request("initialize", {"processId": None, "rootUri": None,
+                                 "capabilities": {}})
+        c.notify("initialized", {})
+        uri = "file:///virtuel/long.ldpy"
+        c.open(uri, "x = [111111111, 222222222, 333333333, 444444444]\n")
+        edits = c.request("textDocument/formatting", {
+            "textDocument": {"uri": uri}, "options": {}})
+        assert edits and "\n" in edits[0]["newText"].strip()
     finally:
         c.close()
