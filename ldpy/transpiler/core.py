@@ -137,13 +137,27 @@ def _name_char(c):
     return c.isalnum() or c == "_"
 
 
+class DynPrefix:
+    """Préfixe dynamique (importé, ou à IRI calculée) : la résolution passe
+    à l'exécution par la variable Python émise `var` (fiche 013). La table
+    lexicale ne connaît pas son IRI."""
+
+    __slots__ = ("var",)
+
+    def __init__(self, var):
+        self.var = var
+
+    def __repr__(self):
+        return "DynPrefix(%r)" % self.var
+
+
 class TranspileResult:
     """Résultat de transpile() : code généré, map, préfixes, warnings."""
 
     def __init__(self, code, lmap, prefixes, base, warnings):
         self.code = code            # source Python généré
         self.map = lmap             # LanguageMap
-        self.prefixes = prefixes    # dict prefix -> IRI (str), état final lexical
+        self.prefixes = prefixes    # dict prefix -> IRI (str) ou DynPrefix
         self.base = base            # IRI de base finale (str ou None)
         self.warnings = warnings    # list[LdpyWarning]
 
@@ -183,6 +197,9 @@ class Transpiler:
         self._scope_stack = []
         self._retired = {}          # préfixe sorti de portée -> ligne de décl.
         self._prefix_col = {}       # préfixe -> indentation de sa déclaration
+        # préfixes dynamiques (fiche 013)
+        self._ns_counter = 0        # variables fraîches _ldpy_ns*
+        self._import_lines = []     # (ligne 0-based, module) des imports de préfixes
 
     # ------------------------------------------------------------------
     # primitives de position / émission
@@ -520,6 +537,21 @@ class Transpiler:
             self.stmt_start = False
             return
 
+        # import de préfixes (fiche 013) : from m import a, brick:, u: as v:
+        if name == "from" and self.stmt_start and not self._sub \
+                and self._import_has_prefix_item():
+            self._take_prefix_import()
+            return
+
+        # __namespaces__ dans __all__ : casserait la sérialisation de
+        # l'importateur (fiche 013) — refusé explicitement.
+        if name == "__all__" and self.stmt_start and not self._sub:
+            stmt = self._stmt_text_ahead(m.end())
+            if "'__namespaces__'" in stmt or '"__namespaces__"' in stmt:
+                self._error("'__namespaces__' ne doit pas figurer dans "
+                            "__all__ : il écraserait la table de préfixes "
+                            "du module importateur (fiche 013)")
+
         # îlots à délimiteur collé
         if nxt == "{" and name in ("g", "f", "e"):
             if name == "g":
@@ -624,12 +656,12 @@ class Transpiler:
             return None
         return self._take_firi()
 
-    def _take_firi(self):
-        """Sur 'f<'. Consomme et retourne l'expression générée."""
+    def _take_firi_parts(self):
+        """Sur 'f<'. Consomme et retourne la liste de morceaux
+        (True, texte statique) | (False, expr transpilée)."""
         self._take(2)
-        parts = []       # (True, texte statique) | (False, expr)
+        parts = []
         static = []
-        t = self.text
         while True:
             c = self._peek()
             if c == "":
@@ -653,13 +685,21 @@ class Transpiler:
             static.append(self._take(1))
         if static:
             parts.append((True, "".join(static)))
+        return parts
+
+    def _firi_args(self, parts):
+        args = ", ".join(repr(p[1]) if p[0] else "(%s)" % p[1] for p in parts)
+        if self.base:
+            return "%s, base=%r" % (args, self.base)
+        return args
+
+    def _take_firi(self):
+        """Sur 'f<'. Consomme et retourne l'expression générée."""
+        parts = self._take_firi_parts()
         if all(p[0] for p in parts):  # aucune interpolation : statique
             iri = "".join(p[1] for p in parts)
             return "%s.URIRef(%r)" % (RUNTIME_ALIAS, self._resolve(iri))
-        args = ", ".join(repr(p[1]) if p[0] else "(%s)" % p[1] for p in parts)
-        if self.base:
-            return "%s.firi(%s, base=%r)" % (RUNTIME_ALIAS, args, self.base)
-        return "%s.firi(%s)" % (RUNTIME_ALIAS, args)
+        return "%s.firi(%s)" % (RUNTIME_ALIAS, self._firi_args(parts))
 
     def _take_fnode(self):
         """Sur 'f{'. Consomme et retourne l'expression générée."""
@@ -705,7 +745,7 @@ class Transpiler:
             self._error("':' attendu dans le nom préfixé")
         self._take(1)
         if prefix not in self.prefixes:
-            self._error("préfixe non déclaré : '%s:'" % prefix)
+            self._undeclared_prefix(prefix)
         self._prefix_used.add(prefix)
         ns = self.prefixes[prefix]
         parts = []
@@ -740,6 +780,12 @@ class Transpiler:
             parts.append((True, "".join(static)))
         if not parts and not in_island:
             self._error("partie locale attendue après '%s:'" % prefix)
+        if isinstance(ns, DynPrefix):
+            # préfixe dynamique : résolution à l'exécution (fiche 013)
+            args = [ns.var]
+            for is_static, val in parts:
+                args.append(repr(val) if is_static else "(%s)" % val)
+            return "%s.pname(%s)" % (RUNTIME_ALIAS, ", ".join(args))
         if all(p[0] for p in parts):
             local = "".join(p[1] for p in parts)
             return "%s.URIRef(%r)" % (RUNTIME_ALIAS, ns + local)
@@ -747,6 +793,169 @@ class Transpiler:
         for is_static, val in parts:
             args.append(repr(val) if is_static else "(%s)" % val)
         return "%s.firi(%s)" % (RUNTIME_ALIAS, ", ".join(args))
+
+    # ------------------------------------------------------------------
+    # import de préfixes (fiche 013)
+    # ------------------------------------------------------------------
+
+    def _stmt_text_ahead(self, j):
+        """Texte de l'instruction logique à partir de j (sans consommer)."""
+        t = self.text
+        depth = 0
+        k = j
+        while k < self.n:
+            c = t[k]
+            if c in "([{":
+                depth += 1
+            elif c in ")]}":
+                depth -= 1
+            elif c == "\\" and k + 1 < self.n and t[k + 1] == "\n":
+                k += 2
+                continue
+            elif depth <= 0 and c in "\n;#":
+                break
+            k += 1
+        return t[j:k]
+
+    def _import_has_prefix_item(self):
+        """Sur 'from' en début d'instruction : la liste d'import
+        contient-elle un nom préfixé (un ':' après le mot-clé import) ?"""
+        stmt = self._stmt_text_ahead(self.i)
+        m = re.search(r"\bimport\b", stmt)
+        return m is not None and ":" in stmt[m.end():]
+
+    def _take_prefix_import(self):
+        """Consomme toute l'instruction from-import (self.i sur 'from') et
+        émet l'import Python + la liaison des préfixes (fiche 013)."""
+        decl_col = self.src_col
+        decl_line = self.src_line
+        mark = self._begin_island()
+        t = self.text
+        self._take(4)                                    # 'from'
+        self._g_ws()
+        mod_start = self.i
+        while self.i < self.n and not t.startswith("import", self.i):
+            if t[self.i] == "\n":
+                self._error("mot-clé 'import' attendu dans l'instruction from")
+            self._take(1)
+        module = t[mod_start:self.i].strip()
+        if not module:
+            self._error("nom de module attendu après 'from'")
+        self._take(6)                                    # 'import'
+        self._imp_ws(paren=False)
+        paren = False
+        if self._peek() == "(":
+            self._take(1)
+            paren = True
+            self._imp_ws(paren)
+        py_items = []
+        prefix_items = []                                # (source, cible)
+        while True:
+            c = self._peek()
+            if c == "":
+                self._error("liste d'import non terminée")
+            if c == "*":
+                self._take(1)
+                py_items.append("*")
+            else:
+                start = self.i
+                pn_end = _scan_pn_prefix(t, self.i, self.n)
+                pym = _PYNAME_RE.match(t, self.i)
+                if pn_end > self.i and pn_end < self.n and t[pn_end] == ":":
+                    name = self._take(pn_end - self.i)
+                    self._take(1)                        # ':'
+                    alias = None
+                    save = (self.i, self.src_line, self.src_col)
+                    self._imp_ws(paren)
+                    if t.startswith("as", self.i) and not _name_char(
+                            self._peek(2)):
+                        self._take(2)
+                        self._imp_ws(paren)
+                        a_end = _scan_pn_prefix(t, self.i, self.n)
+                        if a_end == self.i:
+                            self._error("nom de préfixe attendu après 'as'")
+                        alias = self._take(a_end - self.i)
+                        if self._peek() != ":":
+                            self._error("l'alias d'un préfixe s'écrit "
+                                        "'%s:' — avec le ':'" % alias)
+                        self._take(1)
+                    else:
+                        self.i, self.src_line, self.src_col = save
+                    prefix_items.append((name, alias or name))
+                elif pym:
+                    name = self._take(pym.end() - self.i)
+                    item = name
+                    save = (self.i, self.src_line, self.src_col)
+                    self._imp_ws(paren)
+                    if t.startswith("as", self.i) and not _name_char(
+                            self._peek(2)):
+                        self._take(2)
+                        self._imp_ws(paren)
+                        am = _PYNAME_RE.match(t, self.i)
+                        if not am:
+                            self._error("nom attendu après 'as'")
+                        item += " as " + self._take(am.end() - self.i)
+                    else:
+                        self.i, self.src_line, self.src_col = save
+                    py_items.append(item)
+                else:
+                    self._error("élément d'import attendu")
+            self._imp_ws(paren)
+            if self._peek() == ",":
+                self._take(1)
+                self._imp_ws(paren)
+                if paren and self._peek() == ")":
+                    self._take(1)
+                    break
+                continue
+            if paren:
+                if self._peek() != ")":
+                    self._error("')' attendu dans la liste d'import")
+                self._take(1)
+            break
+        # liaison lexicale des préfixes importés (portée par bloc)
+        self._ns_counter += 1
+        nsvar = "_ldpy_nsi%d" % self._ns_counter
+        binds = []
+        updates = []
+        for source, target in prefix_items:
+            if target in self.prefixes and target in self._prefix_used \
+                    and decl_col <= self._prefix_col.get(target, 0):
+                self._warn("redéclaration du préfixe '%s:' après usage "
+                           "(import de %s)" % (target, module))
+            if decl_col > 0:
+                self._scope_stack.append((decl_col, "prefix", target,
+                                          target in self.prefixes,
+                                          (self.prefixes.get(target),
+                                           self._prefix_col.get(target))))
+            var = self._fresh_ns_var(target)
+            self.prefixes[target] = DynPrefix(var)
+            self._prefix_col[target] = decl_col
+            binds.append("%s = %s[%r]" % (var, nsvar, source))
+            updates.append("%r: %s" % (target, var))
+        self._import_lines.append((decl_line, module))
+        items = py_items + ["__namespaces__ as %s" % nsvar]
+        gen = "from %s import %s; %s; __namespaces__.update({%s})" % (
+            module, ", ".join(items), "; ".join(binds), ", ".join(updates))
+        self._end_island("import", mark, gen)
+
+    def _imp_ws(self, paren):
+        """Blancs dans une liste d'import : continuations '\\'-newline
+        partout, newlines et commentaires seulement entre parenthèses."""
+        t = self.text
+        while self.i < self.n:
+            c = t[self.i]
+            if c in " \t\r":
+                self._take(1)
+            elif c == "\\" and self._peek(1) == "\n":
+                self._take(2)
+            elif paren and c == "\n":
+                self._take(1)
+            elif paren and c == "#":
+                j = t.find("\n", self.i)
+                self._take((j if j != -1 else self.n) - self.i)
+            else:
+                break
 
     # ------------------------------------------------------------------
     # @prefix / @base
@@ -781,6 +990,10 @@ class Transpiler:
                                 "(docs/reference/language.md)")
                 return False  # décorateur nommé prefix
             j = self._skip_ws_ahead(j + 1)
+        if kind == "prefix" and t[j:j + 2] == "f<":
+            # IRI calculée : préfixe dynamique (fiche 013). `@prefix ex: f<`
+            # n'est jamais un début de ligne Python valide : on s'engage.
+            return self._prefix_firi_decl(j, prefix)
         if j >= self.n or t[j] != "<":
             if looks_like_decl:
                 self._error("déclaration @%s invalide — IRI '<...>' attendue"
@@ -824,6 +1037,48 @@ class Transpiler:
         self._end_island(kind, mark, gen)
         return True
 
+    def _prefix_firi_decl(self, j, prefix):
+        """Consomme `@prefix p: f<...> .` (self.i sur '@', j sur 'f').
+        Sans interpolation : déclaration statique ordinaire. Avec : préfixe
+        dynamique, résolu à l'exécution par une variable fraîche."""
+        decl_col = self.src_col
+        mark = self._begin_island()
+        self._take(j - self.i)              # '@prefix p:' + blancs
+        parts = self._take_firi_parts()
+        self._g_ws()
+        if self._peek() != ".":
+            self._error("'.' attendu pour clore la déclaration @prefix")
+        self._take(1)
+        if prefix in self.prefixes and prefix in self._prefix_used \
+                and decl_col <= self._prefix_col.get(prefix, 0):
+            prev = self.prefixes[prefix]
+            static_same = (all(p[0] for p in parts) and isinstance(prev, str)
+                           and prev == self._resolve(
+                               "".join(p[1] for p in parts)))
+            if not static_same:
+                self._warn("redéclaration du préfixe '%s:' après usage"
+                           % prefix)
+        if decl_col > 0:
+            self._scope_stack.append((decl_col, "prefix", prefix,
+                                      prefix in self.prefixes,
+                                      (self.prefixes.get(prefix),
+                                       self._prefix_col.get(prefix))))
+        if all(p[0] for p in parts):        # aucune interpolation : statique
+            resolved = self._resolve("".join(p[1] for p in parts))
+            self.prefixes[prefix] = resolved
+            self._prefix_col[prefix] = decl_col
+            gen = "__namespaces__[%r] = %s.Namespace(%r)" % (
+                prefix, RUNTIME_ALIAS, resolved)
+        else:
+            var = self._fresh_ns_var(prefix)
+            self.prefixes[prefix] = DynPrefix(var)
+            self._prefix_col[prefix] = decl_col
+            gen = "%s = %s.Namespace(%s.firi(%s)); __namespaces__[%r] = %s" % (
+                var, RUNTIME_ALIAS, RUNTIME_ALIAS,
+                self._firi_args(parts), prefix, var)
+        self._end_island("prefix", mark, gen)
+        return True
+
     def _unwind_scopes(self, col):
         """Ferme les portées des déclarations plus indentées que l'instruction
         qui commence à la colonne `col` (fin de leur bloc)."""
@@ -837,6 +1092,22 @@ class Transpiler:
                 self.prefixes.pop(name, None)
                 self._prefix_col.pop(name, None)
                 self._retired.setdefault(name, self.src_line)
+
+    def _fresh_ns_var(self, name):
+        """Variable Python fraîche portant un namespace dynamique."""
+        self._ns_counter += 1
+        safe = "".join(c if c.isascii() and (c.isalnum() or c == "_") else "_"
+                       for c in name)
+        return "_ldpy_ns_%s_%d" % (safe, self._ns_counter)
+
+    def _undeclared_prefix(self, prefix):
+        msg = "préfixe non déclaré : '%s:'" % prefix
+        if self._import_lines:
+            hints = ", ".join("ligne %d (from %s import ...)" % (ln + 1, mod)
+                              for ln, mod in self._import_lines)
+            msg += (" — peut-être manque-t-il à une liste d'import de "
+                    "préfixes : %s" % hints)
+        self._error(msg)
 
     def _skip_ws_ahead(self, j):
         t = self.text

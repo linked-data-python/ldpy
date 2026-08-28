@@ -171,6 +171,13 @@ def dtype(value):
     return URIRef(str(value))
 
 
+def pname(ns, *parts):
+    """Nom préfixé dynamique (fiche 013) : concatène l'IRI du namespace
+    (préfixe importé ou à IRI calculée) et la partie locale."""
+    return rdflib.URIRef(
+        str(ns) + "".join(p if isinstance(p, str) else str(p) for p in parts))
+
+
 def firi(*parts, base=None):
     """IRI formatée : concatène str(part) puis résout contre base si relative."""
     iri = "".join(p if isinstance(p, str) else str(p) for p in parts)
