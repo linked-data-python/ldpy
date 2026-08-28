@@ -33,7 +33,7 @@ lsp = ["python-lsp-server", "pyflakes"]
 # débogage des fichiers fantômes
 debug = ["debugpy"]
 dev = ["pytest"]
-# coloration syntaxique : lexer Pygments (fiche 021) — OPTIONNEL, rien dans
+# coloration syntaxique : lexer Pygments (fiche 023) — OPTIONNEL, rien dans
 # ldpy ne l'importe, Pygments le charge par entry point s'il est installé
 highlight = ["pygments>=2.14"]
 docs = ["mkdocs", "mkdocs-material", "pygments>=2.14"]
@@ -44,7 +44,7 @@ ldpy-lsp = "ldpy.lsp.server:main"
 ldpy-build = "ldpy.build:main"
 ldpy-debug = "ldpy.debug:main"
 
-# le surligneur est le transpileur : le lexer lit la language map (fiche 021).
+# le surligneur est le transpileur : le lexer lit la language map (fiche 023).
 # Enregistré comme plugin Pygments, il sert mkdocs, Sphinx et `pygmentize`.
 [project.entry-points."pygments.lexers"]
 ldpy = "ldpy.pygments_lexer:LdpyLexer"

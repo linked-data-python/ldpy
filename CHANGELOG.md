@@ -42,7 +42,7 @@ rdflib (fiches DESIGN_CHOICES/ldpy/013 à 020).
 - **Coloration HTML** : le paquet enregistre un lexer Pygments
   (`ldpy.pygments_lexer`) construit **sur la language map** — MkDocs, Sphinx et
   `pygmentize` colorent `.ldpy` dès l'installation, et la coloration ne peut
-  pas diverger du transpileur (fiche 021).
+  pas diverger du transpileur (fiche 023).
 - **Documentation refondue** : page d'accueil qui montre le langage plutôt que
   son plan ; référence du langage éclatée en huit pages, une par famille
   d'îlots ; trois pages d'explication nouvelles — pourquoi ldpy, ce que fait le
