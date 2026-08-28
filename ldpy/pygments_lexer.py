@@ -235,6 +235,73 @@ _RE_PNAME = re.compile(r"([\wÀ-￿][-\w.·À-￿]*)?(:)"
 _RE_PUNCT = re.compile(r"[;,.\[\]():]")
 
 
+#: A snippet is rarely a whole module. Documentation and papers show
+#: `g{ ex:s ex:p 1 }` without the `@prefix` line that makes it legal, and the
+#: transpiler — rightly — refuses it. Rather than fall back to plain Python
+#: (which paints `ex:` and `?s` bright red), the lexer DECLARES what the
+#: fragment is missing and tries again: the snippet then colours exactly as
+#: the same lines would inside a complete file.
+_UNDECLARED = re.compile(
+    r"préfixe non déclaré\s*:\s*'([^':]*):'"
+    r"|[Uu]nknown namespace prefix\s*:\s*(\S*)")
+
+#: The declaration a fragment is missing, read off the error it raised. Only
+#: errors that a DECLARATION can repair are listed: a snippet that is actually
+#: ill-formed must keep failing, and fall through to plain Python.
+_NO_CURRENT_GRAPH = re.compile(r"sans graphe courant")
+
+#: Enough for any realistic snippet; the bound is what keeps a pathological
+#: input from looping.
+_MAX_SYNTHETIC = 24
+
+#: Namespace of the synthetic prefixes. Never resolved — the map is thrown
+#: away after the tokens are read — but it has to be a legal IRI.
+_SYNTHETIC_NS = "urn:x-ldpy-highlight:"
+
+
+def _synthetic_declaration(exc):
+    """The declaration line that would let *exc* go away, or None."""
+    m = _UNDECLARED.search(str(exc))
+    if m is not None:
+        prefix = (m.group(1) if m.group(1) is not None else m.group(2)).strip()
+        return f"@prefix {prefix}: <{_SYNTHETIC_NS}{prefix or 'default'}#> ."
+    if _NO_CURRENT_GRAPH.search(str(exc)):
+        return "@graph as _ldpy_highlight_graph"
+    return None
+
+
+def _transpile_for_display(text):
+    """``(segments, preamble)`` — the language map of *text*, possibly read
+    under a synthetic preamble that declares the prefixes it never declared.
+
+    The preamble is prepended, so every coordinate it produces is shifted by
+    ``len(preamble)``; the caller subtracts it. Raises whatever the transpiler
+    raises when no preamble can help."""
+    from ldpy.transpiler import transpile
+    preamble = ""
+    seen = set()
+    while True:
+        try:
+            return transpile(preamble + text, "<pygments>").map.segments, preamble
+        except Exception as exc:
+            line = _synthetic_declaration(exc)
+            if line is None or line in seen or len(seen) >= _MAX_SYNTHETIC:
+                raise
+            seen.add(line)
+            preamble += line + "\n"
+
+
+def _without_errors(python, text):
+    """*text* through PythonLexer, with ``Token.Error`` flattened to text.
+
+    Last resort: the fragment is not ldpy the transpiler can read, even with a
+    preamble. Whatever it is, painting it in error red is a worse answer than
+    painting it plainly — the highlighter is not the place where a syntax
+    error gets reported."""
+    for idx, ttype, value in python.get_tokens_unprocessed(text):
+        yield idx, (Text if ttype is Error else ttype), value
+
+
 class LdpyLexer(Lexer):
     """Lexer for Linked-Data Python (``.ldpy``) sources."""
 
@@ -254,26 +321,27 @@ class LdpyLexer(Lexer):
 
     def get_tokens_unprocessed(self, text):
         try:
-            from ldpy.transpiler import transpile
-            segments = transpile(text, "<pygments>").map.segments
+            segments, preamble = _transpile_for_display(text)
         except Exception:            # not ldpy, or not yet valid: plain Python
-            yield from self.python.get_tokens_unprocessed(text)
+            yield from _without_errors(self.python, text)
             return
 
-        offs = _line_offsets(text)
+        shift = len(preamble)
+        offs = _line_offsets(preamble + text)
+        limit = shift + len(text)
 
         def abs_pos(line, col):
-            return min(offs[line] + col, len(text)) if line < len(offs) \
-                else len(text)
+            at = min(offs[line] + col, limit) if line < len(offs) else limit
+            return at - shift
 
         pos = 0
         for seg in segments:
             if seg.src is None:                     # synthetic prelude
                 continue
-            start = max(abs_pos(seg.src[0], seg.src[1]), pos)
             end = abs_pos(seg.src[2], seg.src[3])
-            if end <= pos:
+            if end <= pos:                          # inside the preamble
                 continue
+            start = max(abs_pos(seg.src[0], seg.src[1]), pos)
             if start > pos:                         # never lose a character
                 yield pos, Text, text[pos:start]
             chunk = text[start:end]

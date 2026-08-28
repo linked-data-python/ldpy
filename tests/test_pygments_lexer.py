@@ -242,3 +242,72 @@ def test_token_classes_are_distinguishable():
     assert roles["var"] != roles["prefix"] and roles["var"] != roles["iri"]
     assert roles["sigil"] == roles["decl"] == roles["kw"]   # ce sont des mots
     assert _get_ttype_class(T_CONST)                        # stylé, quel qu'il soit
+
+
+# --------------------------------------------------- fragments incomplets
+#
+# La documentation et l'article montrent des EXTRAITS : `g{ ex:s ex:p 1 }`
+# sans la ligne `@prefix` qui le rendrait légal. Le transpileur les refuse, à
+# raison. Le surligneur, lui, déclare ce qui manque et recommence — sinon
+# l'extrait retombe en Python pur et se couvre de rouge.
+
+FRAGMENTS = [
+    "g = g{ ex:s ex:p 1 }",
+    "lit = \"x\"^^xsd:integer",
+    "+{ ex:s ex:p 1 }",                       # ni préfixe ni graphe courant
+    "-{ ex:s ex:p ?x }",
+    "s{ SELECT ?s WHERE { ?s a ex:T } }",     # préfixe inconnu de rdflib
+    "for @bindings as r in m{ ?s ex:p ?v }:",
+    "lus = list(m{ ?s a ex:Sensor ; ex:v ?v })",
+]
+
+
+@pytest.mark.parametrize("src", FRAGMENTS)
+def test_fragment_incomplet_sans_erreur(src):
+    assert not [v for _, t, v in toks(src) if t is Error], src
+
+
+@pytest.mark.parametrize("src", FRAGMENTS)
+def test_fragment_incomplet_round_trip(src):
+    assert "".join(v for _, _, v in toks(src)) == src
+
+
+@pytest.mark.parametrize("src", FRAGMENTS)
+def test_fragment_incomplet_colore_comme_un_fichier_complet(src):
+    """Le préambule synthétique ne doit rien changer d'autre : les mêmes
+    caractères reçoivent les mêmes tokens qu'avec les déclarations écrites."""
+    complet = ("@prefix ex: <http://e/> .\n"
+               "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
+               "@graph as g\n")
+    decale = len(complet)
+    attendu = [(i - decale, t, v)
+               for i, t, v in toks(complet + src) if i >= decale]
+    assert attendu == toks(src)
+
+
+def test_le_preambule_ne_fuit_pas_dans_les_positions():
+    """Les positions rendues sont celles de la SOURCE, pas du texte augmenté."""
+    src = "g = g{ ex:s ex:p 1 }"
+    for i, _, v in toks(src):
+        assert src[i:i + len(v)] == v, (i, v)
+
+
+def test_ce_qui_nest_pas_reparable_reste_du_python_sans_erreur():
+    """Un fragment qu'aucune déclaration ne sauve retombe en Python — mais
+    sans Token.Error : le surligneur n'est pas le lieu où l'on signale une
+    faute de syntaxe."""
+    src = "def f(:\n"
+    assert not [v for _, t, v in toks(src) if t is Error]
+    assert "".join(v for _, _, v in toks(src)) == src
+
+
+def test_les_declarations_synthetiques_sont_bornees():
+    from ldpy.pygments_lexer import _MAX_SYNTHETIC, _synthetic_declaration
+    assert _MAX_SYNTHETIC > 0
+    assert _synthetic_declaration(Exception("préfixe non déclaré : 'ex:'")) \
+        .startswith("@prefix ex: <")
+    assert _synthetic_declaration(Exception("Unknown namespace prefix : brick")) \
+        .startswith("@prefix brick: <")
+    assert "graph" in _synthetic_declaration(
+        Exception("'+{ ... }' sans graphe courant : ..."))
+    assert _synthetic_declaration(Exception("autre chose")) is None
