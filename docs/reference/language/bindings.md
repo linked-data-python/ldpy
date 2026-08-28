@@ -56,9 +56,19 @@ iterable of mappings**, which puts a CSV reader one line away from a graph.
 @graph as out
 rows = [{"id": "a", "v": 1}, {"id": "b", "v": 2}]
 for @bindings in rows:
-    +{ ex:{?id} ex:value ?v }
+    +{ e<http://example.org/{?id}> ex:value ?v }
 assert len(out) == 2
+assert sorted(str(s) for s, p, o in out) == ["http://example.org/a",
+                                             "http://example.org/b"]
 ```
+
+!!! warning "Not `ex:{?id}`"
+
+    A variable interpolates in every term position **except the local part of
+    a prefixed name**: `ex:{?id}` yields `ex:id` on every row, with no error.
+    Forging an IRI from a column is what `e<…{?id}>` is for — and it
+    percent-encodes on the way. The trap and the two ways out are recorded in
+    [design record `ldpy/017`](https://gitlab.emse.fr/maxime.lefrancois/linked-data-python).
 
 Chained with a match island, it is a CONSTRUCT with no query engine and no
 query text:
