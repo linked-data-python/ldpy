@@ -555,6 +555,22 @@ class Transpiler:
             self._take_prefix_import()
             return
 
+        # modificateurs de portée sur les déclarations d'îlot (fiche 018)
+        if name in ("global", "nonlocal") and self.stmt_start \
+                and not self._sub:
+            j = m.end()
+            while j < self.n and t[j] in " \t":
+                j += 1
+            if re.match(r"@(prefix|base|graph|bindings)\b", t[j:j + 10]):
+                self._close_copy()
+                self._take(m.end() - self.i)        # le mot-clé
+                while self._peek() in " \t":
+                    self._take(1)
+                if not self._try_prefix_or_base(scope_mode=name):
+                    self._error("déclaration d'îlot attendue après "
+                                "'%s @'" % name)
+                return
+
         # bascule liaisons (fiche 017) : for @bindings [as b] in ...
         if name == "for" and self.stmt_start and not self._sub:
             j = m.end()
@@ -989,18 +1005,19 @@ class Transpiler:
     # @prefix / @base
     # ------------------------------------------------------------------
 
-    def _try_prefix_or_base(self):
+    def _try_prefix_or_base(self, scope_mode=None):
         """Sur '@' en début d'instruction. Tente l'îlot déclaration.
-        Retourne True si consommé (sinon rien n'est consommé)."""
+        Retourne True si consommé (sinon rien n'est consommé).
+        scope_mode : None, 'global' ou 'nonlocal' (fiche 018)."""
         t = self.text
         m = re.match(r"@(prefix|base|graph|bindings)\b", t[self.i:self.i + 10])
         if not m:
             return False
         kind = m.group(1)
         if kind == "graph":
-            return self._try_graph_decl()
+            return self._try_graph_decl(scope_mode)
         if kind == "bindings":
-            return self._try_bindings_decl()
+            return self._try_bindings_decl(scope_mode)
         # une « déclaration ratée » (préfixe non ASCII, ponctuation absente…)
         # ne doit PAS retomber silencieusement sur le cas décorateur : la fin
         # de ligne déclencherait des îlots et produirait du code massacré.
@@ -1025,7 +1042,7 @@ class Transpiler:
         if kind == "prefix" and t[j:j + 2] == "f<":
             # IRI calculée : préfixe dynamique (fiche 013). `@prefix ex: f<`
             # n'est jamais un début de ligne Python valide : on s'engage.
-            return self._prefix_firi_decl(j, prefix)
+            return self._prefix_firi_decl(j, prefix, scope_mode)
         if j >= self.n or t[j] != "<":
             if looks_like_decl:
                 self._error("déclaration @%s invalide — IRI '<...>' attendue"
@@ -1044,32 +1061,29 @@ class Transpiler:
         self._take(k + 1 - self.i)
         resolved = self._resolve(iri)
         if kind == "base":
-            if decl_col > 0:
-                self._scope_stack.append((decl_col, "base", None,
-                                          True, self.base))
-            self.base = resolved
+            self._scope_install("base", None, resolved, decl_col, scope_mode)
             gen = "__base__ = %r" % resolved
+            if scope_mode:
+                gen = "%s __base__; %s" % (scope_mode, gen)
         else:
             # redéclaration au même niveau après usage : warning ;
             # shadowing dans un bloc plus profond : légitime, silencieux.
-            if prefix in self.prefixes and prefix in self._prefix_used \
+            if scope_mode is None and prefix in self.prefixes \
+                    and prefix in self._prefix_used \
                     and self.prefixes[prefix] != resolved \
                     and decl_col <= self._prefix_col.get(prefix, 0):
+                # un global/nonlocal est une réassignation voulue : pas
+                # d'avertissement (fiche 018, « comme global x; x = 1 »)
                 self._warn("redéclaration du préfixe '%s:' après usage "
                            "(nouvelle IRI : %s)" % (prefix, resolved))
-            if decl_col > 0:
-                self._scope_stack.append((decl_col, "prefix", prefix,
-                                          prefix in self.prefixes,
-                                          (self.prefixes.get(prefix),
-                                           self._prefix_col.get(prefix))))
-            self.prefixes[prefix] = resolved
-            self._prefix_col[prefix] = decl_col
+            self._scope_install("prefix", prefix, resolved, decl_col,
+                                scope_mode)
             gen = "__namespaces__[%r] = %s.Namespace(%r)" % (
                 prefix, RUNTIME_ALIAS, resolved)
         self._end_island(kind, mark, gen)
         return True
 
-    def _prefix_firi_decl(self, j, prefix):
+    def _prefix_firi_decl(self, j, prefix, scope_mode=None):
         """Consomme `@prefix p: f<...> .` (self.i sur '@', j sur 'f').
         Sans interpolation : déclaration statique ordinaire. Avec : préfixe
         dynamique, résolu à l'exécution par une variable fraîche."""
@@ -1081,7 +1095,8 @@ class Transpiler:
         if self._peek() != ".":
             self._error("'.' attendu pour clore la déclaration @prefix")
         self._take(1)
-        if prefix in self.prefixes and prefix in self._prefix_used \
+        if scope_mode is None and prefix in self.prefixes \
+                and prefix in self._prefix_used \
                 and decl_col <= self._prefix_col.get(prefix, 0):
             prev = self.prefixes[prefix]
             static_same = (all(p[0] for p in parts) and isinstance(prev, str)
@@ -1090,26 +1105,109 @@ class Transpiler:
             if not static_same:
                 self._warn("redéclaration du préfixe '%s:' après usage"
                            % prefix)
-        if decl_col > 0:
-            self._scope_stack.append((decl_col, "prefix", prefix,
-                                      prefix in self.prefixes,
-                                      (self.prefixes.get(prefix),
-                                       self._prefix_col.get(prefix))))
         if all(p[0] for p in parts):        # aucune interpolation : statique
             resolved = self._resolve("".join(p[1] for p in parts))
-            self.prefixes[prefix] = resolved
-            self._prefix_col[prefix] = decl_col
+            self._scope_install("prefix", prefix, resolved, decl_col,
+                                scope_mode)
             gen = "__namespaces__[%r] = %s.Namespace(%r)" % (
                 prefix, RUNTIME_ALIAS, resolved)
         else:
-            var = self._fresh_ns_var(prefix)
-            self.prefixes[prefix] = DynPrefix(var)
-            self._prefix_col[prefix] = decl_col
+            # global/nonlocal : réutiliser la variable de la liaison cible si
+            # elle est dynamique — c'est elle que les usages du dehors lisent
+            prev = self.prefixes.get(prefix)
+            if scope_mode and isinstance(prev, DynPrefix):
+                var = prev.var
+            else:
+                var = self._fresh_ns_var(prefix)
+            self._scope_install("prefix", prefix, DynPrefix(var), decl_col,
+                                scope_mode)
             gen = "%s = %s.Namespace(%s.firi(%s)); __namespaces__[%r] = %s" % (
                 var, RUNTIME_ALIAS, RUNTIME_ALIAS,
                 self._firi_args(parts), prefix, var)
+            if scope_mode:
+                gen = "%s %s; %s" % (scope_mode, var, gen)
         self._end_island("prefix", mark, gen)
         return True
+
+    def _scope_install(self, kind, name, value, decl_col, mode):
+        """Installe une liaison de déclaration d'îlot (fiches 004/018).
+
+        mode None : portée par bloc (pile) ; 'global' : portée module, les
+        entrées de pile restaureront la nouvelle valeur ; 'nonlocal' : la
+        portée englobante déclarante la plus proche, erreur s'il n'y en a
+        pas — la sémantique de Python, appliquée aux déclarations."""
+        def setval(v):
+            if kind == "prefix":
+                self.prefixes[name] = v
+            elif kind == "base":
+                self.base = v
+            elif kind == "graph":
+                self._graph_var = v
+            else:
+                self._bindings_var = v
+
+        if mode is None:
+            if decl_col > 0:
+                if kind == "prefix":
+                    self._scope_stack.append(
+                        (decl_col, kind, name, name in self.prefixes,
+                         (self.prefixes.get(name),
+                          self._prefix_col.get(name))))
+                elif kind == "base":
+                    self._scope_stack.append((decl_col, kind, None,
+                                              True, self.base))
+                elif kind == "graph":
+                    self._scope_stack.append((decl_col, kind, None,
+                                              True, self._graph_var))
+                else:
+                    self._scope_stack.append((decl_col, kind, None,
+                                              True, self._bindings_var))
+            setval(value)
+            if kind == "prefix":
+                self._prefix_col[name] = decl_col
+            return
+        matches = [i for i, e in enumerate(self._scope_stack)
+                   if e[1] == kind and (kind != "prefix" or e[2] == name)]
+        if mode == "nonlocal":
+            encl = [i for i in matches
+                    if self._scope_stack[i][0] < decl_col]
+            if not encl:
+                what = "prefix %s:" % name if kind == "prefix" else kind
+                self._error("nonlocal @%s : aucune déclaration englobante "
+                            "(comme le nonlocal de Python)" % what)
+            keep = encl[-1]
+            target_col = self._scope_stack[keep][0]
+            touched = [i for i in matches if i > keep]
+        else:                                       # global
+            keep = None
+            target_col = 0
+            touched = matches
+        for i in touched:
+            col, k, n, _, _ = self._scope_stack[i]
+            newprev = ((value, target_col) if kind == "prefix" else value)
+            self._scope_stack[i] = (col, k, n, True, newprev)
+        setval(value)
+        if kind == "prefix":
+            self._prefix_col[name] = target_col
+
+    def _enclosing_value(self, kind, name, decl_col):
+        """Valeur (variable émise) visible dans la portée englobante
+        déclarante la plus proche — la cible d'un nonlocal (fiche 018).
+        None si aucune déclaration englobante."""
+        matches = [i for i, e in enumerate(self._scope_stack)
+                   if e[1] == kind and (kind != "prefix" or e[2] == name)]
+        encl = [i for i in matches if self._scope_stack[i][0] < decl_col]
+        if not encl:
+            return None
+        above = [i for i in matches if i > encl[-1]]
+        if above:
+            prev = self._scope_stack[above[0]][4]
+            return prev[0] if kind == "prefix" else prev
+        if kind == "prefix":
+            return self.prefixes.get(name)
+        if kind == "graph":
+            return self._graph_var
+        return self._bindings_var
 
     def _unwind_scopes(self, col):
         """Ferme les portées des déclarations plus indentées que l'instruction
@@ -1159,7 +1257,7 @@ class Transpiler:
         self._ns_counter += 1
         return "_ldpy_%s%d" % (stem, self._ns_counter)
 
-    def _try_graph_decl(self):
+    def _try_graph_decl(self, scope_mode=None):
         """Sur '@' devant 'graph' en début d'instruction. Désigne ou crée le
         graphe courant. Un décorateur reste un décorateur : '@graph' suivi de
         '(', '.', '[', d'une fin de ligne — ou d'une parenthèse après blancs —
@@ -1175,13 +1273,12 @@ class Transpiler:
         decl_col = self.src_col
         mark = self._begin_island()
         self._take(j - self.i)                      # '@graph' + blancs
-        gvar = None
+        user_name = None                            # nom écrit après 'as'
         if t.startswith("as", self.i) and not _name_char(self._peek(2)):
             self._take(2)
-            gvar = self._graph_decl_as_name()
-            gen = "%s = %s.new_graph(__namespaces__, %s)" % (
-                gvar, RUNTIME_ALIAS,
-                repr(self.base) if self.base else "None")
+            user_name = self._graph_decl_as_name()
+            rhs = "%s.new_graph(__namespaces__, %s)" % (
+                RUNTIME_ALIAS, repr(self.base) if self.base else "None")
         else:
             ident = None
             c = self._peek()
@@ -1203,27 +1300,44 @@ class Transpiler:
                                 "graphe nommé ; pour désigner un graphe "
                                 "existant, écrire '@graph expression'")
                 self._take(2)
-                gvar = self._graph_decl_as_name()
-                gen = "%s = %s.new_graph(__namespaces__, %s, identifier=%s)" \
-                    % (gvar, RUNTIME_ALIAS,
-                       repr(self.base) if self.base else "None", ident)
+                user_name = self._graph_decl_as_name()
+                rhs = "%s.new_graph(__namespaces__, %s, identifier=%s)" % (
+                    RUNTIME_ALIAS,
+                    repr(self.base) if self.base else "None", ident)
             else:
                 expr = self._scan_embedded_expr("\n#").strip()
                 if not expr:
                     self._error("expression attendue après '@graph'")
                 if "\n" in expr:
                     self._error("l'expression de '@graph' tient sur sa ligne")
-                gvar = self._fresh_var("g")
-                gen = "%s = (%s)" % (gvar, expr)
+                rhs = "(%s)" % expr
         self._graph_ws_inline()
         if self._peek() not in "\n\r#;" and self._peek() != "":
             self._error("fin de ligne attendue après la déclaration @graph")
-        if decl_col > 0:
-            self._scope_stack.append((decl_col, "graph", None,
-                                      True, self._graph_var))
-        self._graph_var = gvar
+        gvar, gen = self._compose_decl("graph", None, user_name, rhs,
+                                       decl_col, scope_mode, "g")
+        self._scope_install("graph", None, gvar, decl_col, scope_mode)
         self._end_island("graph-decl", mark, gen)
         return True
+
+    def _compose_decl(self, kind, name, user_name, rhs, decl_col, mode, stem):
+        """Compose l'émission d'une déclaration @graph/@bindings selon la
+        portée visée (fiche 018) : nonlocal réutilise la variable de la
+        liaison englobante — c'est elle que le code du dehors lit."""
+        if mode == "nonlocal":
+            target = self._enclosing_value(kind, name, decl_col)
+            if target is None:
+                # _scope_install produira l'erreur avec le bon message
+                self._scope_install(kind, name, None, decl_col, mode)
+            lhs = ([user_name, target] if user_name and user_name != target
+                   else [target])
+            return target, "nonlocal %s; %s = %s" % (
+                target, " = ".join(lhs), rhs)
+        var = user_name if user_name else self._fresh_var(stem)
+        gen = "%s = %s" % (var, rhs)
+        if mode == "global":
+            gen = "global %s; %s" % (var, gen)
+        return var, gen
 
     def _graph_decl_as_name(self):
         """Après 'as' : le nom Python créé par la déclaration."""
@@ -1265,7 +1379,7 @@ class Transpiler:
             return ", bindings=%s" % self._bindings_var
         return ""
 
-    def _try_bindings_decl(self):
+    def _try_bindings_decl(self, scope_mode=None):
         """Sur '@' devant 'bindings' en début d'instruction. Désigne ou
         crée le binding courant — le parallèle exact de @graph."""
         t = self.text
@@ -1279,26 +1393,25 @@ class Transpiler:
         decl_col = self.src_col
         mark = self._begin_island()
         self._take(j - self.i)
+        user_name = None
         if t.startswith("as", self.i) and not _name_char(self._peek(2)):
             self._take(2)
-            bvar = self._graph_decl_as_name()
-            gen = "%s = %s.Bindings()" % (bvar, RUNTIME_ALIAS)
+            user_name = self._graph_decl_as_name()
+            rhs = "%s.Bindings()" % RUNTIME_ALIAS
         else:
             expr = self._scan_embedded_expr("\n#").strip()
             if not expr:
                 self._error("expression attendue après '@bindings'")
             if "\n" in expr:
                 self._error("l'expression de '@bindings' tient sur sa ligne")
-            bvar = self._fresh_var("b")
-            gen = "%s = (%s)" % (bvar, expr)
+            rhs = "(%s)" % expr
         self._graph_ws_inline()
         if self._peek() not in "\n\r#;" and self._peek() != "":
             self._error("fin de ligne attendue après la déclaration "
                         "@bindings")
-        if decl_col > 0:
-            self._scope_stack.append((decl_col, "bindings", None,
-                                      True, self._bindings_var))
-        self._bindings_var = bvar
+        bvar, gen = self._compose_decl("bindings", None, user_name, rhs,
+                                       decl_col, scope_mode, "b")
+        self._scope_install("bindings", None, bvar, decl_col, scope_mode)
         self._end_island("bindings-decl", mark, gen)
         return True
 
