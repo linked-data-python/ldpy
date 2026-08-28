@@ -44,12 +44,28 @@ Bidirectional position mapping (0-based lines/columns, exclusive ends).
 The façade the generated code calls (imported as `_ldpy_`); also usable
 directly: `URIRef, Literal, Variable, Namespace, RDF` re-exports, plus
 
-- `node(value)` — coerce a Python value to an RDF term (terms pass through);
+- `node(value, field=None)` — coerce a Python value to an RDF term (terms
+  pass through); `field` feeds the coercion policy (fiche 020);
 - `firi(*parts, base=None)` — join parts, resolve against `base` if relative;
+- `pname(ns, *parts)` — dynamic prefixed name (imported or computed prefix);
 - `dtype(value)` — coerce a value to a datatype IRI (`{expr}` after `^^`);
   unlike `node`, a `str` becomes a `URIRef`, never a `Literal`;
-- `graph(namespaces, base, *triples)` — build an `rdflib.Graph` from flattened
-  triples with `bn(i)`/`slot(i, expr)` placeholders;
+- `graph(namespaces, base, *triples, bindings=None)` — build an
+  `rdflib.Graph` from flattened triples with `bn(i)`/`slot(i, expr)`
+  placeholders; with `bindings`, templates are instantiated;
+- `new_graph(namespaces, base, identifier=None)` — the graph created by
+  `@graph as g`, serialization prefixes bound;
+- `add_to(graph, *triples, bindings=None)` / `remove_from(graph, *patterns,
+  bindings=None)` — the `+{ }` / `-{ }` statements (unbound variable:
+  dropped triple / joker, `DELETE WHERE` on shared variables);
+- `match(graph, patterns, project, bindings=None)` → `Match` — the `m{ }`
+  island (lazy nested-loop join; `first()`, `one()`, `count()`);
+- `prepared(text, interps, namespaces, base, graph=None, bindings=None,
+  update=False)` → `PreparedQuery` — the `s{ }` island (lazy, cached);
+- `Bindings` — mapping with str/Variable keys and RDF-coerced values;
+  `as_bindings_iter(iterable)` — the `for @bindings in …` adapter;
+- `Coercion(rules)` — the Python → RDF coercion policy (also exported as
+  `ldpy.Coercion`);
 - `instantiateBGP(graph, solution_mappings, initial=None)`.
 
 ```python
@@ -69,7 +85,8 @@ import ldpy
   already in `.ldpy` coordinates since the mapped compilation, fiche 011);
 - `ldpy.transform_source(source, filename)` — v1-compatible shim returning
   `(code, prefixes, map)`;
-- `ldpy.transpile` — re-export of the above.
+- `ldpy.transpile` — re-export of the above;
+- `ldpy.Coercion(rules)` — Python → RDF coercion policy (fiche 020).
 
 ## `ldpy.sparql`
 
