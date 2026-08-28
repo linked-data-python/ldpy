@@ -21,6 +21,13 @@ def transform_source(source, filename="<ldpy>"):
     return result.code, result.prefixes, result.map
 
 
+def Coercion(rules):
+    """Politique de conversion Python -> RDF (fiche 020) — voir
+    ldpy.runtime.Coercion ; exposée ici comme API publique."""
+    from ldpy.runtime import Coercion as _C
+    return _C(rules)
+
+
 def instantiateBGP(input, solutionMappings, initialGraph=None):
     """Instancie un patron de graphe avec des solution mappings
     (réexport de ldpy.runtime.instantiateBGP, compat v1)."""

@@ -45,7 +45,7 @@ __all__ = [
     "RDF", "URIRef", "BNode", "Literal", "Variable", "Namespace",
     "node", "bn", "slot", "firi", "bnode", "dtype", "graph", "instantiateBGP",
     "pname", "new_graph", "add_to", "remove_from", "match", "prepared",
-    "Bindings", "as_bindings_iter",
+    "Bindings", "as_bindings_iter", "Coercion",
     "sparql",
 ]
 
@@ -149,14 +149,87 @@ def _bnode_cached(label, _cache={}):
 _PASSTHROUGH = frozenset((rdflib.URIRef, Literal, BNode, Variable, bn))
 
 
-def node(value):
-    """Coercition d'une valeur Python en terme RDF (fnode / interpolations).
+_COERCION_STACK = []
+
+
+class Coercion:
+    """Politique de conversion Python -> RDF (fiche 020) : une valeur que
+    l'on nomme, passe et réutilise — pas un réglage global.
+
+    Clés du dictionnaire : un tuple de noms de champs, ou un type Python
+    (résolu après le champ, par le MRO). Conversions : un datatype (IRI),
+    URIRef pour construire un IRI, ou toute fonction rendant un terme.
+    Portée : `with politique:` empile puis dépile (un with intérieur raffine
+    l'extérieur) ; `politique.install()` empile sans dépiler — une
+    bibliothèque utilise with, une application peut install()."""
+
+    def __init__(self, rules):
+        self._fields = {}
+        self._types = {}
+        for key, conv in rules.items():
+            if isinstance(key, tuple):
+                for f in key:
+                    self._fields[f] = conv
+            elif isinstance(key, type):
+                self._types[key] = conv
+            else:
+                raise TypeError(
+                    "clé de Coercion : tuple de noms de champs ou type "
+                    "Python, reçu %r" % (key,))
+
+    def __enter__(self):
+        """Empile la politique pour la durée du with."""
+        _COERCION_STACK.append(self)
+        return self
+
+    def __exit__(self, *exc):
+        """Dépile, y compris sur exception."""
+        _COERCION_STACK.pop()
+        return False
+
+    def install(self):
+        """Empile définitivement (politique de module ou d'application)."""
+        _COERCION_STACK.append(self)
+        return self
+
+    def _rule(self, field, value_type):
+        conv = self._fields.get(field) if field is not None else None
+        if conv is None:
+            for klass in value_type.__mro__:
+                conv = self._types.get(klass)
+                if conv is not None:
+                    break
+        return conv
+
+
+def _apply_conv(conv, value):
+    """Applique une conversion de Coercion : datatype, IRI, ou fonction."""
+    if conv is rdflib.URIRef or conv is URIRef:
+        return rdflib.URIRef(str(value))
+    if conv is Literal:
+        return Literal(value)
+    if isinstance(conv, rdflib.URIRef):        # un datatype (XSD.integer, ...)
+        return Literal(value, datatype=conv)
+    return node(conv(value))
+
+
+def node(value, field=None):
+    """Coercition d'une valeur Python en terme RDF (fnode / interpolations,
+    bindings, instanciation — le point d'entrée unique de la fiche 020).
+    Un terme RDF déjà construit n'est jamais reconverti. Sans politique
+    empilée, Python -> Literal, rdflib choisissant le datatype.
     Dispatch sur le type exact d'abord : le chemin isinstance/ABC de rdflib
     dominait le profil de matérialisation (voir OPTIMIZATION.md)."""
     if type(value) in _PASSTHROUGH:
         return value
     if isinstance(value, (Node, bn)):
         return value
+    if _COERCION_STACK:
+        vt = type(value)
+        for pol in reversed(_COERCION_STACK):
+            conv = pol._rule(field, vt)
+            if conv is not None:
+                return _apply_conv(conv, value)
     return Literal(value)
 
 
@@ -341,7 +414,7 @@ class Bindings(dict):
                 self[k] = v
 
     def __setitem__(self, key, value):
-        dict.__setitem__(self, str(key), node(value))
+        dict.__setitem__(self, str(key), node(value, field=str(key)))
 
     def __getitem__(self, key):
         return dict.__getitem__(self, str(key))
@@ -434,7 +507,7 @@ def _materializer(bindings=None, keep_vars=True):
                 if bindings is not None:
                     v = _bind_get(bindings, t)
                     if v is not None:
-                        return node(v)
+                        return node(v, field=str(t))
                 return t if keep_vars else None
             return t
         if tt is slot:
@@ -808,7 +881,7 @@ def instantiateBGP(input, solutionMappings, initialGraph=None):
                 if value is None:
                     return None
                 if not isinstance(value, Node):
-                    value = Literal(value)
+                    value = node(value, field=str(t))
                 return value
             return None
         if isinstance(t, BNode):
