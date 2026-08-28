@@ -110,6 +110,13 @@ _KIND_TO_TYPE = {
     "island:var": 3,                            # variable
     "island:firi": 4, "island:fnode": 4,        # macro
     "island:graph": 4,                          # macro (région entière)
+    # fiches 013-019
+    "island:import": 5,                         # keyword (import de préfixes)
+    "island:graph-decl": 5, "island:bindings-decl": 5,
+    "island:for-bindings": 5, "island:for-bindings-close": 5,
+    "island:match": 4, "island:sparql": 4,      # macro (région entière)
+    "island:addto": 4, "island:removefrom": 4,
+    "island:enode": 4, "island:eiri": 4,
 }
 
 
