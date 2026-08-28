@@ -561,9 +561,12 @@ class Transpiler:
                             "du module importateur (fiche 013)")
 
         # îlots à délimiteur collé
-        if nxt == "{" and name in ("g", "f", "e"):
+        if nxt == "{" and name in ("g", "f", "e", "s"):
             if name == "g":
                 self._graph_island()
+                return
+            if name == "s":
+                self._sparql_island()
                 return
             if name == "f":
                 mark = self._begin_island()
@@ -1495,6 +1498,141 @@ class Transpiler:
             return "%s.Literal(%s, datatype=%s)" % (
                 RUNTIME_ALIAS, string_text, dt)
         return "%s.Literal(%s)" % (RUNTIME_ALIAS, string_text)
+
+    # ------------------------------------------------------------------
+    # îlot SPARQL s{ ... } (fiche 015)
+    # ------------------------------------------------------------------
+
+    _S_UPDATE_RE = re.compile(
+        r"\s*(?:INSERT|DELETE|CLEAR|DROP|CREATE|LOAD|COPY|MOVE|ADD|WITH)\b",
+        re.I)
+
+    def _sparql_island(self):
+        """Sur 's{'. Tout SPARQL : l'îlot ne lexe que les interpolations,
+        les chaînes et l'équilibre des accolades ; rdflib valide à la
+        transpilation (l'oracle, fiche 015)."""
+        mark = self._begin_island()
+        isl_line, isl_col = self.src_line, self.src_col
+        self._take(2)                                   # s{
+        t = self.text
+        pieces = []
+        interps = []                                    # exprs transpilées
+        depth = 0
+        while True:
+            c = self._peek()
+            if c == "":
+                self._error("'}' attendu pour fermer s{...}")
+            if c == "}":
+                if depth == 0:
+                    self._take(1)
+                    break
+                depth -= 1
+                pieces.append(self._take(1))
+            elif c in "\"'":
+                end = self._string_end(self.i)
+                pieces.append(self._take(end - self.i))
+            elif c == "#":
+                j = t.find("\n", self.i)
+                pieces.append(self._take((j if j != -1 else self.n) - self.i))
+            elif c == "{":
+                inner = self._sparql_brace_content(self.i)
+                if inner is not None and self._is_ldpy_expression(inner):
+                    # interpolation en position de terme
+                    self._take(1)
+                    expr = self._scan_embedded_expr("}")
+                    if self._peek() != "}":
+                        self._error("'}' attendu pour fermer l'interpolation")
+                    self._take(1)
+                    name = "__i%d" % len(interps)
+                    interps.append(expr.strip())
+                    pieces.append(" ?%s " % name)
+                else:
+                    depth += 1
+                    pieces.append(self._take(1))
+            else:
+                pieces.append(self._take(1))
+        text = "".join(pieces).strip()
+        if not text:
+            self._error("requête vide dans s{ }", isl_line, isl_col)
+        is_update = bool(self._S_UPDATE_RE.match(text))
+        self._validate_sparql(text, is_update, isl_line, isl_col)
+        gvar = self._graph_var if self._graph_var else "None"
+        iargs = ", ".join("(%r, (%s))" % ("__i%d" % k, e)
+                          for k, e in enumerate(interps))
+        gen = ("%s.prepared(%r, (%s), __namespaces__, %s, graph=%s, "
+               "update=%r)" % (RUNTIME_ALIAS, text,
+                               iargs + "," if iargs else "",
+                               repr(self.base) if self.base else "None",
+                               gvar, is_update))
+        self._end_island("sparql", mark, gen)
+
+    def _sparql_brace_content(self, i):
+        """Contenu du bloc {...} équilibré commençant en i (sans consommer),
+        ou None si non fermé."""
+        t = self.text
+        depth = 0
+        j = i
+        while j < self.n:
+            c = t[j]
+            if c in "\"'":
+                saved = (self.src_line, self.src_col)
+                try:
+                    j = self._string_end(j)
+                except LdpySyntaxError:
+                    return None
+                self.src_line, self.src_col = saved
+                continue
+            if c == "#":
+                k = t.find("\n", j)
+                j = k if k != -1 else self.n
+                continue
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    return t[i + 1:j]
+            j += 1
+        return None
+
+    def _is_ldpy_expression(self, text):
+        """L'oracle interpolation/groupe : le texte est-il une expression
+        ldpy (transpilable puis compilable en 'eval') ? Un groupe SPARQL ne
+        l'est jamais ; une interpolation l'est par définition."""
+        if not text.strip():
+            return False
+        sub = Transpiler(text, self.filename, emit_prelude=False)
+        sub.prefixes = dict(self.prefixes)
+        sub.base = self.base
+        try:
+            code = sub.run().code.strip()
+            compile("(%s)" % code, "<interp>", "eval")
+            return True
+        except (LdpySyntaxError, SyntaxError, ValueError):
+            return False
+
+    def _validate_sparql(self, text, is_update, line, col):
+        """Valide la requête à la transpilation, rdflib en oracle. Les
+        préfixes dynamiques reçoivent une IRI synthétique — une IRI en vaut
+        une autre pour vérifier une syntaxe. rdflib absent : avertir et
+        émettre sans valider."""
+        try:
+            from rdflib.plugins.sparql import prepareQuery, prepareUpdate
+        except ImportError:
+            self._warn("rdflib indisponible à la transpilation : "
+                       "s{ } émis sans validation syntaxique")
+            return
+        init_ns = {}
+        for pfx, val in self.prefixes.items():
+            init_ns[pfx] = (val if isinstance(val, str)
+                            else "urn:x-ldpy:dyn:%s/" % pfx)
+        full = ("BASE <%s>\n" % self.base if self.base else "") + text
+        try:
+            (prepareUpdate if is_update else prepareQuery)(full,
+                                                           initNs=init_ns)
+        except Exception as e:
+            msg = str(e).split("\n")[0][:200]
+            self._error("requête SPARQL invalide : %s" % msg, line, col)
 
     # ------------------------------------------------------------------
     # nœuds expression SPARQL : e{ ... } et e<...> 

@@ -399,6 +399,92 @@ def graph(namespaces, base, *triples):
     return g
 
 
+# ---------------------------------------------------------------- s{ ... }
+
+_SPARQL_CACHE = {}      # (texte, clé ns) -> requête préparée
+_SPARQL_CACHE_MAX = 64  # borné ; écrit à la main (pas de lru_cache : fiche 008)
+
+
+def _prepare_sparql(text, namespaces, update):
+    key = (text, update, tuple(sorted((k, str(v))
+                                      for k, v in namespaces.items())))
+    hit = _SPARQL_CACHE.get(key)
+    if hit is not None:
+        return hit
+    from rdflib.plugins.sparql import prepareQuery, prepareUpdate
+    prep = (prepareUpdate if update else prepareQuery)(
+        text, initNs=dict(namespaces))
+    if len(_SPARQL_CACHE) >= _SPARQL_CACHE_MAX:
+        _SPARQL_CACHE.pop(next(iter(_SPARQL_CACHE)))
+    _SPARQL_CACHE[key] = prep
+    return prep
+
+
+class PreparedQuery:
+    """Valeur d'un îlot s{ ... } (fiche 015) : requête préparée, paresseuse.
+
+    L'itérer (ou la tester) l'exécute sur son graphe ; l'appeler la relie —
+    suffixe d'appel de la fiche 019 : graphe d'abord, binding ensuite."""
+
+    __slots__ = ("text", "interps", "namespaces", "base",
+                 "graph", "bindings", "update")
+
+    def __init__(self, text, interps, namespaces, base,
+                 graph=None, bindings=None, update=False):
+        self.text = text
+        self.interps = interps
+        self.namespaces = namespaces
+        self.base = base
+        self.graph = graph
+        self.bindings = bindings
+        self.update = update
+
+    def __call__(self, graph=None, bindings=None):
+        return PreparedQuery(self.text, self.interps, self.namespaces,
+                             self.base,
+                             graph if graph is not None else self.graph,
+                             bindings if bindings is not None else self.bindings,
+                             self.update)
+
+    def _init_bindings(self):
+        init = {}
+        if self.bindings:
+            for k, v in self.bindings.items():
+                init[Variable(str(k))] = node(v)
+        for name, value in self.interps:
+            init[Variable(name)] = node(value)
+        return init
+
+    def _execute(self):
+        if self.graph is None:
+            raise RuntimeError(
+                "s{ } sans graphe : déclarez '@graph ...' en portée, ou "
+                "appliquez la requête à un graphe — s{ ... }(g)")
+        prep = _prepare_sparql(self.text, self.namespaces, self.update)
+        if self.update:
+            return self.graph.update(prep, initBindings=self._init_bindings())
+        return self.graph.query(prep, initBindings=self._init_bindings())
+
+    def __iter__(self):
+        return iter(self._execute())
+
+    def __bool__(self):
+        res = self._execute()
+        if getattr(res, "type", None) == "ASK":
+            return bool(res.askAnswer)
+        return res is not None and bool(len(res))
+
+    def __repr__(self):
+        return "s{ %s }" % self.text
+
+
+def prepared(text, interps, namespaces, base, graph=None, bindings=None,
+             update=False):
+    """Construit la valeur d'un îlot s{ ... } (fiche 015)."""
+    return PreparedQuery(text, interps, namespaces, base,
+                         graph, bindings, update)
+
+
 def instantiateBGP(input, solutionMappings, initialGraph=None):
     """Instancie un patron de graphe (BGP) avec des solution mappings.
 
