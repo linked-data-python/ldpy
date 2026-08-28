@@ -11,8 +11,11 @@ import os
 
 import pytest
 
+pytest.importorskip("pygments", reason="extra optionnel [highlight]")
+
 from pygments.lexers.python import PythonLexer
-from pygments.token import Error, Keyword, Name, Number, Punctuation, String
+from pygments.token import (Error, Keyword, Name, Number, Punctuation,
+                            String)
 
 from ldpy.pygments_lexer import LdpyLexer
 
@@ -114,24 +117,25 @@ def test_invalid_source_degrades_to_python():
 # ------------------------------------------------------------ choix de tokens
 
 def test_prefix_declaration_tokens():
+    """Délégué à TurtleLexer : @prefix EST une directive Turtle."""
     assert kinds("@prefix ex: <http://e/> .\n") == [
-        (Keyword.Declaration, "@prefix"), (Name.Namespace, "ex"),
-        (Punctuation, ":"), (Name.Label, "<http://e/>"), (Punctuation, ".")]
+        (Keyword.Declaration, "@prefix"), (Name.Namespace, "ex:"),
+        (String.Symbol, "<http://e/>"), (Punctuation, ".")]
 
 
 def test_graph_island_tokens():
     got = kinds('@prefix ex: <http://e/> .\ng = g{ ex:s a ex:C ; ex:p 1 }\n')
     assert (Keyword.Pseudo, "g{") in got          # le sigil d'îlot
     assert (Keyword, "a") in got                  # le a de Turtle
-    assert (Name.Namespace, "ex") in got and (Name.Tag, "C") in got
-    assert (Number, "1") in got
+    assert (Name.Namespace, "ex") in got and (Name.Class, "C") in got
+    assert (Number.Integer, "1") in got
 
 
 def test_variables_and_language_tags():
     got = kinds('@prefix ex: <http://e/> .\ng = g{ ?s ex:p "x"@en }\n')
     assert (Name.Variable, "?s") in got
-    assert (String, '"x"') in got
-    assert (Name.Function, "en") in got
+    assert (String, '"') in got and (String, "x") in got
+    assert (Name.Builtin, "en") in got
 
 
 def test_interpolation_returns_to_python():
@@ -147,12 +151,22 @@ def test_sparql_group_is_not_an_interpolation():
     got = kinds(src)
     assert (Keyword, "SELECT") in got and (Keyword, "WHERE") in got
     assert (Name.Variable, "?x") in got           # pas passé au lexer Python
-    assert (Name.Tag, "C") in got
+    assert (Name.Class, "C") in got
 
 
 def test_sparql_interpolation_is_python():
     src = "@prefix ex: <http://e/> .\nc = 1\nq = s{ SELECT ?x WHERE { ?x a {c} } }\n"
     assert [(p, v) for p, t, v in toks(src) if t is Error] == []
+
+
+def test_island_nested_in_an_interpolation():
+    """ex:{?id} — l'interpolation est re-scannée par le transpileur, elle peut
+    donc contenir un îlot ; PythonLexer seul y verrait une erreur."""
+    src = ("@prefix ex: <http://e/> .\n@graph as g\n"
+           "for @bindings in rows:\n    +{ ex:{?id} ex:value ?v }\n")
+    out = toks(src)
+    assert [(p, v) for p, t, v in out if t is Error] == []
+    assert (Name.Variable, "?id") in [(t, v) for _, t, v in out]
 
 
 def test_deferred_expression_builtins():
@@ -193,3 +207,38 @@ def test_documentation_snippets_highlight(code):
     out = toks(code)
     assert "".join(v for _, _, v in out) == code
     assert [(p, v) for p, t, v in out if t is Error] == []
+
+
+# ------------------------------------- huit rôles, huit couleurs (mkdocs-material)
+# mkdocs-material rabat plusieurs Name.* sur la même couleur ; le choix des
+# tokens vise huit classes CSS distinctes, sinon les IRIs, les noms locaux et
+# les mots-clés seraient de la même couleur.
+
+_MATERIAL_GROUPS = {                       # classe Pygments -> rôle coloré
+    "kp": "keyword", "kd": "keyword", "k": "keyword",
+    "ss": "string", "s": "string", "s1": "string", "s2": "string",
+    "nn": "function", "nc": "function",
+    "nv": "variable", "na": "variable",
+    "nb": "constant",
+    "mi": "number", "m": "number",
+    "o": "operator", "p": "punctuation", "c1": "comment",
+}
+
+
+def test_token_classes_are_distinguishable():
+    from pygments.formatters.html import _get_ttype_class
+    from ldpy.pygments_lexer import (T_SIGIL, T_DECL, T_KW, T_IRI, T_PREFIX,
+                                     T_LOCAL, T_VAR, T_LANG, T_CONST)
+    roles = {}
+    for name, ttype in [("sigil", T_SIGIL), ("decl", T_DECL), ("kw", T_KW),
+                        ("iri", T_IRI), ("prefix", T_PREFIX),
+                        ("local", T_LOCAL), ("var", T_VAR), ("lang", T_LANG)]:
+        cls = _get_ttype_class(ttype)
+        assert cls in _MATERIAL_GROUPS, (name, ttype, cls)
+        roles[name] = _MATERIAL_GROUPS[cls]
+    # les rôles qui DOIVENT se distinguer les uns des autres
+    assert roles["iri"] != roles["kw"]
+    assert roles["prefix"] != roles["kw"] and roles["local"] != roles["kw"]
+    assert roles["var"] != roles["prefix"] and roles["var"] != roles["iri"]
+    assert roles["sigil"] == roles["decl"] == roles["kw"]   # ce sont des mots
+    assert _get_ttype_class(T_CONST)                        # stylé, quel qu'il soit
