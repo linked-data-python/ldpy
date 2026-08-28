@@ -76,3 +76,43 @@ def test_docstring_split_segment_mapping():
     assert result.map.to_gen(1, 0) == (2, 0)   # y = 1
     assert result.map.to_src(2, 0) == (1, 0)
     assert result.map.to_src(0, 0) == (0, 0)   # docstring inchangée
+
+
+# ----------------------------- rabattement des points d'arrêt (fiche vscode/103)
+
+MULTILIGNE = """\
+@prefix ex: <http://example.org/> .
+valeur = 21.5
+gr = g{ ex:s a ex:Obs ;
+        ex:v {valeur} ;
+        ex:w 2 }
+print(len(gr))
+"""
+
+
+def _map(src=MULTILIGNE):
+    from ldpy.transpiler import transpile
+    return transpile(src, "p.ldpy").map
+
+
+def test_snap_laisse_les_lignes_liables_en_place():
+    from ldpy.transpiler.linemap import snap_breakpoint_lines
+    assert snap_breakpoint_lines(_map(), [1, 2, 3, 6]) == [1, 2, 3, 6]
+
+
+def test_snap_rabat_linterieur_dun_ilot_sur_son_debut():
+    from ldpy.transpiler.linemap import snap_breakpoint_lines
+    assert snap_breakpoint_lines(_map(), [4, 5]) == [3, 3]
+
+
+def test_snap_est_idempotent():
+    from ldpy.transpiler.linemap import snap_breakpoint_lines
+    m = _map()
+    une = snap_breakpoint_lines(m, [1, 2, 3, 4, 5, 6])
+    assert snap_breakpoint_lines(m, une) == une
+
+
+def test_snap_ne_touche_pas_un_ilot_dune_seule_ligne():
+    from ldpy.transpiler.linemap import snap_breakpoint_lines
+    m = _map("@prefix ex: <http://e/> .\ng = g{ ex:s ex:p 1 }\nprint(g)\n")
+    assert snap_breakpoint_lines(m, [1, 2, 3]) == [1, 2, 3]

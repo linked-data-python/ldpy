@@ -21,6 +21,7 @@ import sys
 from ldpy.transpiler import transpile, LdpySyntaxError
 from ldpy.lsp.rpc import Endpoint, read_message, RpcClosed
 from ldpy.lsp import translate as tr
+from ldpy.transpiler.linemap import snap_breakpoint_lines
 
 FORWARDED = {
     "textDocument/completion",
@@ -179,6 +180,9 @@ class LdpyServer:
                         "legend": {"tokenTypes": tr.TOKEN_TYPES,
                                    "tokenModifiers": []},
                         "full": True},
+                    # extension maison, annoncée pour que le client puisse
+                    # la détecter au lieu de la supposer (fiche vscode/103)
+                    "experimental": {"ldpyBreakpointLines": True},
                 },
                 "serverInfo": {"name": "ldpy-lsp", "version": "0.2.0"},
             }
@@ -212,6 +216,17 @@ class LdpyServer:
             self.endpoint.notify("textDocument/publishDiagnostics",
                                  {"uri": uri, "diagnostics": []})
             return None
+
+        if method == "ldpy/breakpointLines":
+            # Rabat des lignes de points d'arrêt sur celles qui se lient
+            # vraiment (intérieur d'un îlot multiligne -> début de l'îlot).
+            # L'extension déplace alors la pastille, au lieu de laisser
+            # l'utilisateur devant un point d'arrêt qui ne se déclenche pas.
+            lines = list(params.get("lines") or [])
+            doc = self.docs.get(params["textDocument"]["uri"])
+            if doc is None or doc.result is None:
+                return {"lines": lines}
+            return {"lines": snap_breakpoint_lines(doc.result.map, lines)}
 
         if method == "textDocument/semanticTokens/full":
             doc = self.docs.get(params["textDocument"]["uri"])

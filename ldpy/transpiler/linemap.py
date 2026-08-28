@@ -132,6 +132,31 @@ class LanguageMap:
         return cls.from_dict(json.loads(s))
 
 
+def snap_breakpoint_line(lmap, line_1based):
+    """Ligne .ldpy où un point d'arrêt posé sur `line_1based` se liera VRAIMENT.
+
+    Un îlot multiligne s'effondre en une instruction dont le code object porte
+    la ligne de DÉBUT (fiche ldpy/011) : aucune ligne intérieure n'est
+    exécutable. Or pydevd répond `verified: true` à un point d'arrêt posé là,
+    et ne s'y arrête jamais — un mensonge silencieux (mesuré, fiche
+    vscode/103). On rabat donc la ligne sur le début de l'îlot, et
+    l'outillage peut DÉPLACER la pastille pour le dire.
+
+    Rend la même ligne quand il n'y a rien à rabattre."""
+    line0 = line_1based - 1
+    for seg in lmap.segments:
+        if seg.src is None or seg.kind == "copy":
+            continue
+        if seg.src[0] < line0 <= seg.src[2]:
+            return seg.src[0] + 1
+    return line_1based
+
+
+def snap_breakpoint_lines(lmap, lines_1based):
+    """`snap_breakpoint_line` sur une liste (ordre conservé)."""
+    return [snap_breakpoint_line(lmap, l) for l in lines_1based]
+
+
 # ---------------------------------------------------------------------------
 # Compilation « remappée » : le code généré est compilé avec les numéros de
 # ligne DU SOURCE .ldpy (via la map), si bien que tracebacks, pdb et debugpy
