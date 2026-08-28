@@ -44,6 +44,8 @@ _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 __all__ = [
     "RDF", "URIRef", "BNode", "Literal", "Variable", "Namespace",
     "node", "bn", "slot", "firi", "bnode", "dtype", "graph", "instantiateBGP",
+    "pname", "new_graph", "add_to", "remove_from", "match", "prepared",
+    "Bindings", "as_bindings_iter",
     "sparql",
 ]
 
@@ -289,6 +291,86 @@ class _EmittedGraph(rdflib.Graph):
         return NotImplemented
 
 
+class Bindings(dict):
+    """Binding courant (fiche 017) : un dict à clés str ou Variable
+    (normalisées en str), valeurs coercées en termes RDF à l'affectation.
+    Tout ce que Python sait faire sur un dict marche : b[?x] = v, update,
+    del, **b, itération sur les clés."""
+
+    def __init__(self, mapping=None):
+        dict.__init__(self)
+        if mapping is not None:
+            if not hasattr(mapping, "items"):
+                raise TypeError(
+                    "Bindings attend un mapping, reçu %s"
+                    % type(mapping).__name__)
+            for k, v in mapping.items():
+                self[k] = v
+
+    def __setitem__(self, key, value):
+        dict.__setitem__(self, str(key), node(value))
+
+    def __getitem__(self, key):
+        return dict.__getitem__(self, str(key))
+
+    def __delitem__(self, key):
+        dict.__delitem__(self, str(key))
+
+    def __contains__(self, key):
+        return dict.__contains__(self, str(key))
+
+    def get(self, key, default=None):
+        """dict.get, clé str ou Variable."""
+        return dict.get(self, str(key), default)
+
+    def update(self, other=(), **kw):
+        """dict.update, en passant par la coercition de __setitem__."""
+        items = other.items() if hasattr(other, "items") else other
+        for k, v in items:
+            self[k] = v
+        for k, v in kw.items():
+            self[k] = v
+
+
+def as_bindings_iter(iterable):
+    """'for @bindings in ...' (fiche 017) : chaque élément devient le
+    binding courant du corps. Un m{ ... } livre ses solutions (variables
+    anonymes exclues) ; tout autre itérable doit produire des mappings."""
+    if isinstance(iterable, Match):
+        for sm in iterable.solutions():
+            b = Bindings()
+            for k, v in sm.items():
+                if not str(k).startswith("__bn"):
+                    dict.__setitem__(b, str(k), v)      # déjà des termes
+            yield b
+        return
+    for item in iterable:
+        if isinstance(item, Bindings):
+            yield item
+        elif hasattr(item, "items"):
+            yield Bindings(item)
+        else:
+            raise TypeError(
+                "for @bindings in ... : l'itérable doit produire des "
+                "mappings, reçu %s" % type(item).__name__)
+
+
+_EXPR_CLASS = None
+
+
+def _expr_class():
+    """Classe Expression de ldpy.sparql, chargée à la demande (None si le
+    module n'est pas disponible)."""
+    global _EXPR_CLASS
+    if _EXPR_CLASS is None:
+        try:
+            from ldpy.sparql import Expression
+            _EXPR_CLASS = Expression
+        except ImportError:
+            _EXPR_CLASS = False
+    return _EXPR_CLASS
+
+
 def _bind_get(bindings, var):
     """Valeur d'une variable dans un mapping à clés str ou Variable ;
     None = non liée (convention d'instantiateBGP)."""
@@ -326,6 +408,17 @@ def _materializer(bindings=None, keep_vars=True):
             if t.bound:
                 slots[t.index] = node(t.value)
             return slots[t.index]
+        cls = _expr_class()
+        if cls and tt is cls:
+            # e{ ... } en position de terme (fiches 007/017) : différé sans
+            # binding, évalué contre le binding courant sinon — une erreur
+            # SPARQL laisse le terme non lié, le triplet est écarté.
+            if bindings is None:
+                return t if keep_vars else None
+            try:
+                return node(t(bindings))
+            except Exception:
+                return None
         return node(t)
 
     return _term
@@ -383,21 +476,31 @@ def remove_from(graph, *patterns, bindings=None):
     return graph
 
 
-def graph(namespaces, base, *triples):
+def graph(namespaces, base, *triples, bindings=None):
     """Construit un rdflib.Graph (sous-type paresseux) à partir de triplets
     aplatis.
 
     namespaces : dict prefix -> Namespace (liaisons de sérialisation,
     partagées via _nm_for) ; base : IRI de base lexicale (str ou None) ;
-    triples : tuples (s, p, o) pouvant contenir des placeholders bn(i)."""
+    triples : tuples (s, p, o) pouvant contenir des placeholders bn(i).
+    Sans binding, un g{ } à variables ou à e{ } reste un gabarit ; avec le
+    binding courant en portée, il est instancié (fiche 017) — un triplet
+    dont un terme reste non lié est écarté."""
     g = _EmittedGraph(base=base,
                       identifier=rdflib.URIRef("urn:x-ldpy:g%d"
                                                % next(_graph_ids)))
     nm = _nm_for(namespaces)
     if nm is not None:
         g.namespace_manager = nm
-    _term = _materializer()
-    g._pending = [(_term(s), _term(p), _term(o)) for s, p, o in triples]
+    _term = _materializer(bindings, keep_vars=(bindings is None))
+    if bindings is None:
+        g._pending = [(_term(s), _term(p), _term(o)) for s, p, o in triples]
+    else:
+        g._pending = [tr for tr in
+                      ((_term(s), _term(p), _term(o))
+                       for s, p, o in triples)
+                      if tr[0] is not None and tr[1] is not None
+                      and tr[2] is not None]
     return g
 
 

@@ -204,6 +204,8 @@ class Transpiler:
         self._graph_var = None      # variable Python du graphe courant, ou None
         # îlot de motif (fiche 016) : collecte des variables projetées
         self._match_vars = None
+        # binding courant (fiche 017)
+        self._bindings_var = None
 
     # ------------------------------------------------------------------
     # primitives de position / émission
@@ -552,6 +554,16 @@ class Transpiler:
                 and self._import_has_prefix_item():
             self._take_prefix_import()
             return
+
+        # bascule liaisons (fiche 017) : for @bindings [as b] in ...
+        if name == "for" and self.stmt_start and not self._sub:
+            j = m.end()
+            while j < self.n and t[j] in " \t":
+                j += 1
+            if t.startswith("@bindings", j) and (
+                    j + 9 >= self.n or not _name_char(t[j + 9])):
+                self._for_bindings_island()
+                return
 
         # __namespaces__ dans __all__ : casserait la sérialisation de
         # l'importateur (fiche 013) — refusé explicitement.
@@ -981,12 +993,14 @@ class Transpiler:
         """Sur '@' en début d'instruction. Tente l'îlot déclaration.
         Retourne True si consommé (sinon rien n'est consommé)."""
         t = self.text
-        m = re.match(r"@(prefix|base|graph)\b", t[self.i:self.i + 8])
+        m = re.match(r"@(prefix|base|graph|bindings)\b", t[self.i:self.i + 10])
         if not m:
             return False
         kind = m.group(1)
         if kind == "graph":
             return self._try_graph_decl()
+        if kind == "bindings":
+            return self._try_bindings_decl()
         # une « déclaration ratée » (préfixe non ASCII, ponctuation absente…)
         # ne doit PAS retomber silencieusement sur le cas décorateur : la fin
         # de ligne déclencherait des îlots et produirait du code massacré.
@@ -1106,6 +1120,8 @@ class Transpiler:
                 self.base = prev
             elif kind == "graph":
                 self._graph_var = prev
+            elif kind == "bindings":
+                self._bindings_var = prev
             elif had:
                 self.prefixes[name], self._prefix_col[name] = prev
             else:
@@ -1235,8 +1251,92 @@ class Transpiler:
         fn = "add_to" if sign == "+" else "remove_from"
         args = [self._graph_var]
         args += ["(%s, %s, %s)" % tr for tr in triples]
-        gen = "%s.%s(%s)" % (RUNTIME_ALIAS, fn, ", ".join(args))
+        gen = "%s.%s(%s%s)" % (RUNTIME_ALIAS, fn, ", ".join(args),
+                               self._bkw())
         self._end_island("addto" if sign == "+" else "removefrom", mark, gen)
+
+    # ------------------------------------------------------------------
+    # binding courant : @bindings, for @bindings in (fiche 017)
+    # ------------------------------------------------------------------
+
+    def _bkw(self):
+        """Suffixe d'argument bindings= pour les îlots consommateurs."""
+        if self._bindings_var:
+            return ", bindings=%s" % self._bindings_var
+        return ""
+
+    def _try_bindings_decl(self):
+        """Sur '@' devant 'bindings' en début d'instruction. Désigne ou
+        crée le binding courant — le parallèle exact de @graph."""
+        t = self.text
+        j = self.i + 9                              # après '@bindings'
+        if j < self.n and t[j] not in " \t":
+            return False
+        while j < self.n and t[j] in " \t":
+            j += 1
+        if j >= self.n or t[j] in "\n\r#(":
+            return False
+        decl_col = self.src_col
+        mark = self._begin_island()
+        self._take(j - self.i)
+        if t.startswith("as", self.i) and not _name_char(self._peek(2)):
+            self._take(2)
+            bvar = self._graph_decl_as_name()
+            gen = "%s = %s.Bindings()" % (bvar, RUNTIME_ALIAS)
+        else:
+            expr = self._scan_embedded_expr("\n#").strip()
+            if not expr:
+                self._error("expression attendue après '@bindings'")
+            if "\n" in expr:
+                self._error("l'expression de '@bindings' tient sur sa ligne")
+            bvar = self._fresh_var("b")
+            gen = "%s = (%s)" % (bvar, expr)
+        self._graph_ws_inline()
+        if self._peek() not in "\n\r#;" and self._peek() != "":
+            self._error("fin de ligne attendue après la déclaration "
+                        "@bindings")
+        if decl_col > 0:
+            self._scope_stack.append((decl_col, "bindings", None,
+                                      True, self._bindings_var))
+        self._bindings_var = bvar
+        self._end_island("bindings-decl", mark, gen)
+        return True
+
+    def _for_bindings_island(self):
+        """Sur 'for' suivi de '@bindings' : la bascule graphes -> liaisons.
+        `for @bindings [as b] in ITER:` — chaque élément de l'itérable
+        devient le binding courant du corps de la boucle (fiche 017)."""
+        decl_col = self.src_col
+        mark = self._begin_island()
+        t = self.text
+        self._take(3)                               # 'for'
+        self._graph_ws_inline()
+        self._take(9)                               # '@bindings'
+        self._graph_ws_inline()
+        if t.startswith("as", self.i) and not _name_char(self._peek(2)):
+            self._take(2)
+            bvar = self._graph_decl_as_name()
+            self._graph_ws_inline()
+        else:
+            bvar = self._fresh_var("b")
+        if not (t.startswith("in", self.i) and not _name_char(self._peek(2))):
+            self._error("'in' attendu dans 'for @bindings [as b] in ...'")
+        self._take(2)
+        self._end_island("for-bindings", mark,
+                         "for %s in %s.as_bindings_iter(" % (
+                             bvar, RUNTIME_ALIAS))
+        # l'itérable : scan normal (îlots inclus), jusqu'au ':' du for
+        self._scan(stops=":", entry_depth=self.depth)
+        if self._peek() != ":":
+            self._error("':' attendu pour clore l'en-tête du for")
+        self._close_copy()
+        mark2 = self._begin_island()
+        self._take(1)
+        self._end_island("for-bindings-close", mark2, "):")
+        # portée : le corps de la boucle
+        self._scope_stack.append((decl_col + 1, "bindings", None,
+                                  True, self._bindings_var))
+        self._bindings_var = bvar
 
     # ------------------------------------------------------------------
     # graphes g{ ... }
@@ -1271,7 +1371,8 @@ class Transpiler:
         base_repr = repr(self.base) if self.base else "None"
         args = ["__namespaces__", base_repr]
         args += ["(%s, %s, %s)" % tr for tr in triples]
-        gen = "%s.graph(%s)" % (RUNTIME_ALIAS, ", ".join(args))
+        gen = "%s.graph(%s%s)" % (RUNTIME_ALIAS, ", ".join(args),
+                                  self._bkw())
         self._end_island("graph", mark, gen)
 
     def _g_ws(self):
@@ -1343,6 +1444,13 @@ class Transpiler:
             return _maybe_impure(self._take_firi(), gctx)
         if c == "f" and self._peek(1) == "{":
             return _impure(self._take_fnode(), gctx)
+        if c == "e" and self._peek(1) in "{<":
+            if self._match_vars is not None:
+                self._error("e{ } dans m{ } : les filtres d'appariement sont "
+                            "hors périmètre (fiche 017)")
+            taker = (self._take_enode if self._peek(1) == "{"
+                     else self._take_eiri)
+            return _impure(taker(), gctx)
         if _name_start(c) or c == ":":
             return _maybe_impure(self._take_pname(in_island=True), gctx)
         self._error("prédicat attendu (IRI, nom préfixé, 'a', variable ou "
@@ -1442,6 +1550,14 @@ class Transpiler:
             return _maybe_impure(self._take_firi(), gctx), False
         if c == "f" and self._peek(1) == "{":
             return _impure(self._take_fnode(), gctx), False
+        if c == "e" and self._peek(1) in "{<":
+            # expression différée en position de terme (fiches 007/017)
+            if self._match_vars is not None:
+                self._error("e{ } dans m{ } : les filtres d'appariement sont "
+                            "hors périmètre (fiche 017)")
+            taker = (self._take_enode if self._peek(1) == "{"
+                     else self._take_eiri)
+            return _impure(taker(), gctx), False
         if c in "\"'" or (c and c in "rbfuRBFU" and self._peek(1) in "\"'"):
             return self._g_literal(), False
         if c.isdigit() or c in "+-" or (c == "." and self._peek(1).isdigit()):
@@ -1528,9 +1644,9 @@ class Transpiler:
         gvar = self._graph_var if self._graph_var else "None"
         pats = ", ".join("(%s, %s, %s)" % tr for tr in triples)
         proj = ", ".join(repr(v) for v in projected)
-        gen = "%s.match(%s, (%s,), (%s%s))" % (
+        gen = "%s.match(%s, (%s,), (%s%s)%s)" % (
             RUNTIME_ALIAS, gvar, pats,
-            proj, "," if projected else "")
+            proj, "," if projected else "", self._bkw())
         self._end_island("match", mark, gen)
 
     # ------------------------------------------------------------------
@@ -1593,11 +1709,11 @@ class Transpiler:
         gvar = self._graph_var if self._graph_var else "None"
         iargs = ", ".join("(%r, (%s))" % ("__i%d" % k, e)
                           for k, e in enumerate(interps))
-        gen = ("%s.prepared(%r, (%s), __namespaces__, %s, graph=%s, "
+        gen = ("%s.prepared(%r, (%s), __namespaces__, %s, graph=%s%s, "
                "update=%r)" % (RUNTIME_ALIAS, text,
                                iargs + "," if iargs else "",
                                repr(self.base) if self.base else "None",
-                               gvar, is_update))
+                               gvar, self._bkw(), is_update))
         self._end_island("sparql", mark, gen)
 
     def _sparql_brace_content(self, i):
