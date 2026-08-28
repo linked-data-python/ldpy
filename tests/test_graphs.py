@@ -430,3 +430,40 @@ def test_semicolon_still_requires_a_predicate_otherwise(run, prefixes):
     from ldpy.transpiler import LdpySyntaxError
     with pytest.raises(LdpySyntaxError):
         run(prefixes + "gr = g{ ex:s ex:p 1 ; 2 }\n")
+
+
+# ------------------------------------------------- matérialisation paresseuse
+# Régression : une liste EN ATTENTE VIDE n'éteignait pas le mode paresseux, si
+# bien que __len__/__iter__ servaient [] pendant que le store se remplissait.
+
+def test_graphe_vide_puis_add(run):
+    g, _ = run("gr = g{ }\n")
+    gr = g["gr"]
+    gr.add((URIRef(EX + "a"), URIRef(EX + "p"), Literal(1)))
+    assert len(gr) == 1 and list(gr)
+
+
+def test_accumulation_par_iadd_sur_graphe_emis(run, prefixes):
+    g, _ = run(prefixes + "gr = g{ }\n"
+               "for i in range(3):\n"
+               "    gr += g{ ex:s ex:p {i} }\n")
+    gr = g["gr"]
+    assert len(gr) == 3
+    assert sorted(int(o) for s, p, o in gr) == [0, 1, 2]
+
+
+def test_iadd_puis_lecture_puis_add(run, prefixes):
+    """Le graphe reste cohérent quand on alterne les deux régimes."""
+    g, _ = run(prefixes + "a = g{ ex:a ex:p 1 }\nb = g{ ex:b ex:p 2 }\n")
+    gr = g["a"]
+    gr += g["b"]
+    assert len(gr) == 2
+    gr.add((URIRef(EX + "c"), URIRef(EX + "p"), Literal(3)))
+    assert len(gr) == 3 and len(set(gr)) == 3
+
+
+def test_isub_sur_graphe_emis(run, prefixes):
+    g, _ = run(prefixes + "a = g{ ex:a ex:p 1 ; ex:q 2 }\nb = g{ ex:a ex:p 1 }\n")
+    gr = g["a"]
+    gr -= g["b"]
+    assert len(gr) == 1

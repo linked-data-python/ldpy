@@ -310,10 +310,15 @@ class _EmittedGraph(rdflib.Graph):
     @property
     def _Graph__store(self):
         pending = self._pending
-        if pending:
+        if pending is not None:
+            # `is not None` et non la vérité de la liste : une liste VIDE doit
+            # elle aussi éteindre le mode paresseux, sinon __len__/__iter__
+            # continueraient de servir [] pendant que le store, lui, se
+            # remplit (g{ } puis .add(), ou `g += g{…}`).
             self._pending = None
-            self._real_store.addN(
-                (s, p, o, self) for s, p, o in dict.fromkeys(pending))
+            if pending:
+                self._real_store.addN(
+                    (s, p, o, self) for s, p, o in dict.fromkeys(pending))
         return self._real_store
 
     @_Graph__store.setter
@@ -388,6 +393,19 @@ class _EmittedGraph(rdflib.Graph):
                 return self._merged(pending, other._pending)
             return self._merged(pending, list(other))
         return super().__add__(other)
+
+    def __iadd__(self, other):
+        """g += autre, paresseux tant que rien n'a été matérialisé : la
+        boucle d'accumulation `g = g{ } ; g += g{…}` reste O(total) en
+        insertions de store au lieu d'en payer une par tour."""
+        pending = self._pending
+        if pending is not None and isinstance(other, rdflib.Graph):
+            if type(other) is _EmittedGraph and other._pending is not None:
+                self._pending = pending + other._pending
+            else:
+                self._pending = pending + list(other)
+            return self
+        return super().__iadd__(other)
 
     def __radd__(self, other):
         """Graph() + g{...} (et donc sum(...)) sans matérialisation."""
