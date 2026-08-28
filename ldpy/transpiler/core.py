@@ -202,6 +202,8 @@ class Transpiler:
         self._import_lines = []     # (ligne 0-based, module) des imports de préfixes
         # graphe courant (fiche 014)
         self._graph_var = None      # variable Python du graphe courant, ou None
+        # îlot de motif (fiche 016) : collecte des variables projetées
+        self._match_vars = None
 
     # ------------------------------------------------------------------
     # primitives de position / émission
@@ -561,12 +563,15 @@ class Transpiler:
                             "du module importateur (fiche 013)")
 
         # îlots à délimiteur collé
-        if nxt == "{" and name in ("g", "f", "e", "s"):
+        if nxt == "{" and name in ("g", "f", "e", "s", "m"):
             if name == "g":
                 self._graph_island()
                 return
             if name == "s":
                 self._sparql_island()
+                return
+            if name == "m":
+                self._match_island()
                 return
             if name == "f":
                 mark = self._begin_island()
@@ -1355,7 +1360,10 @@ class Transpiler:
         m = _NAME_RE.match(self.text, self.i)
         if not m:
             self._error("nom de variable attendu après '%s'" % sigil)
-        return "%s.Variable(%r)" % (RUNTIME_ALIAS, self._take(len(m.group(0))))
+        name = self._take(len(m.group(0)))
+        if self._match_vars is not None and name not in self._match_vars:
+            self._match_vars.append(name)
+        return "%s.Variable(%r)" % (RUNTIME_ALIAS, name)
 
     def _g_node(self, triples, gctx):
         """Parse un nœud de graphe. Retourne (expr, is_composite) ;
@@ -1498,6 +1506,32 @@ class Transpiler:
             return "%s.Literal(%s, datatype=%s)" % (
                 RUNTIME_ALIAS, string_text, dt)
         return "%s.Literal(%s)" % (RUNTIME_ALIAS, string_text)
+
+    # ------------------------------------------------------------------
+    # îlot de motif m{ ... } (fiche 016)
+    # ------------------------------------------------------------------
+
+    def _match_island(self):
+        """Sur 'm{'. Un BGP en syntaxe Turtle, à variables, évalué contre
+        le graphe courant : rend des termes (arité 1) ou des lignes
+        (arité >= 2). Projection = ordre de première apparition ; un nœud
+        anonyme est une variable non distinguée."""
+        mark = self._begin_island()
+        saved_vars, self._match_vars = self._match_vars, []
+        try:
+            self._take(2)                           # m{
+            triples, gctx = self._g_parse_triples()
+            projected = list(self._match_vars)
+        finally:
+            self._match_vars = saved_vars
+        triples = _share_impure(triples, gctx)
+        gvar = self._graph_var if self._graph_var else "None"
+        pats = ", ".join("(%s, %s, %s)" % tr for tr in triples)
+        proj = ", ".join(repr(v) for v in projected)
+        gen = "%s.match(%s, (%s,), (%s%s))" % (
+            RUNTIME_ALIAS, gvar, pats,
+            proj, "," if projected else "")
+        self._end_island("match", mark, gen)
 
     # ------------------------------------------------------------------
     # îlot SPARQL s{ ... } (fiche 015)

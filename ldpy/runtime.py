@@ -358,25 +358,27 @@ def remove_from(graph, *patterns, bindings=None):
     liée est un joker (sémantique remove((s, p, None)) de rdflib) ; à
     plusieurs motifs partageant une variable, DELETE WHERE par appariement
     (fiche 016)."""
-    resolved = []
-    joker_vars = []
+    has_vars = any(isinstance(x, (Variable, bn))
+                   for tr in patterns for x in tr)
+    if len(patterns) > 1 and has_vars:
+        # DELETE WHERE : apparier le BGP (fiche 016) puis retirer les
+        # triplets instanciés — collectés d'abord, le graphe ne doit pas
+        # être modifié pendant l'appariement.
+        prepared_pats, _ = _match_prepare(patterns, bindings)
+        to_remove = set()
+        for sm in Match(graph, patterns, (), bindings).solutions():
+            for tr in prepared_pats:
+                inst = tuple(sm.get(x) if isinstance(x, Variable) else x
+                             for x in tr)
+                if all(t is not None for t in inst):
+                    to_remove.add(inst)
+        for tr in to_remove:
+            graph.remove(tr)
+        return graph
+    term = _materializer(bindings, keep_vars=True)
     for s, p, o in patterns:
-        term = _materializer(bindings, keep_vars=True)
-        tr = []
-        for x in (term(s), term(p), term(o)):
-            if isinstance(x, (Variable, bn)):
-                joker_vars.append(x)
-                tr.append(None)
-            else:
-                tr.append(x)
-        resolved.append(tuple(tr))
-    shared = len(joker_vars) != len(set(map(str, joker_vars)))
-    if len(patterns) > 1 and joker_vars and shared:
-        # DELETE WHERE : apparier le BGP puis retirer les triplets instanciés
-        raise NotImplementedError(
-            "-{ } à plusieurs motifs partageant une variable : "
-            "appariement de la fiche 016, à venir")
-    for tr in resolved:
+        tr = tuple(None if isinstance(x, (Variable, bn)) else x
+                   for x in (term(s), term(p), term(o)))
         graph.remove(tr)
     return graph
 
@@ -397,6 +399,169 @@ def graph(namespaces, base, *triples):
     _term = _materializer()
     g._pending = [(_term(s), _term(p), _term(o)) for s, p, o in triples]
     return g
+
+
+# ---------------------------------------------------------------- m{ ... }
+
+class Row(tuple):
+    """Solution d'un m{ ... } d'arité >= 2 : tuple déballable, accès nommé
+    (row.s) et indexé par variable (row[?v] ou row['v'])."""
+
+    def __new__(cls, values, fields):
+        r = tuple.__new__(cls, values)
+        r._fields = fields
+        return r
+
+    def __getattr__(self, name):
+        try:
+            return self[self._fields.index(name)]
+        except ValueError:
+            raise AttributeError(name)
+
+    def __getitem__(self, key):
+        if isinstance(key, (str, Variable)):
+            return tuple.__getitem__(self, self._fields.index(str(key)))
+        return tuple.__getitem__(self, key)
+
+    def __repr__(self):
+        return "Row(%s)" % ", ".join(
+            "%s=%r" % (f, tuple.__getitem__(self, i))
+            for i, f in enumerate(self._fields))
+
+
+def _match_prepare(patterns, bindings):
+    """Motifs prêts à l'appariement : bn -> variable anonyme partagée par
+    indice, slot -> valeur, variables liées par le binding -> terme."""
+    init = {}
+    if bindings:
+        for k, v in bindings.items():
+            init[Variable(str(k))] = node(v)
+    out = []
+    slots = {}
+    for s, p, o in patterns:
+        tr = []
+        for t in (s, p, o):
+            tt = type(t)
+            if tt is bn:
+                t = Variable("__bn%d" % t.index)
+            elif tt is slot:
+                if t.bound:
+                    slots[t.index] = node(t.value)
+                t = slots[t.index]
+            if isinstance(t, Variable) and t in init:
+                t = init[t]
+            tr.append(t)
+        out.append(tuple(tr))
+    return out, init
+
+
+class Match:
+    """Valeur d'un îlot m{ ... } (fiche 016) : jointure par boucles
+    imbriquées sur graph.triples(), dans l'ordre écrit — aucun moteur,
+    aucune heuristique. Paresseux : itérer, tester ou first() n'apparie
+    que le nécessaire."""
+
+    __slots__ = ("graph", "patterns", "project", "bindings")
+
+    def __init__(self, graph, patterns, project, bindings=None):
+        self.graph = graph
+        self.patterns = patterns
+        self.project = project
+        self.bindings = bindings
+
+    def __call__(self, graph=None, bindings=None):
+        return Match(self.graph if graph is None else graph,
+                     self.patterns, self.project,
+                     self.bindings if bindings is None else bindings)
+
+    def solutions(self):
+        """Générateur de solution mappings (Bindings variable -> terme),
+        liaisons initiales incluses (projetées, fiche 019)."""
+        if self.graph is None:
+            raise RuntimeError(
+                "m{ } sans graphe : déclarez '@graph ...' en portée, ou "
+                "appliquez le motif à un graphe — m{ ... }(g)")
+        patterns, init = _match_prepare(self.patterns, self.bindings)
+        graph = self.graph
+
+        def join(i, sm):
+            if i == len(patterns):
+                yield sm
+                return
+            pat = []
+            var_pos = []
+            for k, t in enumerate(patterns[i]):
+                if isinstance(t, Variable):
+                    v = sm.get(t)
+                    if v is None:
+                        var_pos.append((k, t))
+                        v = None
+                    pat.append(v)
+                else:
+                    pat.append(t)
+            for found in graph.triples(tuple(pat)):
+                sm2 = dict(sm)
+                ok = True
+                for k, var in var_pos:
+                    val = found[k]
+                    prev = sm2.get(var)
+                    if prev is not None and prev != val:
+                        ok = False
+                        break
+                    sm2[var] = val
+                if ok:
+                    yield from join(i + 1, sm2)
+
+        yield from join(0, dict(init))
+
+    def __iter__(self):
+        proj = self.project
+        if len(proj) == 1:
+            v = Variable(proj[0])
+            for sm in self.solutions():
+                yield sm.get(v)
+        else:
+            vs = [Variable(x) for x in proj]
+            for sm in self.solutions():
+                yield Row((sm.get(x) for x in vs), list(proj))
+
+    def __bool__(self):
+        for _ in self.solutions():
+            return True
+        return False
+
+    def first(self):
+        """La première solution, ou None s'il n'y en a pas (~ g.value)."""
+        for x in self:
+            return x
+        return None
+
+    def one(self):
+        """L'unique solution ; lève s'il y en a zéro ou plusieurs."""
+        it = iter(self)
+        try:
+            first = next(it)
+        except StopIteration:
+            raise ValueError("m{ }.one() : aucune solution")
+        for _ in it:
+            raise ValueError("m{ }.one() : plusieurs solutions")
+        return first
+
+    def count(self):
+        """Nombre de solutions — consomme l'appariement (len() échoue)."""
+        n = 0
+        for _ in self.solutions():
+            n += 1
+        return n
+
+    def __repr__(self):
+        return "m{ %d motif(s), projection %r }" % (
+            len(self.patterns), tuple(self.project))
+
+
+def match(graph, patterns, project, bindings=None):
+    """Construit la valeur d'un îlot m{ ... } (fiche 016)."""
+    return Match(graph, patterns, project, bindings)
 
 
 # ---------------------------------------------------------------- s{ ... }
