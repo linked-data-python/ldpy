@@ -1353,21 +1353,66 @@ class Transpiler:
 
     def _addremove_island(self, sign):
         """Sur '+{' ou '-{' en position d'instruction : ajout ou retrait
-        sur le graphe courant (fiche 014)."""
-        if self._graph_var is None:
-            self._error("'%s{ ... }' sans graphe courant : déclarez-le avec "
-                        "'@graph <expression>' ou '@graph as g' (fiche 014)"
-                        % sign)
+        sur le graphe courant (fiche 014), ou sur le contexte donné par le
+        suffixe d'appel — graphe d'abord, binding ensuite (fiche 019)."""
         mark = self._begin_island()
         self._take(2)                               # signe + '{'
         triples, gctx = self._g_parse_triples()
         triples = _share_impure(triples, gctx)
+        sfx_graph = sfx_bindings = None
+        if self._peek() == "(":                     # adjacence stricte (R2)
+            sfx_graph, sfx_bindings = self._call_suffix()
+        gvar = sfx_graph if sfx_graph else self._graph_var
+        if gvar is None:
+            self._error("'%s{ ... }' sans graphe courant : déclarez-le avec "
+                        "'@graph <expression>' ou '@graph as g' (fiche 014), "
+                        "ou donnez-le en suffixe — %s{ ... }(g)"
+                        % (sign, sign))
+        bvar = sfx_bindings if sfx_bindings else self._bindings_var
         fn = "add_to" if sign == "+" else "remove_from"
-        args = [self._graph_var]
+        args = [gvar]
         args += ["(%s, %s, %s)" % tr for tr in triples]
         gen = "%s.%s(%s%s)" % (RUNTIME_ALIAS, fn, ", ".join(args),
-                               self._bkw())
+                               ", bindings=%s" % bvar if bvar else "")
         self._end_island("addto" if sign == "+" else "removefrom", mark, gen)
+
+    def _call_suffix(self):
+        """Sur '(' collé après un îlot-instruction : la liste d'opérandes
+        de contexte — (graphe), (graphe, binding), (bindings=binding)."""
+        self._take(1)
+        self._g_ws()
+        graph_expr = bindings_expr = None
+        if self._peek() == ")":
+            self._take(1)
+            return None, None
+        if self._suffix_bindings_kw():
+            bindings_expr = "(%s)" % self._scan_embedded_expr(")").strip()
+        else:
+            graph_expr = "(%s)" % self._scan_embedded_expr(",)").strip()
+            if self._peek() == ",":
+                self._take(1)
+                self._g_ws()
+                self._suffix_bindings_kw()          # 'bindings=' optionnel
+                bindings_expr = "(%s)" % self._scan_embedded_expr(")").strip()
+        if self._peek() != ")":
+            self._error("')' attendu pour clore le suffixe d'appel")
+        self._take(1)
+        return graph_expr, bindings_expr
+
+    def _suffix_bindings_kw(self):
+        """Consomme 'bindings=' s'il est là (et pas 'bindings==')."""
+        t = self.text
+        j = self.i
+        if not t.startswith("bindings", j):
+            return False
+        j += 8
+        while j < self.n and t[j] in " \t":
+            j += 1
+        if j >= self.n or t[j] != "=" or t[j + 1:j + 2] == "=":
+            return False
+        self._take(j + 1 - self.i)
+        self._g_ws()
+        return True
 
     # ------------------------------------------------------------------
     # binding courant : @bindings, for @bindings in (fiche 017)

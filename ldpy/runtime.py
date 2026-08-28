@@ -259,6 +259,39 @@ class _EmittedGraph(rdflib.Graph):
             return len(dict.fromkeys(pending))
         return super().__len__()
 
+    def __call__(self, bindings=None):
+        """g{ ... }(b) : le gabarit instancié contre le mapping b — le
+        suffixe d'appel de la fiche 019. Variables et expressions différées
+        liées deviennent des termes ; un triplet dont un terme reste non lié
+        est écarté ; les nœuds anonymes sont frais à chaque instanciation."""
+        pending = self._pending
+        if pending is None:
+            pending = list(super().__iter__())
+        g = _EmittedGraph(base=self.base,
+                          identifier=rdflib.URIRef("urn:x-ldpy:g%d"
+                                                   % next(_graph_ids)))
+        nm = self._Graph__namespace_manager
+        if nm is not None:
+            g.namespace_manager = nm
+        term0 = _materializer(bindings if bindings is not None else {},
+                              keep_vars=False)
+        bm = {}
+
+        def term(x):
+            v = term0(x)
+            if type(v) is BNode:
+                b = bm.get(v)
+                if b is None:
+                    b = bm[v] = BNode()
+                return b
+            return v
+
+        g._pending = [tr for tr in
+                      ((term(s), term(p), term(o)) for s, p, o in pending)
+                      if tr[0] is not None and tr[1] is not None
+                      and tr[2] is not None]
+        return g
+
     def _merged(self, left, right):
         """Nouveau graphe paresseux contenant left puis right (listes)."""
         g = _EmittedGraph(base=self.base,
