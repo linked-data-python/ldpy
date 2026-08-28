@@ -33,13 +33,18 @@ lsp = ["python-lsp-server", "pyflakes"]
 # débogage des fichiers fantômes
 debug = ["debugpy"]
 dev = ["pytest"]
-docs = ["mkdocs", "mkdocs-material"]
+docs = ["mkdocs", "mkdocs-material", "pygments>=2.14"]
 
 [project.scripts]
 ldpy = "ldpy.__main__:main"
 ldpy-lsp = "ldpy.lsp.server:main"
 ldpy-build = "ldpy.build:main"
 ldpy-debug = "ldpy.debug:main"
+
+# le surligneur est le transpileur : le lexer lit la language map (fiche 021).
+# Enregistré comme plugin Pygments, il sert mkdocs, Sphinx et `pygmentize`.
+[project.entry-points."pygments.lexers"]
+ldpy = "ldpy.pygments_lexer:LdpyLexer"
 
 [project.urls]
 Homepage = "https://gitlab.emse.fr/maxime.lefrancois/linked-data-python"
