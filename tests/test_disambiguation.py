@@ -1,6 +1,8 @@
 """Règles de désambiguïsation (docs/reference/language.md) : chaque règle est
 testée dans les deux sens (transformé / laissé intact)."""
 
+import ast
+
 import pytest
 from rdflib import URIRef, Literal
 
@@ -170,3 +172,65 @@ def test_interpolation_in_plain_iri_suggests_firi():
     with pytest.raises(LdpySyntaxError) as e:
         transpile(P + "gr = g{ <sensor/{s}> ex:p 1 }\n")
     assert "f<" in str(e.value)
+
+
+# ------------------ nœud anonyme hors îlot et listes de paramètres (021)
+
+def test_bnode_a_cle_de_donnees_hors_ilot(run):
+    """`_:{expr}` a un sens partout : son identité vient de la valeur."""
+    g, _ = run('k = "abc"\nbn = _:{k}\nsame = _:{"abc"}\n')
+    assert g["bn"] == g["same"]
+    assert type(g["bn"]).__name__ == "BNode"
+
+
+def test_bnode_etiquete_hors_ilot_est_refuse():
+    """Une étiquette ne dit la co-référence que dans une portée, et la seule
+    portée d'étiquettes du langage est l'îlot. Hors îlot, le transpileur
+    recopiait `_:station` tel quel et émettait du Python invalide EN SILENCE
+    (constat de la fiche 021)."""
+    with pytest.raises(LdpySyntaxError) as e:
+        transpile("bn = _:station\n", "p.ldpy")
+    msg = str(e.value)
+    assert "_:station" in msg and "g{" in msg and "_:{" in msg
+
+
+@pytest.mark.parametrize("source", [
+    "d = {_:x}\n",                      # dict collé : Python
+    "a = [1]\ni = 0\nd = a[_:i]\n",     # tranche : Python
+    "_: int = 0\n",                     # annotation : Python
+    "def f(_:int=0): pass\n",           # annotation de paramètre : Python
+    "f = lambda _:x\n",                 # paramètre de lambda : Python
+])
+def test_le_nom_jetable_de_python_reste_du_python(source):
+    """`_` est le nom jetable de Python et personne ne l'a déclaré comme
+    préfixe : ces cinq positions restent du Python (R3)."""
+    assert transpile(source, "p.ldpy").code.endswith(source)
+
+
+@pytest.mark.parametrize("source", [
+    "f = lambda ex:ex\n",
+    "def g(ex:int=0): pass\n",
+    "def k(a: int = 1, *, c: str = 'x'): pass\n",
+])
+def test_les_listes_de_parametres_appartiennent_a_python(prefixes, source):
+    """Le `:` d'une annotation ou d'un paramètre de lambda est celui de
+    Python. Ces formes ne sont pas dans les ambiguïtés assumées de la fiche
+    002 — et le transpileur y émettait du Python invalide en silence."""
+    code = transpile(prefixes + source, "p.ldpy").code
+    assert code.endswith(source)
+    ast.parse(code)
+
+
+def test_une_valeur_par_defaut_reste_une_expression(prefixes):
+    """Dans une liste de paramètres, après `=` on est dans une VALEUR, où un
+    nom préfixé a toute sa place."""
+    code = transpile(prefixes + "def h(a, b=ex:Thing): pass\n", "p.ldpy").code
+    assert "URIRef('http://example.org/ns#Thing')" in code
+    ast.parse(code)
+
+
+def test_les_ambiguites_assumees_de_la_fiche_002_sont_intactes(prefixes):
+    """Le garde-fou des listes de paramètres ne doit PAS déborder sur les
+    deux ambiguïtés que la fiche 002 assume et documente."""
+    for source in ("d = {ex:b}\n", "a = [1]\nd = a[ex:b]\n"):
+        assert "URIRef" in transpile(prefixes + source, "p.ldpy").code

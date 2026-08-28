@@ -145,6 +145,21 @@ assert len(people) == 1 and len(g) == 3     # one person, one name, two colours
 A tuple key is canonically encoded before hashing, so `_:{(fname, lname)}`
 cannot collide with `_:{fname + lname}`.
 
+`_:{expr}` also works **outside** an island, wherever a term may stand — its
+identity comes from the value, so it needs no island to be scoped to:
+
+```ldpy
+@prefix ex: <http://example.org/ns#> .
+key = "station-7"
+node = _:{key}
+assert node == _:{"station-7"}
+```
+
+`_:label` does **not**: a label states co-reference *within a scope*, and the
+only scope for labels is the island. Written outside one, it is a syntax
+error that points at the two forms that do work — `_:{expr}` above, and
+`ldpy.BNode()` for a node with no identity of its own.
+
 ## Templates
 
 A `g{ ... }` containing [variables](terms.md#variables-name-name) and with no

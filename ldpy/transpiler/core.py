@@ -191,6 +191,14 @@ class Transpiler:
         self.uses_runtime = False
         # état lexical Python
         self.depth = 0
+        # sorte de chaque crochet ouvert : "(", "[" (liste), "s" (indice),
+        # "{" (dict/ensemble). Sert au nœud anonyme hors îlot, qui ne doit
+        # pas se confondre avec `{_: v}` ni avec la tranche `a[_:v]`.
+        self.brackets = []
+        # `lambda` ouvre une liste de paramètres qui se ferme sur ':' — un ':'
+        # que Python possède, et où aucun terme RDF ne peut vivre.
+        self._lambda_depth = None
+        self._after_def = False     # on vient de lire 'def' : le '(' suivant
         self.operand = True         # un opérande peut commencer ici
         self.stmt_start = True      # début de ligne logique (hors espaces)
         self.after_dot = False
@@ -387,12 +395,25 @@ class Transpiler:
                 self.stmt_start = False
             elif c in "([{":
                 self.depth += 1
+                # un '[' qui suit un opérande complet est un INDICE, pas une
+                # liste : `a[i:j]` est une tranche, `[i:j]` n'existe pas
+                if c == "(" and self._after_def:
+                    self.brackets.append("p")   # paramètres d'un def
+                else:
+                    self.brackets.append("s" if c == "[" and not self.operand
+                                         else c)
+                self._after_def = False
                 self._copy(1)
                 self.operand = True
                 self.stmt_start = False
                 self.after_dot = False
             elif c in ")]}":
                 self.depth -= 1
+                if self.brackets:
+                    self.brackets.pop()
+                if self._lambda_depth is not None \
+                        and self.depth < self._lambda_depth:
+                    self._lambda_depth = None
                 self._copy(1)
                 self.operand = False
                 self.stmt_start = False
@@ -405,6 +426,13 @@ class Transpiler:
                         self.after_dot = True
                     self._copy(1)
                 self.stmt_start = False
+            elif c == ":":
+                if self._lambda_depth == self.depth:
+                    self._lambda_depth = None       # fin des paramètres
+                self._copy(1)
+                self.operand = True
+                self.stmt_start = False
+                self.after_dot = False
             elif c == ";":
                 self._copy(1)
                 self.operand = True
@@ -419,6 +447,17 @@ class Transpiler:
                     self._copy(j - self.i)
                     self.operand = False
                 else:
+                    # dans une liste de paramètres, le ':' est une annotation
+                    # (Python) mais après un '=' on est dans une VALEUR par
+                    # défaut, où un terme RDF a tout à fait sa place :
+                    # `def f(x=ex:Thing)`. 'p' -> 'P' le note.
+                    if self.brackets and self.brackets[-1] in "pP":
+                        if c == "=" and self._peek(1) != "=" \
+                                and (self.i == 0
+                                     or t[self.i - 1] not in "=!<>+-*/%&|^~:@"):
+                            self.brackets[-1] = "P"
+                        elif c == ",":
+                            self.brackets[-1] = "p"
                     self._copy(1)
                     self.operand = True
                 self.stmt_start = False
@@ -627,8 +666,39 @@ class Transpiler:
                 return
             self.i, self.src_line, self.src_col = saved  # repli : comparaison
 
+        # nœud anonyme hors îlot (fiches 002 et 021) : `_:{expr}` a un sens
+        # partout — son identité vient de la valeur ; `_:label` n'en a pas,
+        # car un label ne dit la CO-RÉFÉRENCE que dans une portée, et la
+        # seule portée de labels du langage est l'îlot. Jusqu'ici les deux
+        # étaient recopiés tels quels et le module émis ne compilait pas,
+        # sans qu'aucune erreur ne soit levée.
+        if name == "_" and nxt == ":" and operand_here \
+                and self._bnode_free() and self._bnode_position():
+            after = t[m.end() + 1] if m.end() + 1 < self.n else ""
+            if after == "{":
+                mark = self._begin_island()
+                self._take(m.end() + 2 - self.i)     # '_:' puis '{'
+                expr = self._scan_embedded_expr("}")
+                if self._peek() != "}":
+                    self._error("'}' attendu pour fermer _:{...}")
+                self._take(1)
+                self._end_island("bnode", mark, "%s.bnode((%s))"
+                                 % (RUNTIME_ALIAS, expr.strip()))
+                self.operand = False
+                return
+            if _ix_start(after):
+                label = t[m.end() + 1:
+                          _scan_pn_local_island(t, m.end() + 1, self.n)]
+                self._error(
+                    "nœud anonyme '_:%s' hors d'un îlot : une étiquette ne "
+                    "désigne la co-référence qu'à l'intérieur d'un g{ … }. "
+                    "Écrire _:{%r} pour un nœud dont l'identité vient de la "
+                    "valeur, ou %s.BNode() pour un nœud frais."
+                    % (label, label, "ldpy"))
+
         # pname hors îlot : préfixe déclaré, ':' collé, partie locale
-        if operand_here and nxt == ":" and name in self.prefixes:
+        if operand_here and nxt == ":" and name in self.prefixes \
+                and self._annotation_free():
             after = t[m.end() + 1] if m.end() + 1 < self.n else ""
             if _ix_start(after) or after == "{":
                 mark = self._begin_island()
@@ -644,12 +714,43 @@ class Transpiler:
                            "déclaration est dans un bloc terminé) ; le texte "
                            "est laissé tel quel" % name)
 
+        if name == "lambda":
+            self._lambda_depth = self.depth
+        elif name == "def":
+            self._after_def = True
         self._copy(len(name))
         if name in KEYWORDS:
             self.operand = name not in VALUE_KEYWORDS
         else:
             self.operand = False
         self.stmt_start = False
+
+    def _annotation_free(self):
+        """Sommes-nous ailleurs que dans une liste de paramètres ?
+
+        `lambda ex:ex` et `def f(ex:int = 0)` sont du Python parfaitement
+        valide, où le `:` appartient à Python. Ils ne figurent pas dans les
+        ambiguïtés assumées de la fiche 002 — et jusqu'ici le transpileur y
+        émettait du Python INVALIDE, sans lever d'erreur."""
+        return self._lambda_depth is None \
+            and (not self.brackets or self.brackets[-1] != "p")
+
+    def _bnode_free(self):
+        """Idem, mais un nœud anonyme n'a rien à faire non plus dans une
+        valeur par défaut annotée — inutile de distinguer 'p' de 'P'."""
+        return self._lambda_depth is None \
+            and (not self.brackets or self.brackets[-1] not in "pP")
+
+    def _bnode_position(self):
+        """Un `_:` peut-il être un nœud anonyme ICI ?
+
+        Non dans un dict/ensemble (`{_: v}`) ni dans un indice (`a[_:v]`) :
+        `_` est le nom jetable de Python, personne n'a « déclaré » ce
+        préfixe-là, et ces deux positions sont du Python parfaitement valide
+        que R3 oblige à laisser passer. C'est aussi ce que colorent les
+        grammaires (fiche 002 : pname/bnode absents des indices et des
+        dict/set)."""
+        return not self.brackets or self.brackets[-1] not in "{s"
 
     # ------------------------------------------------------------------
     # IRIs, pnames, f-IRIs, variables, fnodes (émission de termes)

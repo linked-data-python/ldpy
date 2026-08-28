@@ -44,6 +44,7 @@ suffix:
 | `"x"@en` | no space around `@` | `'a' @ en` is matrix multiplication |
 | `"x"^^t` | no space around `^^` | — (`^^` is never adjacent-valid Python) |
 | `p:local` | no space around `:` | slice, dict, annotation |
+| `_:{expr}` | no space around `:` | annotation of the name `_` |
 
 `NAME{` is never valid Python, so nothing is lost by claiming it — and the
 space is the escape hatch when you want the Python reading back.
@@ -57,6 +58,17 @@ is re-emitted as an operator.
 
 This is why `arr[i:j]` and `{k: v}` are untouched: `i`, `j` and `k` are not
 declared prefixes.
+
+Two positions are Python's even when the name *is* a declared prefix, because
+the `:` there belongs to Python and nothing else could be meant:
+
+```ldpy
+@prefix ex: <http://example.org/ns#> .
+f = lambda ex:ex                    # a lambda parameter named ex
+def g(ex:int = 0): return ex        # a parameter annotation
+def h(x = ex:Thing): return x       # but after "=" it is a value: a term
+assert str(h()) == "http://example.org/ns#Thing"
+```
 
 ## The closed list of island letters
 

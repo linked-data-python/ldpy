@@ -38,7 +38,7 @@ Each row links to the section that describes it in full.
 | Form | Example | Value |
 |---|---|---|
 | Graph | `g{ ex:s a ex:C ; ex:p 1, "x" }` | an `rdflib.Graph` |
-| Data-keyed blank node | `_:{expr}` *(inside graphs)* | `BNode` with value-derived identity |
+| Data-keyed blank node | `_:{expr}` *(anywhere a term may stand)* | `BNode` with value-derived identity |
 | Current graph | `@graph g`, `@graph as g`, `@graph <iri> as g` | *(declaration)* |
 | Add / remove | `+{ ex:s ex:p 1 }`, `-{ ex:s ?p ?o }` | *(statements)* write to the current graph |
 
