@@ -289,6 +289,98 @@ class _EmittedGraph(rdflib.Graph):
         return NotImplemented
 
 
+def _bind_get(bindings, var):
+    """Valeur d'une variable dans un mapping à clés str ou Variable ;
+    None = non liée (convention d'instantiateBGP)."""
+    v = bindings.get(var)
+    if v is None:
+        v = bindings.get(str(var))
+    return v
+
+
+def _materializer(bindings=None, keep_vars=True):
+    """Fabrique le matérialiseur de termes des îlots (fiches 014/016/017).
+
+    bn(i) -> BNode frais par évaluation (mémoïsé par indice) ; slot -> valeur
+    partagée ; Variable -> valeur du binding si liée, sinon la Variable
+    elle-même (keep_vars, régime gabarit) ou None (triplet à écarter)."""
+    bnodes = {}
+    slots = {}
+
+    def _term(t):
+        tt = type(t)
+        if tt in _PASSTHROUGH:
+            if tt is bn:
+                b = bnodes.get(t.index)
+                if b is None:
+                    b = bnodes[t.index] = BNode()
+                return b
+            if tt is Variable:
+                if bindings is not None:
+                    v = _bind_get(bindings, t)
+                    if v is not None:
+                        return node(v)
+                return t if keep_vars else None
+            return t
+        if tt is slot:
+            if t.bound:
+                slots[t.index] = node(t.value)
+            return slots[t.index]
+        return node(t)
+
+    return _term
+
+
+def new_graph(namespaces, base, identifier=None):
+    """Graphe créé par '@graph as g' (fiche 014) : un rdflib.Graph ordinaire,
+    avec les liaisons de sérialisation des préfixes en portée."""
+    g = rdflib.Graph(base=base, identifier=identifier)
+    nm = _nm_for(namespaces)
+    if nm is not None:
+        g.namespace_manager = nm
+    return g
+
+
+def add_to(graph, *triples, bindings=None):
+    """'+{ ... }' : instancie et ajoute au graphe courant (fiche 014).
+    Un triplet dont un terme reste non lié est écarté — on ne peut pas
+    écrire un terme inconnu."""
+    term = _materializer(bindings, keep_vars=False)
+    for s, p, o in triples:
+        s2, p2, o2 = term(s), term(p), term(o)
+        if s2 is not None and p2 is not None and o2 is not None:
+            graph.add((s2, p2, o2))
+    return graph
+
+
+def remove_from(graph, *patterns, bindings=None):
+    """'-{ ... }' : retrait du graphe courant (fiche 014). Une variable non
+    liée est un joker (sémantique remove((s, p, None)) de rdflib) ; à
+    plusieurs motifs partageant une variable, DELETE WHERE par appariement
+    (fiche 016)."""
+    resolved = []
+    joker_vars = []
+    for s, p, o in patterns:
+        term = _materializer(bindings, keep_vars=True)
+        tr = []
+        for x in (term(s), term(p), term(o)):
+            if isinstance(x, (Variable, bn)):
+                joker_vars.append(x)
+                tr.append(None)
+            else:
+                tr.append(x)
+        resolved.append(tuple(tr))
+    shared = len(joker_vars) != len(set(map(str, joker_vars)))
+    if len(patterns) > 1 and joker_vars and shared:
+        # DELETE WHERE : apparier le BGP puis retirer les triplets instanciés
+        raise NotImplementedError(
+            "-{ } à plusieurs motifs partageant une variable : "
+            "appariement de la fiche 016, à venir")
+    for tr in resolved:
+        graph.remove(tr)
+    return graph
+
+
 def graph(namespaces, base, *triples):
     """Construit un rdflib.Graph (sous-type paresseux) à partir de triplets
     aplatis.
@@ -302,24 +394,7 @@ def graph(namespaces, base, *triples):
     nm = _nm_for(namespaces)
     if nm is not None:
         g.namespace_manager = nm
-    bnodes = {}
-    slots = {}
-
-    def _term(t):
-        tt = type(t)
-        if tt in _PASSTHROUGH:
-            if tt is bn:
-                b = bnodes.get(t.index)
-                if b is None:
-                    b = bnodes[t.index] = BNode()
-                return b
-            return t
-        if tt is slot:
-            if t.bound:
-                slots[t.index] = node(t.value)
-            return slots[t.index]
-        return node(t)
-
+    _term = _materializer()
     g._pending = [(_term(s), _term(p), _term(o)) for s, p, o in triples]
     return g
 

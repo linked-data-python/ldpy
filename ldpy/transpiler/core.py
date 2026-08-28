@@ -200,6 +200,8 @@ class Transpiler:
         # préfixes dynamiques (fiche 013)
         self._ns_counter = 0        # variables fraîches _ldpy_ns*
         self._import_lines = []     # (ligne 0-based, module) des imports de préfixes
+        # graphe courant (fiche 014)
+        self._graph_var = None      # variable Python du graphe courant, ou None
 
     # ------------------------------------------------------------------
     # primitives de position / émission
@@ -363,6 +365,12 @@ class Transpiler:
                 self._copy(1)
                 self.operand = True
                 self.stmt_start = False
+            elif c in "+-" and self._peek(1) == "{" and self.stmt_start \
+                    and self.depth == 0 and not self._sub:
+                # +{ ... } / -{ ... } : ajout/retrait sur le graphe courant
+                # (fiche 014) — position d'instruction uniquement ; ailleurs,
+                # + et - gardent leur sens Python.
+                self._addremove_island(c)
             elif c in "?$":
                 self._var_island()
             elif c == "<" and self.operand:
@@ -965,10 +973,12 @@ class Transpiler:
         """Sur '@' en début d'instruction. Tente l'îlot déclaration.
         Retourne True si consommé (sinon rien n'est consommé)."""
         t = self.text
-        m = re.match(r"@(prefix|base)\b", t[self.i:self.i + 8])
+        m = re.match(r"@(prefix|base|graph)\b", t[self.i:self.i + 8])
         if not m:
             return False
         kind = m.group(1)
+        if kind == "graph":
+            return self._try_graph_decl()
         # une « déclaration ratée » (préfixe non ASCII, ponctuation absente…)
         # ne doit PAS retomber silencieusement sur le cas décorateur : la fin
         # de ligne déclencherait des îlots et produirait du code massacré.
@@ -1086,6 +1096,8 @@ class Transpiler:
             _, kind, name, had, prev = self._scope_stack.pop()
             if kind == "base":
                 self.base = prev
+            elif kind == "graph":
+                self._graph_var = prev
             elif had:
                 self.prefixes[name], self._prefix_col[name] = prev
             else:
@@ -1116,18 +1128,121 @@ class Transpiler:
         return j
 
     # ------------------------------------------------------------------
+    # graphe courant : @graph, +{ }, -{ } (fiche 014)
+    # ------------------------------------------------------------------
+
+    def _fresh_var(self, stem):
+        self._ns_counter += 1
+        return "_ldpy_%s%d" % (stem, self._ns_counter)
+
+    def _try_graph_decl(self):
+        """Sur '@' devant 'graph' en début d'instruction. Désigne ou crée le
+        graphe courant. Un décorateur reste un décorateur : '@graph' suivi de
+        '(', '.', '[', d'une fin de ligne — ou d'une parenthèse après blancs —
+        n'est pas un îlot."""
+        t = self.text
+        j = self.i + 6                              # après '@graph'
+        if j < self.n and t[j] not in " \t":
+            return False                            # @graph( . [ … décorateur
+        while j < self.n and t[j] in " \t":
+            j += 1
+        if j >= self.n or t[j] in "\n\r#(":
+            return False                            # décorateur nu (ou appel)
+        decl_col = self.src_col
+        mark = self._begin_island()
+        self._take(j - self.i)                      # '@graph' + blancs
+        gvar = None
+        if t.startswith("as", self.i) and not _name_char(self._peek(2)):
+            self._take(2)
+            gvar = self._graph_decl_as_name()
+            gen = "%s = %s.new_graph(__namespaces__, %s)" % (
+                gvar, RUNTIME_ALIAS,
+                repr(self.base) if self.base else "None")
+        else:
+            ident = None
+            c = self._peek()
+            if c == "<" and self._iriref_end(self.i) is not None:
+                iri = self._take_iriref()
+                ident = "%s.URIRef(%r)" % (RUNTIME_ALIAS, self._resolve(iri))
+            elif c == "f" and self._peek(1) == "<":
+                ident = self._take_firi()
+            else:
+                m2 = _PYNAME_RE.match(t, self.i)
+                if m2 and m2.group(0) in self.prefixes \
+                        and t[m2.end():m2.end() + 1] == ":":
+                    ident = self._take_pname(in_island=False)
+            if ident is not None:
+                self._graph_ws_inline()
+                if not (t.startswith("as", self.i)
+                        and not _name_char(self._peek(2))):
+                    self._error("'as' attendu : '@graph <iri> as g' crée un "
+                                "graphe nommé ; pour désigner un graphe "
+                                "existant, écrire '@graph expression'")
+                self._take(2)
+                gvar = self._graph_decl_as_name()
+                gen = "%s = %s.new_graph(__namespaces__, %s, identifier=%s)" \
+                    % (gvar, RUNTIME_ALIAS,
+                       repr(self.base) if self.base else "None", ident)
+            else:
+                expr = self._scan_embedded_expr("\n#").strip()
+                if not expr:
+                    self._error("expression attendue après '@graph'")
+                if "\n" in expr:
+                    self._error("l'expression de '@graph' tient sur sa ligne")
+                gvar = self._fresh_var("g")
+                gen = "%s = (%s)" % (gvar, expr)
+        self._graph_ws_inline()
+        if self._peek() not in "\n\r#;" and self._peek() != "":
+            self._error("fin de ligne attendue après la déclaration @graph")
+        if decl_col > 0:
+            self._scope_stack.append((decl_col, "graph", None,
+                                      True, self._graph_var))
+        self._graph_var = gvar
+        self._end_island("graph-decl", mark, gen)
+        return True
+
+    def _graph_decl_as_name(self):
+        """Après 'as' : le nom Python créé par la déclaration."""
+        self._graph_ws_inline()
+        m = _PYNAME_RE.match(self.text, self.i)
+        if not m:
+            self._error("nom attendu après 'as'")
+        return self._take(m.end() - self.i)
+
+    def _graph_ws_inline(self):
+        while self._peek() in " \t":
+            self._take(1)
+
+    def _addremove_island(self, sign):
+        """Sur '+{' ou '-{' en position d'instruction : ajout ou retrait
+        sur le graphe courant (fiche 014)."""
+        if self._graph_var is None:
+            self._error("'%s{ ... }' sans graphe courant : déclarez-le avec "
+                        "'@graph <expression>' ou '@graph as g' (fiche 014)"
+                        % sign)
+        mark = self._begin_island()
+        self._take(2)                               # signe + '{'
+        triples, gctx = self._g_parse_triples()
+        triples = _share_impure(triples, gctx)
+        fn = "add_to" if sign == "+" else "remove_from"
+        args = [self._graph_var]
+        args += ["(%s, %s, %s)" % tr for tr in triples]
+        gen = "%s.%s(%s)" % (RUNTIME_ALIAS, fn, ", ".join(args))
+        self._end_island("addto" if sign == "+" else "removefrom", mark, gen)
+
+    # ------------------------------------------------------------------
     # graphes g{ ... }
     # ------------------------------------------------------------------
 
-    def _graph_island(self):
-        mark = self._begin_island()
-        self._take(2)  # g{
+    def _g_parse_triples(self):
+        """Corps d'îlot de graphe : self.i juste après le '{' ouvrant.
+        Consomme jusqu'au '}' fermant inclus ; retourne (triples, gctx)."""
         gctx = _GraphCtx()
         triples = []
         self._g_ws()
         while self._peek() != "}":
             if self._peek() == "":
-                self._error("'}' attendu pour fermer g{...}")
+                self._error("'}' attendu pour fermer l'îlot de graphe")
             self._g_triples(triples, gctx)
             self._g_ws()
             if self._peek() == ".":
@@ -1136,8 +1251,14 @@ class Transpiler:
                 continue
             break
         if self._peek() != "}":
-            self._error("'}' attendu pour fermer g{...}")
+            self._error("'}' attendu pour fermer l'îlot de graphe")
         self._take(1)
+        return triples, gctx
+
+    def _graph_island(self):
+        mark = self._begin_island()
+        self._take(2)  # g{
+        triples, gctx = self._g_parse_triples()
         triples = _share_impure(triples, gctx)
         base_repr = repr(self.base) if self.base else "None"
         args = ["__namespaces__", base_repr]
