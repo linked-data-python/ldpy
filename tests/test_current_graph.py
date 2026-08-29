@@ -235,3 +235,56 @@ def test_new_graph_binds_prefixes(run):
         ttl = g.serialize(format="turtle")
         """))
     assert "@prefix ex:" in g["ttl"]
+
+
+# ------------------------------------- suite d'instruction composée (fiche 012)
+
+def test_addremove_in_compound_suite(run):
+    """`if cond: +{ ... }` — le ':' d'une instruction composée ouvre une
+    suite, qui est une position d'instruction (fiche 012, point 12). Avant,
+    l'îlot n'était pas capturé et le transpileur émettait du Python
+    INVALIDE, sans lever."""
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        @graph as g
+        for i in range(3):
+            if i: +{ ex:s ex:p {i} }
+            else: +{ ex:s ex:q 0 }
+        """))
+    assert len(g["g"]) == 3
+
+
+def test_addremove_in_suite_after_semicolon(run):
+    """Le cas mesuré sur le corpus : `if cond: g.remove(...); g.add(...)`."""
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        @graph as g
+        +{ ex:s ex:old 1 }
+        if True: -{ ex:s ex:old 1 } ; +{ ex:s ex:new 2 }
+        """))
+    assert len(g["g"]) == 1
+    assert (URIRef(E + "s"), URIRef(E + "new"), Literal(2)) in g["g"]
+
+
+@pytest.mark.parametrize("stmt", [
+    "while i: +{ ex:s ex:p 1 } ; i = 0",
+    "with open('/dev/null') as fh: +{ ex:s ex:p 1 }",
+    "try: +{ ex:s ex:p 1 }\nexcept KeyError: pass",
+])
+def test_addremove_in_every_compound_suite(run, stmt):
+    g, _ = run("@prefix ex: <http://e/> .\n@graph as g\ni = 1\n" + stmt + "\n")
+    assert len(g["g"]) == 1
+
+
+def test_compound_suite_does_not_capture_python(run):
+    """La suite ne doit rien prendre que Python revendique : annotation,
+    dict, lambda et différence d'ensembles restent intacts (R3)."""
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        n: int = 5
+        d = {"a": 1}
+        f = lambda ex: ex
+        keys = {"a", "b"} - {"a"}
+        """))
+    assert g["n"] == 5 and g["d"] == {"a": 1}
+    assert g["f"]("x") == "x" and g["keys"] == {"b"}

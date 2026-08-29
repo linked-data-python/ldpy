@@ -234,3 +234,35 @@ def test_les_ambiguites_assumees_de_la_fiche_002_sont_intactes(prefixes):
     deux ambiguïtés que la fiche 002 assume et documente."""
     for source in ("d = {ex:b}\n", "a = [1]\nd = a[ex:b]\n"):
         assert "URIRef" in transpile(prefixes + source, "p.ldpy").code
+
+
+# ---------- préfixe déclaré ET nom Python : l'avertissement (fiche 002)
+
+def _warnings(source, prefixes):
+    return [w.message for w in transpile(prefixes + source, "p.ldpy").warnings]
+
+
+def test_prefixe_aussi_nom_python_avertit(prefixes):
+    """La situation à éviter — et la seule où les deux ambiguïtés assumées
+    de la fiche 002 peuvent réellement mordre."""
+    for source in ("ex = 'key'\n", "ex, b = 'k', 'v'\n"):
+        msgs = _warnings(source, prefixes)
+        assert any("préfixe déclaré et un nom Python" in m for m in msgs), \
+            source
+
+
+def test_lavertissement_ne_se_repete_pas(prefixes):
+    msgs = _warnings("ex = 'a'\nex = 'b'\nex = 'c'\n", prefixes)
+    assert sum("nom Python" in m for m in msgs) == 1
+
+
+@pytest.mark.parametrize("source", [
+    "x = ex:Thing\n",              # usage normal du préfixe
+    "n = 1\nn == 1\n",             # un nom qui n'est pas un préfixe
+    "ex:Thing\n",                  # le pname en tête d'instruction
+])
+def test_pas_de_faux_positif(source, prefixes):
+    """L'heuristique est une approximation (fiche 002) : elle doit rester
+    silencieuse partout où rien n'est affecté."""
+    assert not [m for m in _warnings(source, prefixes)
+                if "nom Python" in m]

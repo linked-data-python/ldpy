@@ -1,5 +1,45 @@
 ## Release Notes
 
+### [0.4.0] — 2026-08-29
+
+Les suites de l'étude de corpus (fiche 012), arbitrées par Maxime le
+2026-08-29 : quatre points où la notation coûtait plus qu'elle ne rapportait,
+ou se trompait en silence.
+
+- **`ex:{?id}` s'instancie** (fiche 017, piste 1). La partie locale d'un nom
+  préfixé était la seule position de terme où une variable ne s'instanciait
+  pas : `ex:{?id}` rendait `ex:id` — la même IRI à chaque ligne, sans erreur,
+  juste au moment où l'on forge une IRI depuis une colonne. `pname()` rend
+  désormais une expression différée dès qu'une partie est une `Variable` ou
+  une `Expression`, et le matérialiseur la résout comme les autres : non
+  liée, le triplet est écarté au lieu d'être écrit faux. Sur une valeur
+  ordinaire, `ex:{expr}` reste **immédiat** et ne demande aucun binding.
+  Comme avant, `ex:{…}` concatène sans encoder ; c'est `e<…{?id}>` qui
+  encode.
+- **`+{ }` et `-{ }` en suite d'instruction composée** (fiche 012, point 12) :
+  `if cond: +{ … }` sur une ligne. La règle « tête de ligne logique »
+  obligeait à ouvrir un bloc pour chaque `if cond: g.add(…)`, et la
+  traduction sortait *plus longue* que l'original — 5 lignes pour 13 sur un
+  dépôt écrit en one-liners. Le cas était de surcroît **silencieux** : le
+  transpileur émettait du Python invalide sans lever. Les positions que
+  Python revendique (annotation `x: int`, `lambda ex: ex`, dict, différence
+  d'ensembles) sont inchangées.
+- **`b.raw`** (fiche 012, point 22) : la ligne telle qu'elle est arrivée, à
+  côté des termes. La coercition à l'entrée de `@bindings` casse l'égalité —
+  `Literal("") != ""` — et `if row[col] != "":` est le garde le plus courant
+  d'un script CSV → RDF. `b[key]` reste le terme, `b.raw[key]` rend la valeur
+  Python ; en lecture seule, on écrit par `b[key]`.
+- **Avertissement « préfixe déclaré = nom Python »** (fiche 002) : annoncé
+  par la fiche depuis l'origine, jamais implémenté. L'heuristique retenue —
+  le nom en tête d'instruction suivi de `=` ou `,` — attrape la façon dont le
+  cas se présente réellement, et le message donne l'échappatoire (`{ex: x}`
+  avec une espace).
+- **Documentation** : traduire `set(g.subjects())`, garder `list(g)` pour le
+  parcours complet, les receveurs du suffixe d'appel (`+{ }(self.store)`,
+  attribut, indice, appel de méthode), la mise en garde « une chaîne qui
+  ressemble à une IRI reste un littéral », et une explication des deux jeux
+  de caractères. Suite : 1 391 → 1 421 tests.
+
 ### [0.3.0] — 2026-08-29
 
 - **Le LSP ne relaie plus le style du code généré** : pylsp jugeait l'ombre

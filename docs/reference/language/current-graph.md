@@ -111,6 +111,37 @@ other = Graph()
 assert len(other) == 1
 ```
 
+The receiver is not limited to a bare name: the parenthesis takes any Python
+expression that evaluates to a graph — an attribute, a subscript, a method
+call. That is what lets the island work unmodified inside object-oriented
+code, including against a **read-only property**, where `g += g{ }` cannot:
+`+=` needs to assign the result back through the property, and a
+property with no setter refuses it, while `+{ }(...)` never assigns to its
+receiver at all — it calls `add_to` on whatever the expression returns.
+
+```ldpy
+@prefix ex: <http://example.org/> .
+from rdflib import Graph
+
+class Store:
+    def __init__(self):
+        self._graph = Graph()
+
+    @property
+    def graph(self):                 # read-only: no setter
+        return self._graph
+
+    def get_graph(self):
+        return self._graph
+
+store = Store()
+graphs = [Graph(), Graph()]
++{ ex:s ex:p 1 }(store.graph)        # attribute
++{ ex:s ex:p 2 }(graphs[1])          # subscript
++{ ex:s ex:p 3 }(store.get_graph())  # method call
+assert len(store.graph) == 2 and len(graphs[1]) == 1
+```
+
 ## Scope, and escaping it
 
 `@graph` follows the block-scope rule, so a graph created inside an `if` or a

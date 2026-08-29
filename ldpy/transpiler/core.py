@@ -35,6 +35,14 @@ KEYWORDS = frozenset((
 ))
 # mots-clés « valeurs » : terminent un opérande
 VALUE_KEYWORDS = frozenset(("False", "None", "True"))
+# mots-clés qui ouvrent une instruction composée : leur ':' de profondeur 0
+# ouvre une SUITE, position d'instruction (fiche 012, point 12). `match` et
+# `case` sont des mots-clés SOUPLES — un `match: int = 0` reste une annotation,
+# mais rien n'y suit un ':' qu'un îlot pourrait revendiquer.
+COMPOUND_KEYWORDS = frozenset((
+    "async", "case", "class", "def", "elif", "else", "except", "finally",
+    "for", "if", "match", "try", "while", "with",
+))
 
 STRING_PREFIXES = frozenset((
     "", "r", "b", "u", "f", "rb", "br", "rf", "fr",
@@ -199,6 +207,10 @@ class Transpiler:
         # que Python possède, et où aucun terme RDF ne peut vivre.
         self._lambda_depth = None
         self._after_def = False     # on vient de lire 'def' : le '(' suivant
+        # la ligne logique a commencé par un mot-clé d'instruction composée :
+        # son ':' de profondeur 0 ouvre une SUITE, donc une position
+        # d'instruction (fiche 012, point 12).
+        self._compound_header = False
         self.operand = True         # un opérande peut commencer ici
         self.stmt_start = True      # début de ligne logique (hors espaces)
         self.after_dot = False
@@ -207,6 +219,7 @@ class Transpiler:
         # une instruction moins indentée dépile et restaure.
         self._scope_stack = []
         self._retired = {}          # préfixe sorti de portée -> ligne de décl.
+        self._shadowed = set()      # préfixe aussi nom Python : averti une fois
         self._prefix_col = {}       # préfixe -> indentation de sa déclaration
         # préfixes dynamiques (fiche 013)
         self._ns_counter = 0        # variables fraîches _ldpy_ns*
@@ -357,6 +370,7 @@ class Transpiler:
                 if self.depth == 0:
                     self.stmt_start = True
                     self.operand = True
+                    self._compound_header = False
                 self.after_dot = False
             elif c in " \t\r":
                 self._copy(1)
@@ -427,17 +441,25 @@ class Transpiler:
                     self._copy(1)
                 self.stmt_start = False
             elif c == ":":
-                if self._lambda_depth == self.depth:
+                lam = self._lambda_depth == self.depth
+                if lam:
                     self._lambda_depth = None       # fin des paramètres
                 self._copy(1)
                 self.operand = True
-                self.stmt_start = False
+                # `if c: +{ ... }` — le ':' d'une instruction composée ouvre
+                # une suite, qui est une position d'instruction au même titre
+                # qu'un début de ligne (fiche 012, point 12). Pas celui d'une
+                # annotation (`x: int`) ni d'un lambda, qui n'ouvrent rien.
+                self.stmt_start = (self._compound_header and self.depth == 0
+                                   and not lam)
+                self._compound_header = False
                 self.after_dot = False
             elif c == ";":
                 self._copy(1)
                 self.operand = True
                 if self.depth == 0:
                     self.stmt_start = True
+                    self._compound_header = False
             else:
                 # opérateurs, ponctuation, identifiants unicode
                 if c.isidentifier():
@@ -713,11 +735,30 @@ class Transpiler:
                 self._warn("le préfixe '%s:' est hors de portée ici (sa "
                            "déclaration est dans un bloc terminé) ; le texte "
                            "est laissé tel quel" % name)
+        # un préfixe déclaré qui sert AUSSI de nom Python : `{ex:b}` devient
+        # alors un ensemble d'IRI là où Python lisait un dict (fiche 002).
+        # Savoir où Python affecte un nom demanderait de le parser ; on s'en
+        # tient à l'approximation retenue le 2026-08-29 — le nom en tête
+        # d'instruction, suivi de '=' (hors '==') ou de ','.
+        if self.stmt_start and self.depth == 0 and not self._sub \
+                and name in self.prefixes and name not in self._shadowed:
+            j = self._skip_ws_ahead(m.end())
+            nx, nx2 = (t[j:j + 1], t[j + 1:j + 2])
+            if (nx == "=" and nx2 != "=") or nx == ",":
+                self._shadowed.add(name)
+                self._warn("'%s' est à la fois un préfixe déclaré et un nom "
+                           "Python : dans `{%s:x}` et `a[%s:x]`, le nom "
+                           "préfixé l'emporte sur la lecture Python. Écrire "
+                           "`{%s: x}` avec une espace force le dict."
+                           % (name, name, name, name))
 
         if name == "lambda":
             self._lambda_depth = self.depth
         elif name == "def":
             self._after_def = True
+        if self.stmt_start and self.depth == 0 \
+                and name in COMPOUND_KEYWORDS:
+            self._compound_header = True
         self._copy(len(name))
         if name in KEYWORDS:
             self.operand = name not in VALUE_KEYWORDS
@@ -937,10 +978,13 @@ class Transpiler:
         if all(p[0] for p in parts):
             local = "".join(p[1] for p in parts)
             return "%s.URIRef(%r)" % (RUNTIME_ALIAS, ns + local)
+        # `ex:{expr}` EST un nom préfixé, pas une IRI formatée : même
+        # concaténation, mais `pname` diffère l'évaluation quand la partie
+        # locale porte une variable (fiche 017).
         args = [repr(ns)]
         for is_static, val in parts:
             args.append(repr(val) if is_static else "(%s)" % val)
-        return "%s.firi(%s)" % (RUNTIME_ALIAS, ", ".join(args))
+        return "%s.pname(%s)" % (RUNTIME_ALIAS, ", ".join(args))
 
     # ------------------------------------------------------------------
     # import de préfixes (fiche 013)
@@ -2485,7 +2529,8 @@ class _Term(str):
 def _maybe_impure(expr, gctx):
     """f-IRI et nom prefixe : impurs seulement s'ils portent une interpolation
     (sinon le transpileur a deja produit une URIRef constante)."""
-    if expr.startswith(RUNTIME_ALIAS + ".firi("):
+    if expr.startswith(RUNTIME_ALIAS + ".firi(") \
+            or expr.startswith(RUNTIME_ALIAS + ".pname("):
         return _impure(expr, gctx)
     return expr
 

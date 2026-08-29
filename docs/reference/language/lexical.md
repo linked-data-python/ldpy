@@ -88,15 +88,29 @@ cosmetic gain.
 
 ### Two forms outside the sigil rule
 
-- **`+{ … }` and `-{ … }`** are accepted only at the start of a logical line,
-  at bracket depth zero. Elsewhere `+` and `-` keep their Python meaning
-  (`keys - {'a'}` is a set difference). In statement position `+{…}` *is* legal
-  Python but always dead — unary plus on a set or a dict raises `TypeError` —
-  so the capture costs no real program.
+- **`+{ … }` and `-{ … }`** are accepted in **statement position** at bracket
+  depth zero: at the start of a logical line, after a `;`, and as the suite of
+  a compound statement — `if cond: +{ … }` on one line. Elsewhere `+` and `-`
+  keep their Python meaning (`keys - {'a'}` is a set difference). In statement
+  position `+{…}` *is* legal Python but always dead — unary plus on a set or a
+  dict raises `TypeError` — so the capture costs no real program.
 - **`@graph` and `@bindings`** are told from a decorator the same way
   `@prefix` and `@base` are: the line is an island only if the rest of it
   matches the declaration form. `@graph` alone on its line, or followed by `(`
   or `.attr`, remains a decorator.
+
+The one-line suite matters because the code being translated is full of
+`if cond: g.add(…)`. Without it every such line had to be opened into a block,
+and the translation came out longer than the original it replaced.
+
+```ldpy
+@prefix ex: <http://example.org/> .
+@graph as g
+for i in range(3):
+    if i: +{ ex:s ex:p {i} }
+    else: -{ ex:s ex:p 0 }
+assert len(g) == 2
+```
 
 ### Three forms that extend illegal Python
 
@@ -129,8 +143,22 @@ assert {ex: b} == {"key": "value"}        # spaces give Python back
 | `arr[ex:b]` | indexing by the prefixed name | `arr[ex : b]` |
 
 Both need `ex` to be a **declared prefix** *and* a Python name in the same
-file, which is the situation to avoid. The transpiler does not currently warn
-about it; design record `ldpy/002` records the intent.
+file, which is the situation to avoid — and the transpiler warns when it sees
+you enter it:
+
+```text
+'ex' est à la fois un préfixe déclaré et un nom Python : dans `{ex:x}` et
+`a[ex:x]`, le nom préfixé l'emporte sur la lecture Python. Écrire `{ex: x}`
+avec une espace force le dict.
+```
+
+The detection is deliberately an **approximation**: knowing where Python binds
+a name would mean parsing Python, which the island parser does not do. It
+fires on the declared prefix used as the target of an assignment at the start
+of a statement — `ex = …`, `ex, other = …` — which covers the way the case
+actually arises, and stays silent elsewhere. A prefix shadowed by a `for`
+target or a function parameter is not caught; design record `ldpy/002` records
+the reasoning.
 
 ## Character sets
 
@@ -155,7 +183,9 @@ assert str(ex:café) == "http://example.org/café"
 
 These rules are verified against an independent transcription of both
 specifications by `tools/charsets.py`. The final decision on the residual
-divergence is still open; the current state is frozen by tests.
+divergence is still open; the current state is frozen by tests, and
+[why the seam falls where it does](../../explanation/designing-the-syntax.md#two-character-sets-that-do-not-coincide)
+is explained separately.
 
 ## Known limitations
 

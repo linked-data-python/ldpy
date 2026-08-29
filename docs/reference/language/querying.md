@@ -99,6 +99,24 @@ covers the measured usage of the first, and `s{ }` covers the rest. The
 argument for keeping the island small is
 [in the design record](../../explanation/designing-the-syntax.md#why-m-and-g-are-different-letters).
 
+### Keep list(g) for a full scan
+
+`m{ }` is for a pattern that selects. A traversal with no selection to make
+does not get shorter inside one: `list(g)` becomes
+`list(m{ ?s ?p ?o }(g))`, three variables the original code never had to
+name, for the same rows in the same order.
+
+```ldpy
+@prefix ex: <http://example.org/> .
+@graph as g
++{ ex:a ex:p 1 ; ex:q 2 . ex:b ex:p 3 }
+assert sorted(list(g)) == sorted(list(m{ ?s ?p ?o }(g)))
+```
+
+Keep `list(g)` for the whole graph, and reach for `m{ }` once the pattern
+narrows what comes back — it pays for itself from the first triple it
+excludes.
+
 ## `s{ ... }` — a SPARQL query
 
 All of SPARQL, in the language's own syntax, **validated at transpile time**

@@ -268,3 +268,104 @@ def test_iri_differee_en_sujet_d_un_graphe(run):
                "b['id'] = 'x'\n"
                "gr = g{ e<http://e/{?id}> ex:p 1 ; ex:q 2 }\n")
     assert {str(s) for s, p, o in g["gr"]} == {"http://e/x"}
+
+
+# ------------------------------------------- la ligne brute (fiche 012, pt 22)
+
+def test_raw_keeps_the_uncoerced_value():
+    """`b["v"]` est un terme, `b.raw["v"]` la valeur telle qu'elle est
+    arrivée. C'est l'égalité qui rend la coercition dangereuse : le garde le
+    plus courant d'un script CSV -> RDF est `if row[col] != "":`."""
+    b = Bindings({"note": "", "n": 3})
+    assert b["note"] == Literal("") and b["note"] != ""
+    assert b.raw["note"] == "" and isinstance(b.raw["note"], str)
+    assert b.raw["n"] == 3 and b.raw["n"] is not b["n"]
+
+
+def test_raw_follows_assignment_and_deletion():
+    b = Bindings()
+    b[Variable("x")] = "5"
+    assert b.raw["x"] == "5" and b["x"] == Literal("5")
+    del b["x"]
+    assert "x" not in b.raw
+
+
+def test_raw_is_read_only():
+    """On écrit par b[key], qui coerce ET enregistre les deux faces."""
+    b = Bindings({"a": 1})
+    with pytest.raises(TypeError):
+        b.raw["a"] = 2
+
+
+def test_raw_in_a_for_bindings_loop(run):
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        @graph as out
+        rows = [{"id": "a", "note": ""}, {"id": "b", "note": "x"}]
+        for @bindings as b in rows:
+            if b.raw["note"] != "":
+                +{ ex:{?id} ex:note ?note }
+        """))
+    assert len(g["out"]) == 1
+
+
+def test_raw_of_a_match_solution_is_the_term(run):
+    """Une solution de m{ } n'a pas de face « brute » : ses valeurs SONT des
+    termes, et raw les rend tels quels plutôt que d'inventer une origine."""
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        @graph as g
+        +{ ex:a ex:v 1 }
+        seen = []
+        for @bindings as b in m{ ?s ex:v ?v }:
+            seen.append((b["v"], b.raw["v"]))
+        """))
+    (term, raw), = g["seen"]
+    assert term == Literal(1) and raw == term
+
+
+# --------------------------- nom préfixé à partie locale variable (fiche 017)
+
+def test_pname_with_a_variable_is_deferred(run):
+    """`ex:{?id}` rendait `ex:id` — la même IRI à chaque ligne, sans erreur.
+    Il s'instancie désormais comme tout autre terme différé."""
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        @graph as out
+        for @bindings in [{"id": "a"}, {"id": "b"}]:
+            +{ ex:{?id} ex:seen true }
+        """))
+    assert sorted(str(s) for s, p, o in g["out"]) == [E + "a", E + "b"]
+
+
+def test_pname_with_a_plain_value_stays_immediate(run):
+    """Sans variable, aucun binding n'est requis : la décision de Maxime du
+    2026-08-29 sur la fiche 017."""
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        x = ex:{"hello"}
+        y = ex:{"Sensor".lower()}
+        """))
+    assert g["x"] == URIRef(E + "hello")
+    assert g["y"] == URIRef(E + "sensor")
+
+
+def test_pname_with_an_unbound_variable_drops_the_triple(run):
+    """Erreur seulement à l'évaluation, et la sémantique SPARQL s'applique :
+    non lié, le terme manque et le triplet n'est pas écrit."""
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        @graph as out
+        for @bindings in [{"id": "a"}, {}]:
+            +{ ex:{?id} ex:seen true }
+        """))
+    assert len(g["out"]) == 1
+
+
+def test_pname_with_a_variable_is_a_template_without_bindings(run):
+    """Hors binding, le nom reste différé — comme e{ } en position de terme."""
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        t = g{ ex:{?id} ex:p 1 }
+        """))
+    assert len(g["t"]) == 1

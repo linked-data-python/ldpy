@@ -150,3 +150,35 @@ added in 2026 — prefix import/export, the current graph, `m{ }`, `s{ }`,
 376 repositories, and two of the six ideas we had proposed a priori turned out
 to be aimed at patterns the corpus does not contain. That story is
 [here](what-real-code-does.md).
+
+## Two character sets that do not coincide
+
+An identifier in Python and a name in Turtle are defined by two different
+tables, written by two committees that never had to agree. Turtle's `PN_CHARS`
+admits `-` and an interior `.`, and lets a local part start with a digit;
+Python's identifiers admit characters Turtle never contemplated, such as `µ`
+and `ª`. Neither is a subset of the other, and a language that puts the two
+notations in one file has to say where the seam falls.
+
+The rule is the one that R3 forces. **Inside an island, Turtle's tables apply
+exactly**: the text there is Turtle, and `o-pizza:Named`, `ex:1a` or a local
+part with an interior dot all mean what a Turtle author expects.
+**Outside an island, the intersection applies** — a name is captured only if
+it is both a Python identifier and a Turtle name. That asymmetry is not a
+compromise between two tastes; it is what guarantees that no valid Python
+program can ever be captured, because outside islands the extension never
+reaches beyond what Python itself would have accepted as one token.
+
+The visible consequences are small and all point the same way. `-` stays
+subtraction outside an island, so a hyphenated prefix is declarable and usable
+only inside one. A Python-only character ends a local part, because Turtle
+could not have written it either. Local parts support neither an interior `:`
+nor the `%`/`\` escapes of the specification — they would have to survive
+Python's own lexer first.
+
+Both tables are transcribed independently in `tools/charsets.py` and compared
+against the implementation, which is how the residual divergences were found
+rather than assumed. Some of them are frozen by tests rather than settled by
+an argument, and we prefer to say so: the current state is a description of
+what the transpiler does, not yet a claim that it is the only defensible
+frontier. Record `ldpy/010` keeps the file open.

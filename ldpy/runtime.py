@@ -38,6 +38,12 @@ except ImportError:  # MicroPython
     def _urljoin(base, rel):
         return base + rel
 
+try:
+    from types import MappingProxyType as _MappingProxy
+except ImportError:  # MicroPython
+    def _MappingProxy(d):
+        return dict(d)
+
 import re
 _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 
@@ -248,9 +254,50 @@ def dtype(value):
 
 def pname(ns, *parts):
     """A dynamic prefixed name (record ldpy/013): concatenates the namespace
-    IRI (imported prefix, or computed IRI) and the local part."""
+    IRI (imported prefix, or computed IRI) and the local part.
+
+    A part that is a Variable or a deferred expression makes the WHOLE name
+    deferred (record ldpy/017). `ex:{?id}` used to yield `ex:id` — the same
+    IRI on every row, with no error, which is the trap of forging an IRI
+    from a column. It now resolves against the current bindings like any
+    other deferred term: unbound, the triple is dropped rather than written
+    wrong. `ex:{expr}` on an ordinary value stays immediate and needs no
+    bindings — a Variable is a str subclass, hence the exact type test.
+    """
+    cls = _expr_class()
+    for p in parts:
+        tp = type(p)
+        if tp is Variable or (cls and tp is cls):
+            return _deferred_pname(ns, parts)
     return rdflib.URIRef(
         str(ns) + "".join(p if isinstance(p, str) else str(p) for p in parts))
+
+
+def _deferred_pname(ns, parts):
+    """`ex:{?v}` — the prefixed name as a deferred expression.
+
+    Concatenation, exactly as in the immediate case: no percent-encoding,
+    because the namespace and the shape of the local part are yours. To mint
+    an IRI from data that may hold spaces or slashes, use `e<...{?v}>`,
+    which encodes."""
+    from ldpy.sparql import Expression, var
+
+    def build(sm):
+        out = [str(ns)]
+        for p in parts:
+            tp = type(p)
+            if tp is Variable:
+                out.append(str(var(sm, str(p))))
+            elif isinstance(p, Expression):
+                out.append(str(p(sm)))
+            else:
+                out.append(p if isinstance(p, str) else str(p))
+        return rdflib.URIRef("".join(out))
+
+    src = str(ns) + "".join(
+        "?%s" % p if type(p) is Variable
+        else (p if type(p) is str else repr(p)) for p in parts)
+    return Expression(build, src)
 
 
 def firi(*parts, base=None):
@@ -421,8 +468,12 @@ class Bindings(dict):
     Everything Python can do to a dict works: b[?x] = v, update, del, **b,
     iteration over the keys."""
 
+    #: fallback when __init__ was bypassed (dict.copy, unpickling…)
+    _raw = {}
+
     def __init__(self, mapping=None):
         dict.__init__(self)
+        self._raw = {}
         if mapping is not None:
             if not hasattr(mapping, "items"):
                 raise TypeError(
@@ -431,14 +482,32 @@ class Bindings(dict):
             for k, v in mapping.items():
                 self[k] = v
 
+    @property
+    def raw(self):
+        """The values as they ARRIVED, before coercion (record ldpy/012,
+        point 22).
+
+        `b["v"]` is an RDF term, and a term does not compare equal to the
+        Python value it came from — `Literal("") != ""` is True, and
+        `if row["col"] != "":` is the commonest guard of a CSV-to-RDF
+        script. `b.raw["col"]` gives that guard its Python value back,
+        while `b["col"]` stays the term the islands instantiate against.
+
+        Read-only: write through `b[key]`, which coerces and records both.
+        """
+        return _MappingProxy(self._raw)
+
     def __setitem__(self, key, value):
-        dict.__setitem__(self, str(key), node(value, field=str(key)))
+        k = str(key)
+        self._raw[k] = value
+        dict.__setitem__(self, k, node(value, field=k))
 
     def __getitem__(self, key):
         return dict.__getitem__(self, str(key))
 
     def __delitem__(self, key):
         dict.__delitem__(self, str(key))
+        self._raw.pop(str(key), None)
 
     def __contains__(self, key):
         return dict.__contains__(self, str(key))
@@ -466,6 +535,7 @@ def as_bindings_iter(iterable):
             for k, v in sm.items():
                 if not str(k).startswith("__bn"):
                     dict.__setitem__(b, str(k), v)      # already terms
+                    b._raw[str(k)] = v                  # raw == the term here
             yield b
         return
     for item in iterable:

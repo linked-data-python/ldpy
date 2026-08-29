@@ -62,13 +62,56 @@ assert sorted(str(s) for s, p, o in out) == ["http://example.org/a",
                                              "http://example.org/b"]
 ```
 
-!!! warning "Not `ex:{?id}`"
+A variable interpolates in **every** term position, the local part of a
+prefixed name included: `ex:{?id}` is instantiated row by row, like any other
+deferred term, and an unbound `?id` drops the triple rather than writing a
+wrong IRI.
 
-    A variable interpolates in every term position **except the local part of
-    a prefixed name**: `ex:{?id}` yields `ex:id` on every row, with no error.
-    Forging an IRI from a column is what `e<…{?id}>` is for — and it
-    percent-encodes on the way. The trap and the two ways out are recorded in
+```ldpy
+@prefix ex: <http://example.org/> .
+@graph as out
+for @bindings in [{"id": "a"}, {"id": "b"}, {}]:
+    +{ ex:{?id} ex:seen true }
+assert sorted(str(s) for s, p, o in out) == ["http://example.org/a",
+                                             "http://example.org/b"]
+```
+
+!!! note "`ex:{?id}` joins, `e<…{?id}>` encodes"
+
+    `ex:{expr}` concatenates, exactly as it does on an ordinary value — the
+    namespace and the shape of the local part are yours to control. When the
+    column may hold a space or a slash, use the
+    [deferred IRI](../sparql-expressions.md#deferred-iris-e) `e<http://e/{?id}>`,
+    which percent-encodes its holes. A prefixed name with no variable in it
+    stays **immediate**, and needs no bindings at all: `ex:{name.lower()}` is
+    a `URIRef` on the spot.
+
+    Until 0.3.0 `ex:{?id}` silently yielded `ex:id` — the same IRI on every
+    row. The arbitration is in
     [design record `ldpy/017`](https://github.com/linked-data-python/pilotage/blob/main/design/ldpy/017-bindings-et-gabarits.md).
+
+### `b.raw` — the row as it arrived
+
+Values entering the bindings are [coerced](coercion.md) into RDF terms, and a
+term does not compare equal to the Python value it came from:
+`Literal("") != ""` is `True`. That matters, because `if row[col] != "":` is
+the commonest guard in a CSV-to-RDF script. `b.raw` gives that side back — the
+values before coercion — while `b[key]` stays the term the islands instantiate
+against.
+
+```ldpy
+@prefix ex: <http://example.org/> .
+@graph as out
+rows = [{"id": "a", "note": ""}, {"id": "b", "note": "hot"}]
+for @bindings as b in rows:
+    if b.raw["note"] != "":            # the Python value: a plain str
+        +{ ex:{?id} ex:note ?note }    # the term: an RDF literal
+assert len(out) == 1
+```
+
+`b.raw` is read-only: write through `b[key]`, which coerces and records both
+sides. For solutions coming from `m{ }` there is nothing to undo — their
+values are already terms, and `raw` returns them unchanged.
 
 Chained with a match island, it is a CONSTRUCT with no query engine and no
 query text:
