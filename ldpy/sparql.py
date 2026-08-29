@@ -1,18 +1,18 @@
-"""Sémantique d'évaluation des nœuds expression SPARQL .
+"""Evaluation semantics of SPARQL expression nodes.
 
-`e{ <expression SPARQL> }` transpile vers un objet ``Expression`` DIFFÉRÉ :
-là où ``f{...}``/``?{...}`` s'évaluent immédiatement, une Expression s'évalue
-plus tard, contre un *solution mapping* :
+`e{ <SPARQL expression> }` transpiles to a DEFERRED ``Expression`` object:
+where ``f{...}``/``?{...}`` evaluate immediately, an Expression evaluates
+later, against a *solution mapping*:
 
     majeur = e{ ?age >= 18 && BOUND(?nom) }
     majeur({"age": 20, "nom": "Ana"})          # -> Literal(True)
-    majeur.ebv({"age": 20, "nom": "Ana"})      # -> True (booléen Python)
+    adult.ebv({"age": 20, "name": "Ana"})      # -> True (a Python bool)
 
-La sémantique suit SPARQL 1.1 : promotion numérique (integer < decimal <
-float < double, division entière -> decimal), erreurs PROPAGÉES (variable non
-liée, types incomparables) et absorbées par ``||``/``&&``/``IF``/``COALESCE``
-selon la table de vérité à trois valeurs de SPARQL. Aucun parser de rdflib
-n'est utilisé ; rdflib ne sert que de modèle de données.
+The semantics follow SPARQL 1.1: numeric promotion (integer < decimal <
+float < double, integer division -> decimal), errors PROPAGATED (unbound
+variable, incomparable types) and absorbed by ``||``/``&&``/``IF``/
+``COALESCE`` per SPARQL's three-valued truth table. No rdflib parser is used;
+rdflib only serves as the data model.
 """
 
 import re as _re
@@ -26,16 +26,16 @@ __all__ = ["SparqlError", "Expression", "expr"]
 
 
 class SparqlError(Exception):
-    """Erreur d'évaluation SPARQL (variable non liée, types incomparables…).
+    """A SPARQL evaluation error (unbound variable, incomparable types…).
 
-    Elle se propage à travers les opérateurs et n'est absorbée que là où
+    It propagates through the operators and is absorbed only where SPARQL
     SPARQL l'absorbe : ||, &&, IF, COALESCE."""
 
 
 class Expression:
-    """Une expression SPARQL compilée, à évaluer contre un solution mapping.
+    """A compiled SPARQL expression, to evaluate against a solution mapping.
 
-    Le mapping accepte des clés str ou Variable, et des valeurs Python ou
+    The mapping accepts str or Variable keys, and Python or RDF values
     termes RDF (coercition par ldpy.runtime.node)."""
 
     __slots__ = ("_fn", "src")
@@ -52,7 +52,7 @@ class Expression:
         return out
 
     def __call__(self, sm=None, **kw):
-        """Évalue ; retourne un terme RDF, ou lève SparqlError."""
+        """Evaluate; returns an RDF term, or raises SparqlError."""
         return self._fn(self._mapping(sm, kw))
 
     def evaluate(self, sm=None, **kw):
@@ -60,7 +60,7 @@ class Expression:
         return self(sm, **kw)
 
     def ebv(self, sm=None, **kw):
-        """Effective boolean value (bool Python) ; lève SparqlError sinon."""
+        """Effective boolean value (a Python bool); raises SparqlError otherwise."""
         return ebv(self(sm, **kw))
 
     def __repr__(self):
@@ -68,7 +68,7 @@ class Expression:
 
 
 def expr(fn, src=""):
-    """Construit une Expression (appelé par le code émis)."""
+    """Build an Expression (called by the emitted code)."""
     return Expression(fn, src)
 
 
@@ -82,13 +82,13 @@ _INT_TYPES = {XSD.integer, XSD.int, XSD.long, XSD.short, XSD.byte,
 
 
 def var(sm, name):
-    """Valeur d'une variable ; non liée -> SparqlError."""
+    """A variable's value; unbound -> SparqlError."""
     try:
         v = sm[name]
     except KeyError:
-        raise SparqlError("variable non liée : ?%s" % name)
+        raise SparqlError("unbound variable: ?%s" % name)
     if v is None:
-        raise SparqlError("variable non liée : ?%s" % name)
+        raise SparqlError("unbound variable: ?%s" % name)
     return v
 
 
@@ -98,12 +98,12 @@ def bound(sm, name):
 
 
 def py(value):
-    """Interpolation Python {expr} : coercition en terme, à CHAQUE évaluation."""
+    """Python interpolation {expr}: coerced to a term, at EVERY evaluation."""
     return _node(value)
 
 
 def number(lexical):
-    """Littéral numérique SPARQL (integer / decimal / double)."""
+    """A SPARQL numeric literal (integer / decimal / double)."""
     if _re.search(r"[eE]", lexical):
         return Literal(lexical, datatype=XSD.double)
     if "." in lexical:
@@ -119,7 +119,7 @@ def _numeric(term):
                 return term.toPython()
             except Exception:
                 pass
-    raise SparqlError("valeur non numérique : %r" % (term,))
+    raise SparqlError("not a numeric value: %r" % (term,))
 
 
 def _num_rank(term):
@@ -137,9 +137,9 @@ def _num_result(value, rank):
 
 
 def _promote(value, rank):
-    """Amène une valeur au type Python du rang visé — la promotion numérique
-    de SPARQL 1.1 s'applique aux OPÉRANDES, pas seulement au résultat : sans
-    elle, xsd:double * xsd:decimal serait un float fois un Decimal, que Python
+    """Bring a value to the Python type of the target rank — SPARQL 1.1
+    numeric promotion applies to the OPERANDS, not only to the result:
+    without it, xsd:double * xsd:decimal would be a float times a Decimal,
     refuse."""
     if rank == 0:
         return int(value)
@@ -158,27 +158,27 @@ def _arith(a, b, op, div=False):
     try:
         return _num_result(op(va, vb), rank)
     except ZeroDivisionError:
-        raise SparqlError("division par zéro")
+        raise SparqlError("division by zero")
 
 
 def add(a, b):
-    """Opérateur +."""
+    """The + operator."""
     return _arith(a, b, lambda x, y: x + y)
 
 
 def sub(a, b):
-    """Opérateur -."""
+    """The - operator."""
     return _arith(a, b, lambda x, y: x - y)
 
 
 def mul(a, b):
-    """Opérateur *."""
+    """The * operator."""
     return _arith(a, b, lambda x, y: x * y)
 
 
 def div(a, b):
-    """Opérateur / (integer/integer -> decimal). Les opérandes sont promus au
-    rang du résultat, donc jamais deux int ici."""
+    """The / operator (integer/integer -> decimal). Operands are promoted to
+    the rank of the result, so never two ints here."""
     return _arith(a, b, lambda x, y: x / y, div=True)
 
 
@@ -190,7 +190,7 @@ def neg(a):
 # ------------------------------------------------------------- comparaisons
 
 def _cmp(a, b):
-    """-1/0/1, ou SparqlError si les termes ne sont pas comparables."""
+    """-1/0/1, or SparqlError if the terms are not comparable."""
     if isinstance(a, Literal) and isinstance(b, Literal):
         try:
             va, vb = _numeric(a), _numeric(b)
@@ -214,7 +214,7 @@ def _cmp(a, b):
 
 
 def eq(a, b):
-    """Opérateur = (égalité de valeur, puis identité de terme)."""
+    """The = operator (value equality, then term identity)."""
     try:
         return Literal(_cmp(a, b) == 0)
     except SparqlError:
@@ -226,32 +226,32 @@ def eq(a, b):
 
 
 def ne(a, b):
-    """Opérateur !=."""
+    """The != operator."""
     return Literal(not ebv(eq(a, b)))
 
 
 def lt(a, b):
-    """Opérateur <."""
+    """The < operator."""
     return Literal(_cmp(a, b) < 0)
 
 
 def gt(a, b):
-    """Opérateur >."""
+    """The > operator."""
     return Literal(_cmp(a, b) > 0)
 
 
 def le(a, b):
-    """Opérateur <=."""
+    """The <= operator."""
     return Literal(_cmp(a, b) <= 0)
 
 
 def ge(a, b):
-    """Opérateur >=."""
+    """The >= operator."""
     return Literal(_cmp(a, b) >= 0)
 
 
 def in_(a, items):
-    """Opérateur IN (sémantique « = enchaînés par || »)."""
+    """The IN operator (semantics of "= chained by ||")."""
     err = None
     for it in items:
         try:
@@ -265,7 +265,7 @@ def in_(a, items):
 
 
 def not_in(a, items):
-    """Opérateur NOT IN."""
+    """The NOT IN operator."""
     return Literal(not ebv(in_(a, items)))
 
 
@@ -286,11 +286,11 @@ def ebv(term):
                 return False
         if term.datatype in (None, XSD.string):
             return len(str(term)) > 0
-    raise SparqlError("pas d'EBV pour %r" % (term,))
+    raise SparqlError("no EBV for %r" % (term,))
 
 
 def and_(la, lb):
-    """&& — table à trois valeurs de SPARQL (F && err = F)."""
+    """&& — SPARQL's three-valued table (F && err = F)."""
     try:
         a = ebv(la())
     except SparqlError:
@@ -303,7 +303,7 @@ def and_(la, lb):
 
 
 def or_(la, lb):
-    """|| — table à trois valeurs de SPARQL (T || err = T)."""
+    """|| — SPARQL's three-valued table (T || err = T)."""
     try:
         a = ebv(la())
     except SparqlError:
@@ -316,7 +316,7 @@ def or_(la, lb):
 
 
 def not_(a):
-    """Opérateur !."""
+    """The ! operator."""
     return Literal(not ebv(a))
 
 
@@ -332,7 +332,7 @@ def coalesce(*lams):
             return lam()
         except SparqlError:
             continue
-    raise SparqlError("COALESCE : aucun argument évaluable")
+    raise SparqlError("COALESCE: no argument could be evaluated")
 
 
 # ------------------------------------------------------------- built-ins
@@ -340,28 +340,28 @@ def coalesce(*lams):
 def STR(t):
     """STR(term)."""
     if isinstance(t, BNode):
-        raise SparqlError("STR d'un nœud anonyme")
+        raise SparqlError("STR of a blank node")
     return Literal(str(t))
 
 
 def LANG(t):
     """LANG(literal)."""
     if not isinstance(t, Literal):
-        raise SparqlError("LANG demande un littéral")
+        raise SparqlError("LANG wants a literal")
     return Literal(t.language or "")
 
 
 def DATATYPE(t):
     """DATATYPE(literal)."""
     if not isinstance(t, Literal):
-        raise SparqlError("DATATYPE demande un littéral")
+        raise SparqlError("DATATYPE wants a literal")
     if t.language:
         return URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString")
     return t.datatype or XSD.string
 
 
 def IRI(t, base=None):
-    """IRI(str) — résolution contre la base lexicale du site d'appel."""
+    """IRI(str) — resolved against the lexical base of the call site."""
     s = str(t)
     if base and not _re.match(r"^[A-Za-z][A-Za-z0-9+.\-]*:", s):
         from ldpy.runtime import firi
@@ -395,7 +395,7 @@ def STRLEN(t):
 
 
 def SUBSTR(t, start, length=None):
-    """SUBSTR(str, début-1-based[, longueur])."""
+    """SUBSTR(str, start-1-based[, length])."""
     s = str(t)
     i = int(_numeric(start)) - 1
     if length is None:
@@ -405,7 +405,7 @@ def SUBSTR(t, start, length=None):
 
 
 def STRSTARTS(a, b):
-    """STRSTARTS(str, préfixe)."""
+    """STRSTARTS(str, prefix)."""
     return Literal(str(a).startswith(str(b)))
 
 
@@ -420,14 +420,14 @@ def CONTAINS(a, b):
 
 
 def STRBEFORE(a, b):
-    """STRBEFORE(str, séparateur)."""
+    """STRBEFORE(str, separator)."""
     s, sep = str(a), str(b)
     i = s.find(sep)
     return Literal("" if i < 0 else s[:i])
 
 
 def STRAFTER(a, b):
-    """STRAFTER(str, séparateur)."""
+    """STRAFTER(str, separator)."""
     s, sep = str(a), str(b)
     i = s.find(sep)
     return Literal("" if i < 0 else s[i + len(sep):])
@@ -507,7 +507,7 @@ def ISNUMERIC(t):
 
 
 def LANGMATCHES(tag, rng):
-    """LANGMATCHES(tag, gamme) — '*' et préfixes de gamme."""
+    """LANGMATCHES(tag, range) — '*' and range prefixes."""
     t, r = str(tag).lower(), str(rng).lower()
     if not t:
         return Literal(False)
@@ -517,15 +517,15 @@ def LANGMATCHES(tag, rng):
 
 
 def build_iri(parts, base=None):
-    """e<...> : concatène les parts — statiques telles quelles, valeurs par
-    STR() puis encodage IRI-safe (sémantique IRI(CONCAT(ENCODE_FOR_IRI…)) de
-    la spécification dev-sparql) — puis résout contre la base lexicale."""
+    """e<...>: concatenate the parts — statics as they are, values through
+    STR() then IRI-safe encoding (the IRI(CONCAT(ENCODE_FOR_IRI…)) semantics
+    of the dev-sparql specification) — then resolve against the lexical base."""
     from ldpy.runtime import firi
     out = []
     for p in parts:
         if type(p) is str:          # partie statique du gabarit
             out.append(p)
-        else:                       # valeur (Literal EST une str : type exact)
+        else:                       # a value (Literal IS a str: exact type)
             out.append(_iri_safe(str(STR(p))))
     iri = "".join(out)
     if base:
@@ -537,7 +537,7 @@ _IUNRESERVED = "-._~"
 
 
 def _iri_safe(value):
-    """ENCODE_FOR_IRI (aligné sur harness R2RML : iunreserved préservé)."""
+    """ENCODE_FOR_IRI (aligned on the R2RML harness: iunreserved preserved)."""
     out = []
     for ch in value:
         if ch.isalnum() and ch.isascii() or ch in _IUNRESERVED \
