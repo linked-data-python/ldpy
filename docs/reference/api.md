@@ -20,7 +20,7 @@ Transpiles a Linked-Data Python source string. Raises `LdpySyntaxError`
 | `map` | the `LanguageMap` |
 | `prefixes` | `dict` prefix → IRI, final lexical state |
 | `base` | final base IRI or `None` |
-| `warnings` | list of `LdpyWarning` (scope issues, redeclarations) |
+| `warnings` | list of `LdpyWarning` (scope issues, redeclarations, a declared prefix shadowed by a Python name) |
 
 ```python
 from ldpy.transpiler import transpile

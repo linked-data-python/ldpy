@@ -36,11 +36,14 @@ for @bindings in [{"id": "a b"}]:
 assert bool(m{ <http://example.org/thing/a%20b> a ex:Thing })
 ```
 
-!!! warning "`ex:{?id}` is not this"
-    Inside `{ }` you are in Python, so `{?id}` is the `Variable` *object*, and
-    `ex:{?id}` gives you `ex:id` on every row. The local part of a prefixed
-    name is built before bindings are applied; every other term position
-    instantiates `?id` as expected.
+!!! note "`ex:{?id}` mints too, but does not encode"
+    The local part of a prefixed name instantiates against the current
+    bindings, like any other term position — `ex:{?id}` is `ex:a` on the row
+    where `?id` is `"a"`. It **concatenates**, though, rather than
+    percent-encoding. `e<…{?id}>` is the safer choice whenever a column may
+    hold a space or a slash, because it percent-encodes what it
+    interpolates. See
+    [`ex:{?id}` joins, `e<…{?id}>` encodes](../reference/language/bindings.md#for-bindings-in-iter-the-loop-that-carries-them).
 
 ## Join two tables
 

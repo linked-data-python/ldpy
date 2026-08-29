@@ -24,8 +24,9 @@ the [formatted IRI](#formatted-iris-f) below.
 
 ## Prefixed names — `ex:local`
 
-Resolved at transpile time against the `@prefix` declarations
-[in scope](declarations.md), and emitted as a constant `URIRef`.
+The namespace is resolved at transpile time against the `@prefix`
+declarations [in scope](declarations.md). On an ordinary local part the whole
+name is emitted as a constant `URIRef`.
 
 ```ldpy
 @prefix ex:  <http://example.org/ns#> .
@@ -43,6 +44,13 @@ name = "Sensor"
 assert str(ex:{name}) == "http://example.org/ns#Sensor"
 assert str(ex:{name.lower()}) == "http://example.org/ns#sensor"
 ```
+
+When the local part holds a [`Variable`](#variables-name-name) or a
+[deferred expression](../sparql-expressions.md) instead of an ordinary value,
+the whole prefixed name becomes deferred too, and is resolved against the
+[current bindings](bindings.md#for-bindings-in-iter-the-loop-that-carries-them)
+— see [`ex:{?id}` joins, `e<…{?id}>` encodes](bindings.md#for-bindings-in-iter-the-loop-that-carries-them)
+for how that differs from a deferred IRI.
 
 Three conditions make `p:local` a prefixed name rather than Python: the prefix
 must be **declared**, there must be **no space** around the `:`, and the local

@@ -90,10 +90,12 @@ cosmetic gain.
 
 - **`+{ … }` and `-{ … }`** are accepted in **statement position** at bracket
   depth zero: at the start of a logical line, after a `;`, and as the suite of
-  a compound statement — `if cond: +{ … }` on one line. Elsewhere `+` and `-`
-  keep their Python meaning (`keys - {'a'}` is a set difference). In statement
-  position `+{…}` *is* legal Python but always dead — unary plus on a set or a
-  dict raises `TypeError` — so the capture costs no real program.
+  a compound statement — `if cond: +{ … }` on one line. The sigil and the
+  brace must still touch, as in rule 2: `+ { … }`, with a space, stays
+  Python. Elsewhere `+` and `-` keep their Python meaning (`keys - {'a'}` is a
+  set difference). In statement position `+{…}` *is* legal Python but always
+  dead — unary plus on a set or a dict raises `TypeError` — so the capture
+  costs no real program.
 - **`@graph` and `@bindings`** are told from a decorator the same way
   `@prefix` and `@base` are: the line is an island only if the rest of it
   matches the declaration form. `@graph` alone on its line, or followed by `(`
@@ -144,13 +146,14 @@ assert {ex: b} == {"key": "value"}        # spaces give Python back
 
 Both need `ex` to be a **declared prefix** *and* a Python name in the same
 file, which is the situation to avoid — and the transpiler warns when it sees
-you enter it:
+you enter it, naming the prefix and pointing at the spelling that gives the
+Python reading back.
 
-```text
-'ex' est à la fois un préfixe déclaré et un nom Python : dans `{ex:x}` et
-`a[ex:x]`, le nom préfixé l'emporte sur la lecture Python. Écrire `{ex: x}`
-avec une espace force le dict.
-```
+!!! note "Diagnostics are currently emitted in French"
+
+    Transpiler errors and warnings are the one part of the toolchain still
+    written in French; translating them is planned and does not change what
+    they detect.
 
 The detection is deliberately an **approximation**: knowing where Python binds
 a name would mean parsing Python, which the island parser does not do. It

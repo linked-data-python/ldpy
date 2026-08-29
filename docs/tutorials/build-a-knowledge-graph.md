@@ -56,17 +56,20 @@ assert bool(m{ ex:s1 a sosa:Sensor })
 ```
 
 Read the pattern once more. `e<…{?id}…>` mints an IRI from a column — a
-[deferred IRI](../reference/language/terms.md), evaluated against the current
-bindings and percent-encoded, which is what data-derived IRIs need. `?label` is
-the column's value as a literal. And `e<…{?room}…>` mints another IRI, so two
-rows in the same room point at the same node: minting *is* the join.
+[deferred IRI](../reference/sparql-expressions.md#deferred-iris-e), evaluated
+against the current bindings and percent-encoded, which is what data-derived
+IRIs need. `?label` is the column's value as a literal. And `e<…{?room}…>`
+mints another IRI, so two rows in the same room point at the same node:
+minting *is* the join.
 
-!!! warning "`ex:{?id}` does not do this"
-    Inside `{ }` you are in Python, so `{?id}` is the `Variable` *object*, and
-    `ex:{?id}` yields `ex:id` — the same IRI on every row. In every other term
-    position `{?id}` is instantiated as you would expect; the local part of a
-    prefixed name is the exception, because it is built before the bindings are
-    applied. Use `e<...>` to mint from a binding.
+!!! note "`ex:{?id}` mints too, but does not encode"
+    The local part of a prefixed name instantiates against the current
+    bindings, like any other term position: `ex:{?id}` is `ex:a` on the row
+    where `?id` is `"a"`. It **concatenates**, though, rather than
+    percent-encoding — the namespace and the shape of the local part stay
+    yours to control. When a column may hold a space or a slash, `e<…{?id}>`
+    is the safer choice, because it percent-encodes what it interpolates.
+    See [`ex:{?id}` joins, `e<…{?id}>` encodes](../reference/language/bindings.md#for-bindings-in-iter-the-loop-that-carries-them).
 
 ## Step 2 — the second table joins on the first
 

@@ -18,7 +18,7 @@ Each row links to the section that describes it in full.
 | Form | Example | Value |
 |---|---|---|
 | IRI | `<http://e/a>`, `<rel>` | `URIRef`, resolved against `@base` |
-| Prefixed name | `ex:Thing`, `ex:{expr}` | `URIRef` |
+| Prefixed name | `ex:Thing`, `ex:{expr}`, `ex:{?v}` | `URIRef`, or a deferred term when the local part holds a variable |
 | RDF literal | `"a"@en`, `"1"^^xsd:int`, `f"v{x}"@en` | `Literal` |
 | Variable | `?name`, `$name` | `Variable` |
 | Formatted IRI | `f<http://e/{expr}/y>` | `URIRef` built by interpolation |

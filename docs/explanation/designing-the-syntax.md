@@ -50,11 +50,13 @@ So the list of island letters is closed, enumerated in one place, and short:
 
 Two forms sit outside the rule, and each pays for itself:
 
-- **`+{ … }` / `-{ … }`** are admitted only at the start of a logical line at
-  bracket depth zero. The lexical argument is precise: `keys - {'a'}` is a very
-  common set difference, so the form cannot be claimed generally — but in
-  statement position `+{…}` is legal Python that is always *dead* (unary plus
-  on a set raises `TypeError`). The scanner already tracks both bits.
+- **`+{ … }` / `-{ … }`** are admitted only in **statement position** at
+  bracket depth zero: the start of a logical line, after a `;`, or as the
+  suite of a compound statement (`if cond: +{ … }`). The lexical argument is
+  precise: `keys - {'a'}` is a very common set difference, so the form cannot
+  be claimed generally — but in statement position `+{…}` is legal Python
+  that is always *dead* (unary plus on a set raises `TypeError`). The scanner
+  already tracks both bits.
 - **`@graph` and `@bindings`** are told from decorators exactly as `@prefix`
   is: the line is an island only if the rest of it matches the declaration
   form.

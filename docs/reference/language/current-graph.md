@@ -55,11 +55,12 @@ for i in range(3):
 assert len(g) == 4
 ```
 
-They are accepted **only at the start of a logical line, at bracket depth
-zero**. Everywhere else `+` and `-` keep their Python meaning — `keys - {'a'}`
-stays a set difference. In statement position, `+{…}` *is* legal Python but
-always dead (unary plus on a set or dict raises `TypeError`), so capturing it
-costs no real code. The full rule is
+They are accepted in **statement position** at bracket depth zero: at the
+start of a logical line, after a `;`, and as the suite of a compound
+statement (`if cond: +{ … }` on one line). Everywhere else `+` and `-` keep
+their Python meaning — `keys - {'a'}` stays a set difference. In statement
+position, `+{…}` *is* legal Python but always dead (unary plus on a set or
+dict raises `TypeError`), so capturing it costs no real code. The full rule is
 [in the lexical reference](lexical.md#two-forms-outside-the-sigil-rule).
 
 The emitted code calls `add_to` / `remove_from`, never `+=`. That is what

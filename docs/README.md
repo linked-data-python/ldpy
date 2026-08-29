@@ -91,7 +91,7 @@ This documentation is organised by what you came for.
 
 ## Status, honestly
 
-ldpy is a research resource under active development, at version 0.2. The
+ldpy is a research resource under active development, at version 0.4. The
 language is stable enough to write real programs in — the corpus study
 translated 140 of them — and the tooling is real. What is *not* settled:
 
