@@ -1,9 +1,9 @@
-"""Backend Python délégué : un vrai serveur LSP Python (pylsp) en
-sous-processus, à qui le serveur ldpy transmet les requêtes traduites
-(request forwarding, PAS de fork).
+"""Delegated Python backend: a real Python language server (pylsp) in a
+subprocess, to which the ldpy server forwards translated requests
+(request forwarding, NOT a fork).
 
-Le backend ne voit QUE les documents fantômes : pour chaque .ldpy ouvert,
-un didOpen/didChange du Python transpilé sous l'URI <uri>.shadow.py.
+The backend only ever sees shadow documents: for every open .ldpy, a
+didOpen/didChange of the transpiled Python under the URI <uri>.shadow.py.
 """
 
 import subprocess
@@ -14,7 +14,7 @@ from ldpy.lsp.rpc import Endpoint, read_message, RpcClosed
 
 
 class PythonBackend:
-    """Cycle de vie + délégation vers `python -m pylsp` (ou autre argv)."""
+    """Lifecycle and delegation to `python -m pylsp` (or another argv)."""
 
     def __init__(self, argv=None, root_uri=None):
         self.argv = argv or [sys.executable, "-m", "pylsp"]
@@ -27,7 +27,7 @@ class PythonBackend:
     # -- cycle de vie -------------------------------------------------------
 
     def start(self):
-        """Démarre le sous-processus et fait la poignée de main initialize."""
+        """Start the subprocess and do the initialize handshake."""
         self.proc = subprocess.Popen(
             self.argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL)
@@ -59,13 +59,13 @@ class PythonBackend:
                         self.diagnostics_handler(p.get("uri", ""),
                                                  p.get("diagnostics", []))
                 elif "id" in msg:
-                    # requête serveur->client (configuration...) : réponse vide
+                    # server->client request (configuration…): empty answer
                     self.endpoint.respond(msg["id"], result=None)
         except (RpcClosed, ValueError, OSError):
             pass
 
     def stop(self):
-        """Arrêt propre (shutdown/exit), kill en dernier recours."""
+        """Clean stop (shutdown/exit), kill as a last resort."""
         if not self.proc:
             return
         try:
@@ -77,33 +77,33 @@ class PythonBackend:
         self.proc = None
 
     def alive(self):
-        """Le sous-processus backend tourne-t-il encore ?"""
+        """Is the backend subprocess still running?"""
         return self.proc is not None and self.proc.poll() is None
 
-    # -- documents fantômes -------------------------------------------------
+    # -- shadow documents ---------------------------------------------------
 
     def open_shadow(self, uri, text, version=1):
-        """didOpen du document fantôme Python chez le backend."""
+        """didOpen of the Python shadow document, on the backend."""
         self.endpoint.notify("textDocument/didOpen", {"textDocument": {
             "uri": uri, "languageId": "python",
             "version": version, "text": text}})
 
     def change_shadow(self, uri, text, version):
-        """didChange (synchronisation complète) du document fantôme."""
+        """didChange (full sync) of the shadow document."""
         self.endpoint.notify("textDocument/didChange", {
             "textDocument": {"uri": uri, "version": version},
             "contentChanges": [{"text": text}]})
 
     def close_shadow(self, uri):
-        """didClose du document fantôme."""
+        """didClose of the shadow document."""
         self.endpoint.notify("textDocument/didClose",
                              {"textDocument": {"uri": uri}})
 
-    # -- requêtes -----------------------------------------------------------
+    # -- requests -----------------------------------------------------------
 
     def forward(self, method, params, timeout=15.0):
-        """Transmet une requête déjà traduite ; retourne le result brut
-        (ou lève l'erreur du backend)."""
+        """Forward an already translated request; returns the raw result
+        (or raises the backend error)."""
         resp = self.endpoint.request(method, params, timeout=timeout)
         if "error" in resp:
             raise BackendError(resp["error"])
@@ -111,7 +111,7 @@ class PythonBackend:
 
 
 class BackendError(Exception):
-    """Erreur JSON-RPC renvoyée par le backend délégué."""
+    """A JSON-RPC error returned by the delegated backend."""
 
     def __init__(self, error):
         super().__init__(error.get("message", "erreur backend"))

@@ -1,13 +1,13 @@
 """Console interactive Linked-Data Python .
 
-L'intérêt du paquet `ideas` en v1 était d'entrer dans l'interpréteur et d'y écrire directement du ldpy.
-Cette console le permet sans `ideas` : chaque entrée est transpilée puis
-compilée ; l'état des @prefix/@base de niveau zéro persiste d'une entrée à
-l'autre (les déclarations faites dans un bloc meurent avec l'entrée, portée
-par bloc oblige, portée par bloc).
+The point of the `ideas` package in v1 was to enter the interpreter and type
+ldpy directly. This console does it without `ideas`: every entry is
+transpiled then compiled; the state of top-level @prefix/@base persists from
+one entry to the next (declarations made inside a block die with the entry —
+block scope obliges).
 
     $ python -m ldpy                      # console
-    $ python -m ldpy -i script.ldpy       # exécute puis ouvre la console
+    $ python -m ldpy -i script.ldpy       # run, then open the console
 """
 
 import atexit
@@ -25,9 +25,9 @@ HISTORY_LENGTH = 1000
 
 
 def _setup_readline(locals):
-    """Édition de ligne (flèches, Ctrl-A/E...), historique persistant et
-    complétion Tab sur les noms de la console. Sans effet si le module
-    readline n'existe pas (Windows sans pyreadline)."""
+    """Line editing (arrows, Ctrl-A/E…), persistent history and Tab
+    completion on console names. A no-op if the readline module is missing
+    (Windows without pyreadline)."""
     try:
         import readline
         import rlcompleter
@@ -52,19 +52,19 @@ def _setup_readline(locals):
     atexit.register(_save)
 
 BANNER = ("ldpy %s — console Linked-Data Python (Python %s)\n"
-          "Les îlots RDF sont acceptés : @prefix, <iri>, ex:nom, g{ ... }, ?v")
+          "RDF islands are accepted: @prefix, <iri>, ex:name, g{ ... }, ?v")
 
 
 class LdpyConsole(code.InteractiveConsole):
-    """Console interactive : transpile chaque entrée avant compilation ;
-    les @prefix/@base de niveau zéro persistent entre les entrées."""
+    """Interactive console: transpile every entry before compiling it;
+    top-level @prefix/@base persist between entries."""
 
     def __init__(self, locals=None, filename="<console>",
                  prefixes=None, base=None):
         if locals is None:
             locals = {"__name__": "__console__", "__doc__": None}
         super().__init__(locals=locals, filename=filename)
-        # le prélude du runtime est installé une fois pour toutes
+        # the runtime prelude is installed once and for all
         if "__namespaces__" not in self.locals:
             exec(PRELUDE, self.locals)
         self._prefixes = dict(prefixes or {})
@@ -72,8 +72,8 @@ class LdpyConsole(code.InteractiveConsole):
         self._base = base
 
     def runsource(self, source, filename=None, symbol="single"):
-        """Transpile puis compile une entrée ; True = entrée incomplète
-        (îlot ou bloc Python non terminé), False = traitée."""
+        """Transpile then compile one entry; True = incomplete entry
+        (unclosed island or Python block), False = handled."""
         filename = filename or self.filename
         t = Transpiler(source, filename, emit_prelude=False)
         t.prefixes = dict(self._prefixes)
@@ -83,7 +83,7 @@ class LdpyConsole(code.InteractiveConsole):
             result = t.run()
         except LdpySyntaxError as e:
             if getattr(e, "at_eof", False):
-                return True          # îlot non fermé : attendre la suite
+                return True          # unclosed island: wait for more
             self.write(str(e) + "\n")
             return False
         try:
@@ -93,7 +93,7 @@ class LdpyConsole(code.InteractiveConsole):
             return False
         if code_obj is None:
             return True              # Python incomplet (def, if, ...)
-        # l'entrée est complète : les déclarations de niveau zéro persistent
+        # the entry is complete: top-level declarations persist
         t._unwind_scopes(0)
         self._prefixes = dict(t.prefixes)
         self._prefix_cols = dict(t._prefix_col)
@@ -105,7 +105,7 @@ class LdpyConsole(code.InteractiveConsole):
 
 
 def interact(locals=None, prefixes=None, base=None):
-    """Ouvre la console ldpy (bannière, Ctrl-D pour sortir)."""
+    """Open the ldpy console (banner, Ctrl-D to leave)."""
     console = LdpyConsole(locals=locals, prefixes=prefixes, base=base)
     _setup_readline(console.locals)
     banner = BANNER % (ldpy.__version__, sys.version.split()[0])

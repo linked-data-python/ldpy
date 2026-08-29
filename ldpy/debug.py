@@ -1,20 +1,20 @@
-"""Débogage des fichiers .ldpy (docs/explanation/tooling.md).
+"""Debugging .ldpy files (docs/explanation/tooling.md).
 
-Principe : PAS d'adaptateur DAP à écrire. Deux modes :
+Principle: NO DAP adapter to write. Two modes:
 
-- **direct** (`--run`, fiche ldpy/011) : le .ldpy est compilé
-  en coordonnées source (compile_mapped) et exécuté DANS ce processus. Lancé
-  sous debugpy (par l'extension VS Code : `python -m debugpy ... -m
-  ldpy.debug --run f.ldpy`), les breakpoints posés dans le .ldpy se lient
-  directement — pas de fantôme, pas de traduction ;
-- **fantôme** : `ldpy.build` matérialise un vrai fichier Python + ses maps ;
-  debugpy (ou tout outil Python) s'exécute dessus tel quel
-  (`python -m ldpy.debug fichier.ldpy [--listen H:P] [-- args]`), et
-  `--breakpoints` traduit lignes .ldpy <-> lignes fantôme pour l'outillage.
+- **direct** (`--run`, record ldpy/011): the .ldpy is compiled in source
+  coordinates (compile_mapped) and run IN this process. Started under
+  debugpy (by the VS Code extension: `python -m debugpy … -m ldpy.debug
+  --run f.ldpy`), breakpoints set in the .ldpy bind directly — no shadow,
+  no translation;
+- **shadow**: `ldpy.build` materialises a real Python file and its maps;
+  debugpy (or any Python tool) runs on it as it is
+  (`python -m ldpy.debug file.ldpy [--listen H:P] [-- args]`), and
+  `--breakpoints` translates .ldpy lines <-> shadow lines for tooling.
 
-Le mode direct laisse trois trames de CE module sous celle de l'utilisateur.
-`stepping_rules()` dit au débogueur de les ignorer (fiche vscode/103) ;
-`--probe` les publie pour que l'extension VS Code n'ait pas à les redécrire.
+The direct mode leaves three frames of THIS module below the user's own.
+`stepping_rules()` tells the debugger to ignore them (record vscode/103);
+`--probe` publishes them so the VS Code extension need not restate them.
 """
 
 import argparse
@@ -31,37 +31,37 @@ from ldpy.transpiler.linemap import (LanguageMap, compile_mapped,
 
 
 # ---------------------------------------------------------------------------
-# Filtres de pas (fiche vscode/103)
+# Stepping filters (record vscode/103)
 #
-# L'invariant : chaque arrêt du débogueur sélectionne une région du .ldpy.
-# Deux choses le violent — les trames du LANCEUR (ce module, sous celle de
-# l'utilisateur) et, quand on ne l'a pas demandé, celles du RUNTIME (entrer
-# dans `_ldpy_.graph(...)` mène dans runtime.py). Les deux se règlent par les
-# `rules` du protocole : pydevd les lit dans la requête DAP `launch`/`attach`
-# (la variable d'environnement PYDEVD_FILTERS, elle, est écrasée par cette
-# requête — mesuré, ne pas s'en servir).
+# The invariant: every debugger stop selects a region of the .ldpy file.
+# Two things break it — the LAUNCHER frames (this module, below the user's)
+# and, when nobody asked for them, the RUNTIME ones (stepping into
+# `_ldpy_.graph(...)` lands in runtime.py). Both are settled by the protocol's
+# `rules`: pydevd reads them from the DAP `launch`/`attach` request (the
+# PYDEVD_FILTERS environment variable, on the other hand, is overwritten by
+# that request — measured, do not rely on it).
 #
-# Politique, en deux étages :
-#   - le lanceur est TOUJOURS masqué : c'est de la plomberie, jamais du code
-#     que l'on souhaite voir ;
-#   - le reste du paquet l'est seulement sous `justMyCode` (le défaut).
-#     `justMyCode: false` est la demande explicite de tout voir : le pas
-#     entrant descend alors dans le runtime, ce qui est le comportement voulu.
+# The policy, in two tiers:
+#   - the launcher is ALWAYS hidden: it is plumbing, never code anyone
+#     wants to look at;
+#   - the rest of the package only under `justMyCode` (the default).
+#     `justMyCode: false` is the explicit request to see everything: a step
+#     in then descends into the runtime, which is the intended behaviour.
 # ---------------------------------------------------------------------------
 
-#: Modules qui ne sont que le lanceur : jamais visibles, quel que soit le mode.
+#: Modules that are only the launcher: never visible, whatever the mode.
 LAUNCHER_FILES = ("debug.py", "__main__.py")
 
 
 def package_dir():
-    """Répertoire du paquet ldpy installé (celui qui exécute ce code)."""
+    """Directory of the installed ldpy package (the one running this code)."""
     return os.path.dirname(os.path.abspath(__file__))
 
 
 def stepping_rules(just_my_code=True, package=None):
-    """Règles `rules` du DAP qui garantissent l'invariant de la fiche 103.
+    """The DAP `rules` that hold the invariant of record vscode/103.
 
-    Forme attendue par debugpy : une liste de {"path": glob, "include": bool},
+    Shape debugpy expects: a list of {"path": glob, "include": bool}, first
     premier motif qui matche gagnant."""
     pkg = package or package_dir()
     rules = [{"path": os.path.join(pkg, name), "include": False}
@@ -72,11 +72,11 @@ def stepping_rules(just_my_code=True, package=None):
 
 
 def probe():
-    """Ce dont un client de débogage a besoin pour lancer ldpy correctement.
+    """What a debug client needs in order to launch ldpy correctly.
 
-    L'extension VS Code appelle `python -m ldpy.debug --probe` : un seul
-    processus lui donne la preuve que le paquet est importable, sa version, et
-    les règles de pas — qui restent ainsi décrites À UN SEUL endroit."""
+    The VS Code extension calls `python -m ldpy.debug --probe`: a single
+    process gives it proof that the package is importable, its version, and
+    the stepping rules — which thus stay described in ONE place."""
     import ldpy
     return {
         "package": package_dir(),
@@ -89,8 +89,8 @@ def probe():
     }
 
 
-#: réexportés : l'outillage de débogage les cherche ici (fonctions pures,
-#: définies avec la map dans ldpy/transpiler/linemap.py)
+#: re-exported: debug tooling looks for them here (pure functions, defined
+#: alongside the map in ldpy/transpiler/linemap.py)
 __all__ = ["stepping_rules", "probe", "package_dir", "load_map",
            "translate_breakpoints", "translate_frames",
            "snap_breakpoint_line", "snap_breakpoint_lines",
@@ -98,21 +98,21 @@ __all__ = ["stepping_rules", "probe", "package_dir", "load_map",
 
 
 def load_map(map_path):
-    """Charge une LanguageMap depuis un fichier .ldpy.map (JSON)."""
+    """Load a LanguageMap from a .ldpy.map file (JSON)."""
     with open(map_path, "r", encoding="utf-8") as f:
         return LanguageMap.from_json(f.read())
 
 
 def translate_breakpoints(lmap, lines_1based):
-    """Lignes de breakpoints .ldpy (1-based) -> lignes fantôme (1-based).
+    """.ldpy breakpoint lines (1-based) -> shadow lines (1-based).
 
-    Une ligne sans correspondance (commentaire dans un îlot replié...) est
-    rabattue sur la ligne générée de la région qui la contient, sinon None."""
+    A line with no counterpart (a comment inside a collapsed island…) snaps
+    to the generated line of the region containing it, else None."""
     out = []
     for line in lines_1based:
         pos = lmap.to_gen(line - 1, 0)
         if pos is None:
-            # au coeur d'un îlot multiligne : rabattre sur son début
+            # inside a multi-line island: snap to its start
             for seg in lmap.segments:
                 if seg.src and seg.src[0] <= line - 1 <= seg.src[2]:
                     pos = (seg.gen[0], seg.gen[1])
@@ -122,7 +122,7 @@ def translate_breakpoints(lmap, lines_1based):
 
 
 def translate_frames(lmap, lines_1based):
-    """Lignes fantôme (1-based) -> lignes .ldpy (1-based), pour les piles."""
+    """Shadow lines (1-based) -> .ldpy lines (1-based), for stack frames."""
     out = []
     for line in lines_1based:
         src = lmap.src_line_for_gen_line(line - 1)
@@ -131,8 +131,8 @@ def translate_frames(lmap, lines_1based):
 
 
 def run_direct(source_path, script_args):
-    """Mode direct : compile le .ldpy en coordonnées source et l'exécute ici
-    même. Sous debugpy, les breakpoints du .ldpy se lient sans traduction."""
+    """Direct mode: compile the .ldpy in source coordinates and run it right
+    here. Under debugpy, .ldpy breakpoints bind with no translation."""
     import ldpy
     src_path = os.path.abspath(source_path)
     with open(src_path, "r", encoding="utf-8") as f:
@@ -157,29 +157,29 @@ def run_direct(source_path, script_args):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="ldpy.debug",
-        description="Exécute un .ldpy en mode déboguable : --run (direct, "
-                    "coordonnées source) ou via son fantôme Python, "
-                    "sous debugpy si --listen est fourni.")
+        description="Run a .ldpy in debuggable mode: --run (direct, source "
+                    "coordinates) or through its Python shadow, "
+                    "under debugpy when --listen is given.")
     parser.add_argument("source", nargs="?", help="fichier .ldpy")
     parser.add_argument("--run", action="store_true",
-                        help="exécution directe dans ce processus, code "
-                             "compilé en coordonnées .ldpy (pour debugpy : "
-                             "breakpoints directement dans le .ldpy)")
+                        help="run directly in this process, code compiled "
+                             "in .ldpy coordinates (for debugpy: breakpoints "
+                             "straight in the .ldpy)")
     parser.add_argument("-o", "--out", default=DEFAULT_OUT,
-                        help="répertoire fantôme (défaut : %(default)s)")
+                        help="shadow directory (default: %(default)s)")
     parser.add_argument("--listen", metavar="HOTE:PORT",
-                        help="démarre debugpy en écoute (ex. 127.0.0.1:5678)")
+                        help="start debugpy listening (e.g. 127.0.0.1:5678)")
     parser.add_argument("--wait-for-client", action="store_true",
-                        help="attend l'attachement du débogueur avant de lancer")
+                        help="wait for the debugger to attach before starting")
     parser.add_argument("--probe", action="store_true",
-                        help="affiche en JSON {package, version, rules} et "
-                             "sort — pour l'extension VS Code")
+                        help="print {package, version, rules} as JSON and "
+                             "exit — for the VS Code extension")
     parser.add_argument("--breakpoints", metavar="L1,L2,...",
-                        help="lignes .ldpy : affiche leurs lignes fantôme "
-                             "(JSON) et sort — pour l'outillage")
+                        help=".ldpy lines: print their shadow lines "
+                             "(JSON) and exit — for tooling")
     parser.add_argument("args", nargs="*",
-                        help="arguments passés au script (après « -- »)")
-    # argparse gère mal « -- » devant un nargs="*" : découpe manuelle
+                        help="arguments passed to the script (after `--`)")
+    # argparse handles "--" poorly before a nargs="*": split it by hand
     if argv is None:
         argv = sys.argv[1:]
     script_args = []
@@ -194,7 +194,7 @@ def main(argv=None):
         print(json.dumps(probe()))
         return 0
     if not args.source:
-        parser.error("un fichier .ldpy est requis")
+        parser.error("a .ldpy file is required")
 
     if args.run:
         return run_direct(args.source, args.args)

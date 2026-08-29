@@ -1,24 +1,24 @@
-"""Language map segment-level entre un source .ldpy et le Python généré.
+"""Segment-level language map between a .ldpy source and the generated Python.
 
 Voir docs/reference/language-map.md.
 
 Positions 0-based, fins exclusives. Trois sortes de segments :
-- "copy"      : texte recopié verbatim -> traduction exacte des positions ;
-- "island:*"  : îlot RDF réécrit -> traduction à la granularité de la région ;
-- "synthetic" : texte généré sans origine (prélude d'import du runtime).
+- "copy"      : text copied verbatim -> exact position translation;
+- "island:*"  : rewritten RDF island -> translation at region granularity;
+- "synthetic" : generated text with no origin (the runtime import prelude).
 """
 
 import json
 
 
 class Segment:
-    """Un segment de correspondance source/généré (copy, island:*, synthetic)."""
+    """One source/generated correspondence segment (copy, island:*, synthetic)."""
 
     __slots__ = ("kind", "src", "gen")
 
     def __init__(self, kind, src, gen):
         self.kind = kind
-        self.src = src  # (line0, col0, line1, col1) ou None pour synthetic
+        self.src = src  # (line0, col0, line1, col1), or None for synthetic
         self.gen = gen  # (line0, col0, line1, col1)
 
     def __repr__(self):
@@ -52,17 +52,17 @@ def _translate_copy(range_from, range_to, line, col):
 
 
 class LanguageMap:
-    """Correspondance bidirectionnelle .ldpy <-> Python généré
-    (liste ordonnée de Segments ; voir docs/reference/language-map.md)."""
+    """Bidirectional .ldpy <-> generated Python correspondence
+    (an ordered list of Segments; see docs/reference/language-map.md)."""
 
     def __init__(self, source_name="<ldpy>", generated_name=None):
         self.source_name = source_name
         self.generated_name = generated_name
-        self.segments = []  # ordonnés en positions gen ET src croissantes
+        self.segments = []  # ordered by increasing gen AND src positions
 
     def add(self, kind, src, gen):
-        """Ajoute un segment (ignore les segments vides des deux côtés)."""
-        # ignore les segments vides des deux côtés
+        """Add a segment (segments empty on both sides are ignored)."""
+        # ignore segments that are empty on both sides
         if src is not None and src[:2] == src[2:] and gen[:2] == gen[2:]:
             return
         self.segments.append(Segment(kind, src, gen))
@@ -70,7 +70,7 @@ class LanguageMap:
     # -- traduction ---------------------------------------------------------
 
     def to_src(self, line, col):
-        """Position générée -> position source (None si synthétique)."""
+        """Generated position -> source position (None if synthetic)."""
         for seg in self.segments:
             if _pos_in(seg.gen, line, col):
                 if seg.src is None:
@@ -81,7 +81,7 @@ class LanguageMap:
         return None
 
     def to_gen(self, line, col):
-        """Position source -> position générée."""
+        """Source position -> generated position."""
         for seg in self.segments:
             if seg.src is not None and _pos_in(seg.src, line, col):
                 if seg.kind == "copy":
@@ -90,7 +90,7 @@ class LanguageMap:
         return None
 
     def src_line_for_gen_line(self, line):
-        """Ligne source correspondant à une ligne générée (pour tracebacks)."""
+        """Source line matching a generated line (for tracebacks)."""
         best = None
         for seg in self.segments:
             if seg.src is None:
@@ -102,7 +102,7 @@ class LanguageMap:
                 best = seg.src[0]
         return best
 
-    # -- sérialisation ------------------------------------------------------
+    # -- serialisation ------------------------------------------------------
 
     def to_dict(self):
         """Forme JSON (version 1, format maison)."""
@@ -114,7 +114,7 @@ class LanguageMap:
         }
 
     def to_json(self, **kw):
-        """Sérialise en JSON (kwargs passés à json.dumps)."""
+        """Serialise to JSON (kwargs passed to json.dumps)."""
         return json.dumps(self.to_dict(), **kw)
 
     @classmethod
@@ -128,21 +128,21 @@ class LanguageMap:
 
     @classmethod
     def from_json(cls, s):
-        """Reconstruit une map depuis une chaîne JSON."""
+        """Rebuild a map from a JSON string."""
         return cls.from_dict(json.loads(s))
 
 
 def snap_breakpoint_line(lmap, line_1based):
-    """Ligne .ldpy où un point d'arrêt posé sur `line_1based` se liera VRAIMENT.
+    """The .ldpy line where a breakpoint set on `line_1based` will REALLY bind.
 
-    Un îlot multiligne s'effondre en une instruction dont le code object porte
-    la ligne de DÉBUT (fiche ldpy/011) : aucune ligne intérieure n'est
-    exécutable. Or pydevd répond `verified: true` à un point d'arrêt posé là,
-    et ne s'y arrête jamais — un mensonge silencieux (mesuré, fiche
-    vscode/103). On rabat donc la ligne sur le début de l'îlot, et
+    A multi-line island collapses into one statement whose code object carries
+    the START line (record ldpy/011): no interior line is executable. Yet
+    pydevd answers `verified: true` to a breakpoint set there, and never stops
+    on it — a silent lie (measured, record vscode/103). So we snap the line to
+    the island's start, and tooling can MOVE the dot to say so.
     l'outillage peut DÉPLACER la pastille pour le dire.
 
-    Rend la même ligne quand il n'y a rien à rabattre."""
+    Returns the same line when there is nothing to snap."""
     line0 = line_1based - 1
     for seg in lmap.segments:
         if seg.src is None or seg.kind == "copy":
@@ -153,23 +153,23 @@ def snap_breakpoint_line(lmap, line_1based):
 
 
 def snap_breakpoint_lines(lmap, lines_1based):
-    """`snap_breakpoint_line` sur une liste (ordre conservé)."""
+    """`snap_breakpoint_line` over a list (order preserved)."""
     return [snap_breakpoint_line(lmap, l) for l in lines_1based]
 
 
 # ---------------------------------------------------------------------------
-# Compilation « remappée » : le code généré est compilé avec les numéros de
-# ligne DU SOURCE .ldpy (via la map), si bien que tracebacks, pdb et debugpy
-# parlent directement en coordonnées .ldpy (fiche ldpy/011).
+# "Remapped" compilation: the generated code is compiled with the line numbers
+# OF THE .ldpy SOURCE (through the map), so that tracebacks, pdb and debugpy
+# all speak directly in .ldpy coordinates (record ldpy/011).
 # ---------------------------------------------------------------------------
 
 
 def remap_ast_lines(tree, lmap):
-    """Réécrit lineno/end_lineno de chaque nœud de l'AST du code GÉNÉRÉ vers
-    les lignes du source .ldpy. Une ligne générée sans origine (prélude
-    synthétique) est rabattue sur la ligne 1 ; l'intérieur d'un îlot replié
-    est rabattu sur la ligne de début de l'îlot. Les colonnes sont conservées
-    telles quelles (co_positions approximatives sur les lignes réécrites)."""
+    """Rewrite lineno/end_lineno of every node of the GENERATED code's AST to
+    the .ldpy source lines. A generated line with no origin (the synthetic
+    prelude) snaps to line 1; the inside of a collapsed island snaps to the
+    island's start line. Columns are kept as they are (co_positions are
+    approximate on rewritten lines)."""
     import ast
     cache = {}
 
@@ -194,9 +194,9 @@ def remap_ast_lines(tree, lmap):
 
 def compile_mapped(gen_code, lmap, filename, mode="exec",
                    dont_inherit=True, optimize=-1):
-    """Compile le code Python généré avec `filename` (le .ldpy) et les numéros
-    de ligne du source, via `remap_ast_lines`. En cas d'échec inattendu de
-    l'analyse AST, retombe sur une compilation ordinaire (lignes générées)."""
+    """Compile the generated Python code with `filename` (the .ldpy) and the
+    source line numbers, through `remap_ast_lines`. On an unexpected AST
+    parse failure, fall back to an ordinary compilation (generated lines)."""
     import ast
     try:
         tree = ast.parse(gen_code, filename, mode)
@@ -210,16 +210,16 @@ def compile_mapped(gen_code, lmap, filename, mode="exec",
 
 # ---------------------------------------------------------------------------
 # Export Source Map v3  : le format standard
-# de l'outillage JavaScript, pour interopérer avec les outils qui le lisent.
+# JavaScript tooling, to interoperate with the tools that read it.
 # https://tc39.es/ecma426/ — champs [genCol, srcIdx, srcLine, srcCol] en
-# base64-VLQ, en deltas ; une entrée « ; » par ligne générée.
+# base64-VLQ, as deltas; one ";" entry per generated line.
 # ---------------------------------------------------------------------------
 
 _B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 
 def _vlq(value):
-    """Encode un entier signé en base64-VLQ (zigzag + groupes de 5 bits)."""
+    """Encode a signed integer in base64-VLQ (zigzag + groups of 5 bits)."""
     v = (value << 1) if value >= 0 else ((-value << 1) | 1)
     out = []
     while True:
@@ -233,10 +233,10 @@ def _vlq(value):
 
 
 def _mapping_points(lmap):
-    """Points (gen_line, gen_col, src_line, src_col), triés, dédoublonnés.
+    """Points (gen_line, gen_col, src_line, src_col), sorted, deduplicated.
 
-    Un point par début d'îlot ; pour un segment copy, un point par ligne
-    générée couverte (granularité standard des débogueurs)."""
+    One point per island start; for a copy segment, one point per generated
+    line covered (the standard debugger granularity)."""
     points = {}
     for seg in lmap.segments:
         if seg.src is None:
@@ -244,8 +244,8 @@ def _mapping_points(lmap):
         gl0, gc0, gl1, gc1 = seg.gen
         sl0, sc0, _, _ = seg.src
         if seg.kind == "copy":
-            # fin exclusive : si le segment finit colonne 0, sa dernière
-            # « ligne » est vide et ne porte aucun point
+            # exclusive end: if the segment ends at column 0, its last
+            # "line" is empty and carries no point
             last = gl1 if gc1 > 0 else gl1 - 1
             for l in range(gl0, last + 1):
                 gcol = gc0 if l == gl0 else 0
@@ -257,7 +257,7 @@ def _mapping_points(lmap):
 
 
 def _to_sourcemap_v3(self):
-    """Retourne le dict Source Map v3 équivalent à cette map."""
+    """Return the Source Map v3 dict equivalent to this map."""
     points = _mapping_points(self)
     lines = []
     prev_gcol = prev_sline = prev_scol = 0

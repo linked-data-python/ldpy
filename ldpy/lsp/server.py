@@ -2,16 +2,16 @@
 
 Architecture (voir docs/explanation/tooling.md) :
 
-- ZÉRO dépendance : JSON-RPC/framing maison (ldpy/lsp/rpc.py), pas de pygls.
-- Couche NATIVE : diagnostics du transpileur (erreurs + warnings de portée),
-  hover sur les îlots, semantic tokens des îlots (complément précis de la
+- ZERO dependency: home-made JSON-RPC/framing (ldpy/lsp/rpc.py), no pygls.
+- NATIVE layer: transpiler diagnostics (errors + scope warnings), hover on
+  the islands, semantic tokens for the islands (a precise complement to the
   coloration TextMate, docs/how-to/use-vscode.md).
-- Couche DÉLÉGUÉE : pour chaque .ldpy, un document fantôme Python est
-  maintenu chez un VRAI serveur LSP Python (pylsp, non forké, sous-processus) ;
-  completion, definition, references, signatureHelp — et hover hors îlot —
-  lui sont transmis avec positions traduites par le LanguageMap, réponses
-  re-traduites au retour (y compris les URIs d'ombre dans les Locations).
-  Sans pylsp installé, le serveur fonctionne en mode natif seul.
+- DELEGATED layer: for every .ldpy, a Python shadow document is kept up to
+  date on a REAL Python language server (pylsp, subprocess, not forked);
+  completion, definition, references, signatureHelp — and hover outside an
+  island — are forwarded to it with positions translated through the
+  LanguageMap, answers translated back (shadow URIs in Locations included).
+  Without pylsp installed, the server works in native-only mode.
 
 Lancement : python -m ldpy.lsp [--backend pylsp|none]
 """
@@ -25,7 +25,7 @@ from ldpy.transpiler.linemap import snap_breakpoint_lines
 
 
 def fmt_default():
-    """Longueur de ligne par défaut, sans importer black."""
+    """Default line length, without importing black."""
     from ldpy.formatter import DEFAULT_LINE_LENGTH
     return DEFAULT_LINE_LENGTH
 
@@ -39,7 +39,7 @@ FORWARDED = {
 
 
 class Document:
-    """Un document .ldpy ouvert : texte, version, résultat de transpilation."""
+    """An open .ldpy document: text, version, transpilation result."""
 
     __slots__ = ("uri", "text", "version", "result",
                  "native_diags", "py_diags")
@@ -48,13 +48,13 @@ class Document:
         self.uri = uri
         self.text = text
         self.version = version
-        self.result = None          # TranspileResult ou None si erreur
+        self.result = None          # TranspileResult, or None on error
         self.native_diags = []      # diagnostics du transpileur
-        self.py_diags = []          # diagnostics du backend, déjà traduits
+        self.py_diags = []          # backend diagnostics, already translated
 
 
 class LdpyServer:
-    """Le serveur LSP : couche native + délégation au backend Python."""
+    """The language server: native layer plus delegation to the Python backend."""
 
     def __init__(self, reader, writer, backend="pylsp", backend_argv=None,
                  line_length=None):
@@ -88,7 +88,7 @@ class LdpyServer:
         return {u: d.result.map for u, d in self.docs.items() if d.result}
 
     def _sync(self, doc, opened):
-        """Transpile, publie les diagnostics, synchronise l'ombre."""
+        """Transpile, publish the diagnostics, sync the shadow."""
         diags = []
         try:
             doc.result = transpile(doc.text, doc.uri)
@@ -122,8 +122,8 @@ class LdpyServer:
              "diagnostics": doc.native_diags + doc.py_diags})
 
     def _on_backend_diags(self, shadow, diags):
-        """Diagnostics Python du backend : re-projetés sur le .ldpy.
-        Ceux qui tombent sur du texte synthétique (prélude) sont écartés."""
+        """The backend's Python diagnostics, re-projected onto the .ldpy.
+        Those landing on synthetic text (the prelude) are dropped."""
         doc = self.docs.get(tr.unshadow_uri(shadow))
         if doc is None or doc.result is None:
             return
@@ -133,7 +133,7 @@ class LdpyServer:
             rng = d.get("range", {})
             start = tr.pos_to_ldpy(lmap, rng.get("start", {}))
             if start is None:
-                continue                     # prélude ou hors carte
+                continue                     # prelude, or off the map
             end = tr.pos_to_ldpy(lmap, rng.get("end", {})) or start
             d = dict(d, range={"start": start, "end": end},
                      source=d.get("source") or "python")
@@ -144,7 +144,7 @@ class LdpyServer:
     # ------------------------------------------------------------- boucle
 
     def serve(self):
-        """Boucle principale : lit stdin, répartit, répond ; sort sur exit."""
+        """Main loop: read stdin, dispatch, answer; leave on exit."""
         while True:
             try:
                 msg = read_message(self.endpoint.reader)
@@ -169,7 +169,7 @@ class LdpyServer:
         if self.backend:
             self.backend.stop()
 
-    # --------------------------------------------------------- répartition
+    # ------------------------------------------------------------ dispatch
 
     def _dispatch(self, method, params, rid):
         if method == "initialize":
@@ -189,8 +189,8 @@ class LdpyServer:
                         "legend": {"tokenTypes": tr.TOKEN_TYPES,
                                    "tokenModifiers": []},
                         "full": True},
-                    # extension maison, annoncée pour que le client puisse
-                    # la détecter au lieu de la supposer (fiche vscode/103)
+                    # our own extension, announced so the client can detect
+                    # it instead of assuming it (record vscode/103)
                     "experimental": {"ldpyBreakpointLines": True},
                 },
                 "serverInfo": {"name": "ldpy-lsp", "version": "0.2.0"},
@@ -230,10 +230,10 @@ class LdpyServer:
             return self._format(params)
 
         if method == "ldpy/breakpointLines":
-            # Rabat des lignes de points d'arrêt sur celles qui se lient
-            # vraiment (intérieur d'un îlot multiligne -> début de l'îlot).
-            # L'extension déplace alors la pastille, au lieu de laisser
-            # l'utilisateur devant un point d'arrêt qui ne se déclenche pas.
+            # Snap breakpoint lines onto those that really bind (inside a
+            # multi-line island -> the island's first line). The extension
+            # then moves the dot, instead of leaving the user with a
+            # breakpoint that never fires.
             lines = list(params.get("lines") or [])
             doc = self.docs.get(params["textDocument"]["uri"])
             if doc is None or doc.result is None:
@@ -259,8 +259,8 @@ class LdpyServer:
     # ------------------------------------------------------------- natives
 
     def _can_format(self):
-        """Le formateur délègue le Python à black (extra `[format]`) : on
-        n'annonce la capacité que si elle est réellement disponible."""
+        """The formatter delegates Python to black (extra `[format]`): we
+        only announce the capability when it is actually available."""
         try:
             from ldpy.formatter import _black
             _black()
@@ -269,10 +269,10 @@ class LdpyServer:
             return False
 
     def _format(self, params):
-        """`textDocument/formatting` : un seul edit qui remplace tout.
+        """`textDocument/formatting`: one edit replacing everything.
 
-        Un document fautif ne se formate pas — on ne rend alors AUCUN edit
-        plutôt qu'un texte inventé ; les diagnostics disent déjà pourquoi."""
+        A faulty document is not formatted — we then return NO edit rather
+        than invented text; the diagnostics already say why."""
         doc = self.docs.get(params["textDocument"]["uri"])
         if doc is None:
             return None
@@ -309,13 +309,13 @@ class LdpyServer:
                 excerpt = "\n".join(lines)
             sl0, sc0, sl1, sc1 = seg.src
             return {"contents": {"kind": "markdown", "value":
-                    "**îlot %s**\n```python\n%s\n```" % (
+                    "**%s island**\n```python\n%s\n```" % (
                         seg.kind.split(":", 1)[1], excerpt)},
                     "range": {"start": {"line": sl0, "character": sc0},
                               "end": {"line": sl1, "character": sc1}}}
         return self._forward("textDocument/hover", params)
 
-    # ---------------------------------------------------------- délégation
+    # --------------------------------------------------------- delegation
 
     def _forward(self, method, params):
         doc = self.docs.get(params.get("textDocument", {}).get("uri", ""))
@@ -339,10 +339,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="ldpy.lsp")
     parser.add_argument("--backend", default="pylsp",
                         choices=["pylsp", "none"],
-                        help="serveur Python délégué (défaut : pylsp)")
+                        help="delegated Python server (default: pylsp)")
     parser.add_argument("--line-length", type=int, default=None,
-                        help="longueur de ligne du formateur "
-                             "(défaut : celle de black)")
+                        help="formatter line length "
+                             "(default: black's own)")
     args = parser.parse_args(argv)
     server = LdpyServer(sys.stdin.buffer, sys.stdout.buffer,
                         backend=args.backend, line_length=args.line_length)

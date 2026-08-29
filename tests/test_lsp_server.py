@@ -171,7 +171,7 @@ def test_hover_on_island_is_native(lsp):
     result = lsp.request("textDocument/hover", {
         "textDocument": {"uri": URI},
         "position": {"line": 0, "character": 4}})   # dans @prefix
-    assert result and "îlot" in result["contents"]["value"]
+    assert result and "island" in result["contents"]["value"]
 
 
 def test_hover_on_python_is_forwarded(lsp):
@@ -257,7 +257,7 @@ def test_native_only_mode_works_without_backend():
         hover = c.request("textDocument/hover", {
             "textDocument": {"uri": URI},
             "position": {"line": 0, "character": 4}})
-        assert "îlot" in hover["contents"]["value"]
+        assert "island" in hover["contents"]["value"]
         # une requête déléguée répond None proprement
         assert c.request("textDocument/definition", {
             "textDocument": {"uri": URI},

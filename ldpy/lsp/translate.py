@@ -1,17 +1,17 @@
-"""Traduction de positions/portées/URIs entre un document .ldpy et son ombre
-Python, au travers du LanguageMap — sur les structures LSP brutes (dicts).
+"""Translating positions, ranges and URIs between a .ldpy document and its
+Python shadow, through the LanguageMap — on raw LSP structures (dicts).
 
-Les fonctions sont pures et testées unitairement (tests/test_lsp_translate.py).
+The functions are pure and unit-tested (tests/test_lsp_translate.py).
 """
 
 
 def shadow_uri(uri):
-    """URI du document fantôme Python d'un .ldpy (convention in-memory)."""
+    """URI of the Python shadow document of a .ldpy (in-memory convention)."""
     return uri + ".shadow.py"
 
 
 def unshadow_uri(uri):
-    """URI .ldpy d'origine d'une URI d'ombre (inverse de shadow_uri)."""
+    """Original .ldpy URI of a shadow URI (inverse of shadow_uri)."""
     if uri.endswith(".shadow.py"):
         return uri[:-len(".shadow.py")]
     return uri
@@ -44,15 +44,15 @@ def _is_range(d):
 
 
 def translate_result(obj, lmap, maps_by_uri=None):
-    """Traduit récursivement un RÉSULTAT du backend (.py -> .ldpy) :
+    """Recursively translate a backend RESULT (.py -> .ldpy):
 
-    - toute portée {'start','end'} est traduite via la map ;
-    - tout champ 'uri'/'targetUri' pointant vers une ombre est dé-shadowé,
-      et les portées d'un objet portant cet uri utilisent la map de CE
+    - every range {'start','end'} is translated through the map;
+    - every 'uri'/'targetUri' field pointing at a shadow is un-shadowed, and
+      the ranges of an object carrying that uri use THAT document's map
       document (maps_by_uri : uri .ldpy -> LanguageMap).
 
-    Une portée intraduisible (position synthétique) est laissée telle quelle
-    plutôt que de casser la structure."""
+    An untranslatable range (a synthetic position) is left as it is rather
+    than breaking the structure."""
     maps_by_uri = maps_by_uri or {}
 
     def walk(node, cur_map):
@@ -61,7 +61,7 @@ def translate_result(obj, lmap, maps_by_uri=None):
         if not isinstance(node, dict):
             return node
         out = {}
-        # l'uri de ce nœud peut changer la map applicable à SES portées
+        # this node's uri may change which map applies to ITS ranges
         for key in ("uri", "targetUri"):
             u = node.get(key)
             if isinstance(u, str) and u.endswith(".shadow.py"):
@@ -90,7 +90,7 @@ def _range_to_ldpy(lmap, rng):
 
 
 def island_at(lmap, line, character):
-    """Le segment d'îlot couvrant une position source, ou None."""
+    """The island segment covering a source position, or None."""
     for seg in lmap.segments:
         if seg.src is None or not seg.kind.startswith("island:"):
             continue
@@ -111,7 +111,7 @@ _KIND_TO_TYPE = {
     "island:firi": 4, "island:fnode": 4,        # macro
     "island:graph": 4,                          # macro (région entière)
     # fiches 013-019
-    "island:import": 5,                         # keyword (import de préfixes)
+    "island:import": 5,                         # keyword (prefix import)
     "island:graph-decl": 5, "island:bindings-decl": 5,
     "island:for-bindings": 5, "island:for-bindings-close": 5,
     "island:match": 4, "island:sparql": 4,      # macro (région entière)
@@ -121,7 +121,7 @@ _KIND_TO_TYPE = {
 
 
 def semantic_tokens(lmap):
-    """Encodage LSP (deltas) des îlots MONOLIGNE du document source."""
+    """LSP encoding (deltas) of the SINGLE-LINE islands of the source doc."""
     toks = []
     for seg in lmap.segments:
         if seg.src is None or seg.kind not in _KIND_TO_TYPE:

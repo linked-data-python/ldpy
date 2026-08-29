@@ -1,11 +1,11 @@
 """Linked-Data Python (ldpy) v2.
 
-Transpileur « island parsing » : le Python est recopié tel quel, les îlots RDF
-(@prefix, @base, IRIs, noms préfixés, littéraux RDF, variables, graphes g{...})
-sont réécrits en expressions Python s'appuyant sur ldpy.runtime.
+An "island parsing" transpiler: Python is copied through untouched, the RDF
+islands (@prefix, @base, IRIs, prefixed names, RDF literals, variables,
+graphs g{...}) are rewritten into Python expressions built on ldpy.runtime.
 
-La chaîne historique ANTLR (v1) reste accessible via le paquet ldpy.rewriter
-mais n'est plus importée par défaut.
+The historical ANTLR chain (v1) is still reachable through the ldpy.rewriter
+package but is no longer imported by default.
 """
 
 from ldpy.transpiler import transpile, LdpySyntaxError, LdpyWarning
@@ -16,20 +16,20 @@ __date__ = "2026-08-26"
 
 
 def transform_source(source, filename="<ldpy>"):
-    """Compat v1 simplifiée : retourne (code_python, prefixes, map)."""
+    """Simplified v1 compatibility: returns (python_code, prefixes, map)."""
     result = transpile(source, filename)
     return result.code, result.prefixes, result.map
 
 
 def Coercion(rules):
     """Politique de conversion Python -> RDF (fiche 020) — voir
-    ldpy.runtime.Coercion ; exposée ici comme API publique."""
+    ldpy.runtime.Coercion; exposed here as public API."""
     from ldpy.runtime import Coercion as _C
     return _C(rules)
 
 
 def instantiateBGP(input, solutionMappings, initialGraph=None):
-    """Instancie un patron de graphe avec des solution mappings
-    (réexport de ldpy.runtime.instantiateBGP, compat v1)."""
+    """Instantiate a graph template with solution mappings
+    (re-export of ldpy.runtime.instantiateBGP, v1 compatibility)."""
     from ldpy.runtime import instantiateBGP as _f
     return _f(input, solutionMappings, initialGraph)

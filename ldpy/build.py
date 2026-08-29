@@ -1,10 +1,10 @@
-"""Matérialisation : transpile des fichiers .ldpy vers un répertoire fantôme.
+"""Materialisation: transpile .ldpy files into a shadow directory.
 
-`python -m ldpy.build src/ -o .ldpy-build` écrit, en miroir de l'arborescence :
-  - <module>.py        (code généré)
+`python -m ldpy.build src/ -o .ldpy-build` mirrors the tree and writes:
+  - <module>.py        (generated code)
   - <module>.ldpy.map  (language map JSON)
 
-C'est le socle du debugging (debugpy s'exécute sur les .py fantômes) et du
+This is the base of debugging (debugpy runs on the shadow .py files) and of
 language server (voir docs/explanation/tooling.md)."""
 
 import os
@@ -17,7 +17,7 @@ DEFAULT_OUT = ".ldpy-build"
 
 
 def build_file(src_path, out_dir, rel=None):
-    """Transpile un fichier ; retourne (py_path, map_path, result)."""
+    """Transpile one file; returns (py_path, map_path, result)."""
     with open(src_path, "r", encoding="utf-8") as f:
         source = f.read()
     rel = rel or os.path.basename(src_path)
@@ -31,15 +31,15 @@ def build_file(src_path, out_dir, rel=None):
         f.write(result.code)
     with open(map_path, "w", encoding="utf-8") as f:
         f.write(result.map.to_json(indent=1))
-    # Source Map v3  : pour l'outillage standard
+    # Source Map v3: for standard tooling
     with open(py_path + ".map", "w", encoding="utf-8") as f:
         f.write(result.map.to_sourcemap_v3_json())
     return py_path, map_path, result
 
 
 def build_tree(root, out_dir):
-    """Transpile récursivement tous les .ldpy sous root. Les .py purs sont
-    copiés tels quels (un paquet mixte doit rester importable)."""
+    """Recursively transpile every .ldpy under root. Plain .py files are
+    copied as they are (a mixed package must stay importable)."""
     built, errors = [], []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames
@@ -63,18 +63,18 @@ def build_tree(root, out_dir):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="ldpy.build",
-        description="Transpile des fichiers .ldpy vers un répertoire fantôme "
+        description="Transpile .ldpy files into a shadow directory "
                     "(.py + .ldpy.map).")
-    parser.add_argument("source", help="fichier .ldpy ou répertoire")
+    parser.add_argument("source", help=".ldpy file or directory")
     parser.add_argument("-o", "--out", default=DEFAULT_OUT,
-                        help="répertoire de sortie (défaut : %(default)s)")
+                        help="output directory (default: %(default)s)")
     args = parser.parse_args(argv)
 
     if os.path.isdir(args.source):
         built, errors = build_tree(args.source, args.out)
         for e in errors:
             print(str(e), file=sys.stderr)
-        print("%d fichier(s) transpilé(s) vers %s" % (len(built), args.out))
+        print("%d file(s) transpiled into %s" % (len(built), args.out))
         return 1 if errors else 0
     try:
         py_path, _, result = build_file(args.source, args.out)

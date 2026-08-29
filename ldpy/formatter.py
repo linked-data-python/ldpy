@@ -1,25 +1,25 @@
 """Formateur (pretty printer) des fichiers .ldpy — fiche ldpy/024.
 
-Le principe est celui du surligneur (fiche 023) : **le formateur est le
-transpileur**. On transpile pour obtenir la language map, qui dit exactement
-où sont les îlots dans le SOURCE ; on remplace chacun par un substitut valide
-en Python à sa place ; on donne le résultat à `black`, qui est le formateur de
-Python ; on réinjecte les îlots là où les substituts ont atterri.
+The principle is the highlighter's (record ldpy/023): **the formatter is the
+transpiler**. We transpile to get the language map, which says exactly where
+the islands are in the SOURCE; we replace each one with a stand-in that is
+valid Python in its place; we hand the result to `black`, which is the Python
+formatter; we put the islands back where the stand-ins landed.
 
-Deux conséquences tiennent lieu de contrat, et sont testées :
+Two consequences serve as the contract, and are tested:
 
-- **transparence de l'hôte** — un fichier sans îlot est formaté *exactement*
-  comme `black` le formaterait. Le formateur n'a pas d'avis sur Python ;
-- **le sens ne bouge pas** — l'AST du Python transpilé est identique avant et
-  après formatage. Un formateur qui change ce que fait le programme n'est pas
+- **host transparency** — a file with no island is formatted *exactly* as
+  `black` would format it. The formatter has no opinion about Python;
+- **the meaning does not move** — the AST of the transpiled Python is the
+  same before and after formatting. A formatter that changes what the
   un formateur.
 
-Ce que le formateur fait AUX ÎLOTS est délibérément modeste (le corps est
-recopié tel quel, seules les bordures sont normalisées) : voir la fiche 024,
-section « ce que le formateur ne fait pas ».
+What the formatter does TO THE ISLANDS is deliberately modest (the body is
+copied verbatim, only the edges are normalised): see record ldpy/024, section
+"what the formatter does not do".
 
-`black` est une dépendance OPTIONNELLE (extra `[format]`) : rien dans ldpy ne
-l'importe hors de ce module, et son absence donne un message actionnable.
+`black` is an OPTIONAL dependency (extra `[format]`): nothing in ldpy imports
+it outside this module, and its absence gives an actionable message.
 """
 
 import argparse
@@ -33,20 +33,20 @@ DEFAULT_LINE_LENGTH = 88
 
 
 class FormatterUnavailable(RuntimeError):
-    """`black` n'est pas installé dans cet interpréteur."""
+    """`black` is not installed in this interpreter."""
 
 
 def _black():
-    """Le moteur Python, chargé à la demande.
+    """The Python engine, loaded on demand.
 
-    Le seul point de couplage : en changer (ruff format, par exemple) ne
-    touche que cette fonction et `_format_python`."""
+    The single coupling point: changing it (for ruff format, say) touches
+    this function and `_format_python`, nothing else."""
     try:
         import black
     except ImportError as e:                                # pragma: no cover
         raise FormatterUnavailable(
-            "le formateur ldpy délègue le Python à black, qui n'est pas "
-            "installé — `pip install linked-data-python[format]`") from e
+            "the ldpy formatter delegates Python to black, which is not "
+            "installed — `pip install linked-data-python[format]`") from e
     return black
 
 
@@ -56,7 +56,7 @@ def _format_python(text, line_length):
 
 
 # ---------------------------------------------------------------------------
-# Décalages : la map parle en (ligne, colonne), le texte en offsets
+# Offsets: the map speaks in (line, column), text speaks in offsets
 # ---------------------------------------------------------------------------
 
 def _line_starts(text):
@@ -72,43 +72,43 @@ def _offset(starts, line, col):
 
 
 # ---------------------------------------------------------------------------
-# Masquage : un substitut valide en Python à la place de chaque îlot
+# Masking: a stand-in that is valid Python in place of each island
 # ---------------------------------------------------------------------------
 
-#: Les îlots occupent une position d'expression ou d'instruction, sauf deux
-#: cas où le substitut doit porter la forme syntaxique de l'original pour que
-#: `black` le traite pareil (un import a droit à sa ligne vide, pas un nom nu).
+#: Islands sit in an expression or a statement position, except in two cases
+#: where the stand-in must carry the syntactic shape of the original so that
+#: `black` treats it the same (an import earns its blank line, a bare name
 def _substitute(kind, name):
     if kind == "for-bindings":
-        # `for @bindings [as b] in` -> l'en-tête de boucle correspondante
+        # `for @bindings [as b] in` -> the matching loop header
         return "for %s in" % name
     if kind == "import":
         # `from m import a, ex:, unit: as u:` -> une VRAIE instruction
-        # d'import, pour que black gère les lignes vides du bloc d'imports
+        # so that black handles the blank lines of the import block
         return "import %s" % name
     return name
 
 
 def _padded(name, text, line_length):
-    """Rallonge `name` pour que le substitut PÈSE ce que pèse l'îlot.
+    """Pad `name` so that the stand-in WEIGHS what the island weighs.
 
-    C'est la doctrine du masquage de la fiche 023 : un substitut de même
-    longueur laisse le moteur délégué décider comme il aurait décidé sur le
-    vrai texte. Ici l'enjeu est la coupure de ligne — un substitut court
-    ferait croire à black que tout tient sur une ligne, et l'îlot réinjecté
-    déborderait.
+    This is the masking doctrine of record ldpy/023: a stand-in of the same
+    length lets the delegated engine decide as it would have decided on the
+    real text. Here what is at stake is line breaking — a short stand-in
+    would make black believe everything fits on one line, and the island put
+    back would overflow.
 
-    Un îlot MULTILIGNE ne peut par construction pas tenir sur une ligne : on
-    lui donne un poids qui dépasse la limite, ce qui garde la coupure que
-    l'auteur a écrite."""
+    A MULTI-LINE island cannot, by construction, fit on one line: we give it
+    a weight beyond the limit, which keeps the break the author wrote.
+    """
     width = max(len(l) for l in text.split("\n"))
     if "\n" in text:
         width = max(width, line_length + 1)
     return name + "_" * max(0, width - len(name))
 
 
-#: Îlot dont le texte est déjà du Python valide et n'a rien à masquer : le
-#: « : » qui ferme un `for @bindings in ... :`.
+#: An island whose text is already valid Python and has nothing to mask: the
+#: ":" closing a `for @bindings in ... :`.
 _TRANSPARENT = ("for-bindings-close",)
 
 
@@ -118,7 +118,7 @@ class _Island:
     def __init__(self, kind, text, column, name, line_length):
         self.kind = kind
         self.text = text
-        self.column = column          # colonne de départ dans le SOURCE
+        self.column = column          # start column in the SOURCE
         self.name = name
         self.substitute = _substitute(kind, _padded(name, text, line_length))
 
@@ -126,9 +126,9 @@ class _Island:
 def _fresh_names(source, count):
     """`count` identifiants uniques absents du source.
 
-    On préfixe par `_L` et on rallonge tant qu'un nom apparaît dans le texte :
-    le masquage doit être réversible, donc les substituts ne doivent jamais
-    entrer en collision avec un nom de l'utilisateur."""
+    We prefix with `_L` and lengthen as long as a name appears in the text:
+    masking has to be reversible, so stand-ins must never collide with a name
+    of the user's."""
     prefix = "_L"
     while any(("%s%d" % (prefix, i)) in source for i in range(count)):
         prefix += "_"
@@ -136,7 +136,7 @@ def _fresh_names(source, count):
 
 
 def _mask(source, lmap, line_length=DEFAULT_LINE_LENGTH):
-    """Rend (texte masqué, liste d'îlots) — le texte masqué est du Python."""
+    """Returns (masked text, island list) — the masked text is Python."""
     starts = _line_starts(source)
     segments = [s for s in lmap.segments
                 if s.kind.startswith("island:") and s.src is not None
@@ -149,7 +149,7 @@ def _mask(source, lmap, line_length=DEFAULT_LINE_LENGTH):
         kind = seg.kind[len("island:"):]
         a = _offset(starts, seg.src[0], seg.src[1])
         b = _offset(starts, seg.src[2], seg.src[3])
-        if a < cursor:                       # îlot imbriqué : déjà couvert
+        if a < cursor:                       # nested island: already covered
             continue
         island = _Island(kind, source[a:b], seg.src[1], name, line_length)
         out.append(source[cursor:a])
@@ -161,23 +161,23 @@ def _mask(source, lmap, line_length=DEFAULT_LINE_LENGTH):
 
 
 # ---------------------------------------------------------------------------
-# Normalisation des îlots : les BORDURES seulement (fiche 024)
+# Island normalisation: the EDGES only (record ldpy/024)
 # ---------------------------------------------------------------------------
 
 _OPENER = re.compile(r"^[a-zA-Z+\-]?\{")
 #: `@prefix ex: <...> .` / `@base <...> .` — grammaire close, sans espace
-#: possible dans les termes, donc normalisable sans risque.
+#: possible inside the terms, so it normalises without risk.
 _DECL = re.compile(r"^@(prefix|base)\s+((?:\S+:)\s+)?(<[^>\s]*>)\s*\.$")
 
 
 def _normalize_island(text):
-    """Normalise les bordures d'un îlot, sans toucher à son corps.
+    """Normalise an island's edges, without touching its body.
 
-    Ce qui est repris : les espaces de fin de ligne, le rembourrage juste
-    après `{` et juste avant `}`, et les déclarations dont la grammaire est
-    close (`@prefix`, `@base`, `@graph`, `@bindings`, import de préfixes).
-    Le corps d'un graphe ou d'une requête est recopié CARACTÈRE POUR
-    CARACTÈRE : voir la fiche 024."""
+    What is taken in hand: trailing whitespace, the padding right after `{`
+    and right before `}`, and the declarations whose grammar is closed
+    (`@prefix`, `@base`, `@graph`, `@bindings`, prefix imports). The body of a
+    graph or a query is copied CHARACTER FOR CHARACTER: see record ldpy/024.
+    """
     text = "\n".join(l.rstrip() for l in text.split("\n"))
 
     m = _DECL.match(text)
@@ -190,8 +190,8 @@ def _normalize_island(text):
 
     if text.startswith(("@graph", "@bindings", "from ")) \
             and not re.search(r"[{}'\"]", text):
-        # pas d'interpolation ni de littéral : les blancs n'y sont que du
-        # rembourrage, et la virgule d'une liste d'imports se normalise
+        # no interpolation and no literal: the blanks there are only padding,
+        # and the comma of an import list normalises
         text = re.sub(r"\s+", " ", text).strip()
         return re.sub(r"\s*,\s*", ", ", text)
 
@@ -211,9 +211,9 @@ def _normalize_island(text):
 
 
 def _reindent(text, from_column, to_column):
-    """Décale les lignes de continuation d'un îlot multiligne.
+    """Shift the continuation lines of a multi-line island.
 
-    Le décalage préserve l'alignement voulu par l'auteur ; on ne le laisse
+    The shift preserves the alignment the author wanted; we never let it
     jamais passer sous la colonne 0."""
     if "\n" not in text or from_column == to_column:
         return text
@@ -230,13 +230,13 @@ def _reindent(text, from_column, to_column):
 
 
 def _unmask(formatted, islands):
-    """Réinjecte chaque îlot à la place de son substitut."""
+    """Put each island back in place of its stand-in."""
     for island in islands:
         idx = formatted.find(island.substitute)
         if idx < 0:                                        # pragma: no cover
             raise RuntimeError(
-                "substitut %r introuvable après formatage — signaler ce "
-                "fichier comme un défaut du formateur" % island.substitute)
+                "stand-in %r not found after formatting — please report this "
+                "file as a formatter defect" % island.substitute)
         column = idx - formatted.rfind("\n", 0, idx) - 1
         text = _reindent(_normalize_island(island.text),
                          island.column, column)
@@ -251,17 +251,17 @@ def _unmask(formatted, islands):
 
 def format_source(source, filename="<ldpy>",
                   line_length=DEFAULT_LINE_LENGTH):
-    """Formate un source .ldpy et rend le texte formaté.
+    """Format a .ldpy source and return the formatted text.
 
-    Lève `LdpySyntaxError` si le source ne transpile pas (on ne formate pas
-    ce qu'on ne comprend pas) et `FormatterUnavailable` si black manque."""
+    Raises `LdpySyntaxError` if the source does not transpile (we do not
+    format what we do not understand) and `FormatterUnavailable` if black is missing."""
     result = transpile(source, filename)
     masked, islands = _mask(source, result.map, line_length)
     return _unmask(_format_python(masked, line_length), islands)
 
 
 def format_file(path, line_length=DEFAULT_LINE_LENGTH, write=False):
-    """Formate un fichier ; rend (texte formaté, a_changé)."""
+    """Format one file; returns (formatted text, changed)."""
     with open(path, "r", encoding="utf-8") as f:
         source = f.read()
     formatted = format_source(source, path, line_length)
@@ -275,18 +275,18 @@ def format_file(path, line_length=DEFAULT_LINE_LENGTH, write=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="ldpy-format",
-        description="Formate des fichiers .ldpy : black pour le Python, "
-                    "bordures normalisées pour les îlots (fiche ldpy/024).")
+        description="Format .ldpy files: black for the Python, edges "
+                    "normalised for the islands (record ldpy/024).")
     parser.add_argument("paths", nargs="+",
-                        help="fichiers .ldpy ou répertoires à parcourir")
+                        help=".ldpy files or directories to walk")
     parser.add_argument("-l", "--line-length", type=int,
                         default=DEFAULT_LINE_LENGTH,
-                        help="longueur de ligne (défaut : %(default)s)")
+                        help="line length (default: %(default)s)")
     parser.add_argument("--check", action="store_true",
-                        help="n'écrit rien ; sort en 1 si un fichier "
-                             "n'est pas formaté")
+                        help="write nothing; exit 1 if a file is not "
+                             "formatted")
     parser.add_argument("--diff", action="store_true",
-                        help="affiche le diff au lieu d'écrire")
+                        help="print the diff instead of writing")
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
     files = []
@@ -317,9 +317,9 @@ def main(argv=None):
                 before = f.read()
             sys.stdout.writelines(difflib.unified_diff(
                 before.splitlines(True), formatted.splitlines(True),
-                path, path + " (formaté)"))
+                path, path + " (formatted)"))
         elif changed:
-            print("reformaté %s" % path)
+            print("reformatted %s" % path)
     if args.check and changed_any:
         return 1
     return status

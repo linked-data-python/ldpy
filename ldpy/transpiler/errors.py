@@ -1,11 +1,11 @@
-"""Erreurs et avertissements du transpileur Linked-Data Python v2."""
+"""Errors and warnings of the Linked-Data Python transpiler."""
 
 
 class LdpySyntaxError(SyntaxError):
-    """Erreur de syntaxe dans un source .ldpy.
+    """A syntax error in a .ldpy source.
 
-    line et col sont 0-based en interne ; SyntaxError.lineno/offset sont
-    renseignés en 1-based comme l'exige Python.
+    line and col are 0-based internally; SyntaxError.lineno/offset are filled
+    in 1-based, as Python requires.
     """
 
     def __init__(self, message, filename="<ldpy>", line=0, col=0):
@@ -22,7 +22,7 @@ class LdpySyntaxError(SyntaxError):
 
 
 class LdpyWarning:
-    """Avertissement non bloquant émis pendant la transpilation."""
+    """A non-blocking warning emitted during transpilation."""
 
     def __init__(self, message, filename="<ldpy>", line=0, col=0):
         self.message = message

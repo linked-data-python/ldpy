@@ -1,13 +1,13 @@
-"""Import hook v2 pour les modules .ldpy (importlib standard, sans `ideas`).
+"""Import hook for .ldpy modules (standard importlib, no `ideas` package).
 
 Usage :
     import ldpy ; ldpy.install()
     import monmodule        # trouve monmodule.ldpy sur sys.path
 
-Les modules .ldpy sont compilés en coordonnées SOURCE (compile_mapped,
+The .ldpy modules are compiled in SOURCE coordinates (compile_mapped,
 fiche ldpy/011) : tracebacks, pdb et debugpy pointent
-directement les lignes du .ldpy. Les LanguageMap des modules importés sont
-conservées dans MAPS (clé : chemin du fichier .ldpy) pour l'outillage."""
+straight at the .ldpy lines. The LanguageMap of each imported module is
+kept in MAPS (key: path of the .ldpy file) for tooling."""
 
 import sys
 import os
@@ -18,30 +18,30 @@ import importlib.util
 from ldpy.transpiler import transpile
 
 MAPS = {}   # chemin .ldpy -> LanguageMap
-CODES = {}  # chemin .ldpy -> source Python généré
+CODES = {}  # .ldpy path -> generated Python source
 
 
 class LdpyLoader(importlib.abc.SourceLoader):
-    """Chargeur de modules .ldpy : transpile puis compile la source."""
+    """Loader for .ldpy modules: transpile, then compile the source."""
 
     def __init__(self, fullname, path):
         self.fullname = fullname
         self.path = path
 
     def get_filename(self, fullname):
-        """Chemin du fichier .ldpy (API importlib)."""
+        """Path of the .ldpy file (importlib API)."""
         return self.path
 
     def get_data(self, path):
-        """Octets bruts du fichier source (API importlib)."""
+        """Raw bytes of the source file (importlib API)."""
         with open(path, "rb") as f:
             return f.read()
 
     def source_to_code(self, data, path, *, _optimize=-1):
-        """Transpile la source ldpy puis la compile en coordonnées SOURCE
-        (compile_mapped, fiche 011) : les tracebacks, pdb et debugpy pointent
-        directement les lignes du .ldpy. La LanguageMap est gardée dans MAPS
-        pour l'outillage."""
+        """Transpile the ldpy source, then compile it in SOURCE
+        coordinates (compile_mapped, record ldpy/011): tracebacks, pdb and
+        debugpy point straight at the .ldpy lines. The LanguageMap is kept
+        for tooling."""
         source = data.decode("utf-8") if isinstance(data, bytes) else data
         result = transpile(source, path)
         for w in result.warnings:
@@ -54,10 +54,10 @@ class LdpyLoader(importlib.abc.SourceLoader):
 
 
 class LdpyFinder(importlib.abc.MetaPathFinder):
-    """Finder sys.meta_path : résout `import mod` vers `mod.ldpy`."""
+    """sys.meta_path finder: resolves `import mod` to `mod.ldpy`."""
 
     def find_spec(self, fullname, path=None, target=None):
-        """Cherche <nom>.ldpy sur sys.path (ou le path du paquet)."""
+        """Look for <name>.ldpy on sys.path (or on the package path)."""
         name = fullname.rpartition(".")[2]
         for entry in (path if path is not None else sys.path):
             if not isinstance(entry, str):
@@ -84,7 +84,7 @@ def install():
 
 
 def uninstall():
-    """Retire le finder .ldpy de sys.meta_path."""
+    """Remove the .ldpy finder from sys.meta_path."""
     global _finder
     if _finder is not None:
         try:
@@ -95,7 +95,7 @@ def uninstall():
 
 
 def translate_lineno(path, gen_line_1based):
-    """Ligne générée (1-based) -> ligne source .ldpy (1-based), ou None."""
+    """Generated line (1-based) -> .ldpy source line (1-based), or None."""
     lmap = MAPS.get(path)
     if lmap is None:
         return None
@@ -104,7 +104,7 @@ def translate_lineno(path, gen_line_1based):
 
 
 def install_excepthook():
-    """OBSOLÈTE (conservé pour compatibilité) : depuis la compilation
-    remappée (fiche 011), les code objects portent déjà les numéros de ligne
-    du .ldpy — les tracebacks sont corrects sans réécriture. Ne fait rien."""
+    """OBSOLETE (kept for compatibility): since the remapped compilation
+    (record ldpy/011), code objects already carry the .ldpy line numbers —
+    tracebacks are right without rewriting. Does nothing."""
     return sys.excepthook

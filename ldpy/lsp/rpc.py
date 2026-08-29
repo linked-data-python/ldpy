@@ -1,7 +1,7 @@
-"""JSON-RPC 2.0 sur flux avec en-têtes Content-Length (base commune LSP).
+"""JSON-RPC 2.0 over streams with Content-Length headers (the LSP framing).
 
-Utilisé deux fois : côté serveur (stdin/stdout de l'éditeur) et côté client
-(pipes du backend Python délégué). Aucune dépendance.
+Used twice: on the server side (the editor's stdin/stdout) and on the client
+side (the pipes of the delegated Python backend). No dependency.
 """
 
 import io
@@ -10,11 +10,11 @@ import threading
 
 
 class RpcClosed(Exception):
-    """Le flux JSON-RPC est terminé (EOF ou corps tronqué)."""
+    """The JSON-RPC stream is over (EOF or a truncated body)."""
 
 
 def read_message(stream):
-    """Lit un message encadré ; lève RpcClosed sur fin de flux."""
+    """Read one framed message; raises RpcClosed at end of stream."""
     length = None
     while True:
         line = stream.readline()
@@ -34,7 +34,7 @@ def read_message(stream):
 
 
 def write_message(stream, msg):
-    """Écrit un message avec son en-tête Content-Length."""
+    """Write a message with its Content-Length header."""
     body = json.dumps(msg, ensure_ascii=False).encode("utf-8")
     stream.write(b"Content-Length: %d\r\n\r\n" % len(body))
     stream.write(body)
@@ -42,30 +42,30 @@ def write_message(stream, msg):
 
 
 class Endpoint:
-    """Extrémité JSON-RPC : requêtes sortantes appariées, écriture sérialisée.
+    """A JSON-RPC endpoint: outgoing requests paired up, writes serialised.
 
-    Le pompage des messages entrants est à la charge de l'appelant
-    (boucle serveur) ou d'un thread lecteur (client backend)."""
+    Pumping incoming messages is the caller's job (the server loop) or a
+    reader thread's (the backend client)."""
 
     def __init__(self, reader, writer):
         self.reader = reader
         self.writer = writer
         self._wlock = threading.Lock()
         self._next_id = 1
-        self._pending = {}          # id -> threading.Event + slot réponse
+        self._pending = {}          # id -> threading.Event + answer slot
 
     def send(self, msg):
-        """Écrit un message brut (écriture sérialisée par verrou)."""
+        """Write a raw message (writes serialised by a lock)."""
         with self._wlock:
             write_message(self.writer, msg)
 
     def notify(self, method, params=None):
-        """Envoie une notification (sans id)."""
+        """Send a notification (no id)."""
         self.send({"jsonrpc": "2.0", "method": method,
                    "params": params if params is not None else {}})
 
     def request_async(self, method, params=None):
-        """Envoie une requête ; retourne (id, event) — la réponse arrivera
+        """Send a request; returns (id, event) — the answer will arrive
         via feed_response()."""
         with self._wlock:
             rid = self._next_id
@@ -78,15 +78,15 @@ class Endpoint:
         return rid, slot
 
     def request(self, method, params=None, timeout=15.0):
-        """Requête synchrone (nécessite un thread qui pompe feed_response)."""
+        """Synchronous request (needs a thread pumping feed_response)."""
         rid, slot = self.request_async(method, params)
         if not slot["event"].wait(timeout):
             self._pending.pop(rid, None)
-            raise TimeoutError("pas de réponse à %s" % method)
+            raise TimeoutError("no answer to %s" % method)
         return slot["response"]
 
     def feed_response(self, msg):
-        """À appeler pour tout message entrant portant un id de réponse."""
+        """Call this for every incoming message carrying a response id."""
         slot = self._pending.pop(msg.get("id"), None)
         if slot is not None:
             slot["response"] = msg
@@ -95,7 +95,7 @@ class Endpoint:
         return False
 
     def respond(self, rid, result=None, error=None):
-        """Répond à la requête entrante d'id ``rid``."""
+        """Answer the incoming request with id ``rid``."""
         msg = {"jsonrpc": "2.0", "id": rid}
         if error is not None:
             msg["error"] = error
