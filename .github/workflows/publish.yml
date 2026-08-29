@@ -1,0 +1,122 @@
+# Publish the package to PyPI.
+#
+# Trigger: pushing a `v*` tag whose number matches `pyproject.toml`. Nothing is
+# published on a push to a branch — a release is a deliberate act.
+#
+#     # set version = "0.2.1" in pyproject.toml, then
+#     git tag v0.2.1 && git push --follow-tags
+#
+# Or run it by hand from the Actions tab: `publish: false` (the default) builds
+# and checks the distributions and attaches them as artifacts, without
+# uploading anything. That is how you rehearse the pipeline.
+#
+# Secret to set in the repository (Settings -> Secrets and variables ->
+# Actions):
+#
+#   PYPI_API_TOKEN   pypi.org -> Account settings -> API tokens -> Add API
+#                    token. Scope it to the `linked-data-python` project
+#                    rather than to the whole account. The value starts with
+#                    `pypi-`; copy it immediately, PyPI never shows it again.
+#                    Without this secret the workflow still builds and checks,
+#                    it just does not upload.
+#
+# A version already on PyPI cannot be replaced, and a number cannot be reused
+# even after a deletion — a botched release is fixed by publishing the next
+# number, never by re-running this one.
+#
+# Worth knowing: PyPI also supports "trusted publishing" (OpenID Connect),
+# which replaces this secret with a declaration on the PyPI side and leaves no
+# token to leak or rotate. Switching costs one PyPI form and dropping the
+# `password:` line below.
+
+name: Publish to PyPI
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Actually upload to PyPI (otherwise only build and check)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write        # attach the distributions to the release
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      # On the JOB, not on the steps: a step's own `env` is not visible to that
+      # step's `if`, so a per-step declaration would make the guard below read
+      # an empty string and silently skip the upload.
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install, with every extra the tests need
+        run: |
+          python -m pip install --upgrade pip build twine
+          pip install -e ".[lsp,debug,format,highlight,dev]"
+
+      # The whole suite, slow tests included: the debugger stepping tests drive
+      # a real debugpy over the Debug Adapter Protocol, and they are precisely
+      # the ones a release must not break.
+      - name: Test
+        run: python -m pytest tests -q
+
+      # A tag that disagrees with pyproject.toml publishes the wrong version,
+      # and a published version number can never be reused.
+      - name: Check the tag matches pyproject.toml
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag $GITHUB_REF_NAME says $tag, pyproject.toml says $pkg"
+            exit 1
+          fi
+          echo "version $pkg"
+
+      - name: Build the source distribution and the wheel
+        run: |
+          python -m build
+          ls -l dist/
+
+      # Rejects a README that PyPI would refuse to render, and metadata it
+      # would refuse outright — after upload it is too late.
+      - name: Check the distributions
+        run: twine check --strict dist/*
+
+      # The sdist must carry what a user needs to build and test, and nothing
+      # of the workspace around it.
+      - name: Show what the sdist contains
+        run: tar tzf dist/*.tar.gz | sed 's|^[^/]*/||' | sort | head -40
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/*
+
+      - name: Publish to PyPI
+        if: >
+          env.PYPI_API_TOKEN != '' &&
+          (startsWith(github.ref, 'refs/tags/v') || inputs.publish)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Attach the distributions to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+            --notes "See CHANGELOG.md." --verify-tag || true
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber

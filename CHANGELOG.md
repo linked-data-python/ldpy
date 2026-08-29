@@ -1,6 +1,6 @@
 ## Release Notes
 
-### [0.2.0] — en préparation
+### [0.2.0] — 2026-08-29
 
 **Le langage conçu depuis le corpus** : huit constructions nouvelles, chacune
 dérivée d'une mesure sur 5 190 fichiers de 376 dépôts publics utilisant
