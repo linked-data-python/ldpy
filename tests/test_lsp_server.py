@@ -171,7 +171,61 @@ def test_hover_on_island_is_native(lsp):
     result = lsp.request("textDocument/hover", {
         "textDocument": {"uri": URI},
         "position": {"line": 0, "character": 4}})   # dans @prefix
-    assert result and "island" in result["contents"]["value"]
+    value = result["contents"]["value"]
+    # les trois blocs de la fiche vscode/108, dans l'ordre
+    assert value.startswith("```ldpy\n(declaration) @prefix")
+    assert "readthedocs.io" in value
+    assert "```python\n__namespaces__" in value
+    assert value.count("\n---\n") == 2
+
+
+def test_hover_inside_an_island_answers_on_the_term(lsp):
+    """Sur `ex:Sensor` dans le g{ } : le terme, pas l'îlot entier."""
+    result = lsp.request("textDocument/hover", {
+        "textDocument": {"uri": URI},
+        "position": {"line": 3, "character": 30}})
+    value = result["contents"]["value"]
+    assert value.startswith("```ldpy\n(term) ex:local -> URIRef")
+    assert "_ldpy_.graph(" not in value            # pas la traduction du g{ }
+    # la plage soulignée est celle du TERME
+    assert result["range"] == {"start": {"line": 3, "character": 28},
+                               "end": {"line": 3, "character": 37}}
+
+
+def test_hover_translation_can_be_turned_off(lsp):
+    """Le drapeau retire la traduction et LAISSE la description : c'est
+    elle qui dit ce qu'on regarde."""
+    try:
+        lsp.notify("workspace/didChangeConfiguration", {
+            "settings": {"ldpy": {"hover": {"showTranslation": False}}}})
+        result = lsp.request("textDocument/hover", {
+            "textDocument": {"uri": URI},
+            "position": {"line": 0, "character": 4}})
+        value = result["contents"]["value"]
+        assert "```python" not in value
+        assert "readthedocs.io" in value
+        assert value.count("\n---\n") == 1
+    finally:
+        lsp.notify("workspace/didChangeConfiguration", {
+            "settings": {"ldpy": {"hover": {"showTranslation": True}}}})
+
+
+def test_hover_translation_flag_at_initialize():
+    """Le réglage passe aussi par initializationOptions : un client qui
+    n'envoie jamais didChangeConfiguration doit être servi."""
+    c = Client(backend="none")
+    try:
+        c.request("initialize", {
+            "processId": None, "rootUri": None, "capabilities": {},
+            "initializationOptions": {"hover": {"showTranslation": False}}})
+        c.notify("initialized", {})
+        c.open()
+        hover = c.request("textDocument/hover", {
+            "textDocument": {"uri": URI},
+            "position": {"line": 0, "character": 4}})
+        assert "```python" not in hover["contents"]["value"]
+    finally:
+        c.close()
 
 
 def test_hover_on_python_is_forwarded(lsp):
@@ -292,7 +346,7 @@ def test_native_only_mode_works_without_backend():
         hover = c.request("textDocument/hover", {
             "textDocument": {"uri": URI},
             "position": {"line": 0, "character": 4}})
-        assert "island" in hover["contents"]["value"]
+        assert "(declaration) @prefix" in hover["contents"]["value"]
         # une requête déléguée répond None proprement
         assert c.request("textDocument/definition", {
             "textDocument": {"uri": URI},

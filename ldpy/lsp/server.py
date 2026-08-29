@@ -21,6 +21,7 @@ import sys
 from ldpy.transpiler import transpile, LdpySyntaxError
 from ldpy.lsp.rpc import Endpoint, read_message, RpcClosed
 from ldpy.lsp import translate as tr
+from ldpy.lsp import hover as hv
 from ldpy.transpiler.linemap import snap_breakpoint_lines
 
 
@@ -34,6 +35,22 @@ def _ldpy_version():
     """The installed package version — never duplicated here."""
     from ldpy import __version__
     return __version__
+
+def _setting(settings, *path, default=None):
+    """Read a nested setting, whether the client sends the whole tree
+    (`{"ldpy": {"hover": ...}}`) or just our section (`{"hover": ...}`).
+    Clients differ on this and both spellings are legitimate."""
+    for root in (settings, (settings or {}).get("ldpy")):
+        node = root
+        for key in path:
+            if not isinstance(node, dict) or key not in node:
+                node = None
+                break
+            node = node[key]
+        if node is not None:
+            return node
+    return default
+
 
 FORWARDED = {
     "textDocument/completion",
@@ -70,6 +87,9 @@ class LdpyServer:
         self.backend_argv = backend_argv
         self.backend = None
         self.line_length = line_length
+        # `ldpy.hover.showTranslation` — the generated Python in the hover.
+        # On by default: it is the point of the feature (record vscode/108).
+        self.hover_translation = True
         self._shutdown = False
 
     # ------------------------------------------------------------ backend
@@ -186,6 +206,7 @@ class LdpyServer:
 
     def _dispatch(self, method, params, rid):
         if method == "initialize":
+            self._apply_settings(params.get("initializationOptions"))
             self._ensure_backend(params.get("rootUri"))
             return {
                 "capabilities": {
@@ -208,8 +229,12 @@ class LdpyServer:
                 },
                 "serverInfo": {"name": "ldpy-lsp", "version": _ldpy_version()},
             }
-        if method in ("initialized", "workspace/didChangeConfiguration",
-                      "$/setTrace", "$/cancelRequest"):
+        if method == "workspace/didChangeConfiguration":
+            # a live toggle: no restart, and no re-transpilation either —
+            # only the rendering of the next hover changes
+            self._apply_settings(params.get("settings"))
+            return None
+        if method in ("initialized", "$/setTrace", "$/cancelRequest"):
             return None
         if method == "shutdown":
             self._shutdown = True
@@ -305,28 +330,49 @@ class LdpyServer:
         return [{"range": {"start": {"line": 0, "character": 0}, "end": end},
                  "newText": new}]
 
+    def _apply_settings(self, settings):
+        """Client configuration, from `initialize` or a later change."""
+        value = _setting(settings, "hover", "showTranslation")
+        if isinstance(value, bool):
+            self.hover_translation = value
+
+    def _gen_text(self, doc, gen):
+        """The generated Python covered by a map range."""
+        gl0, gc0, gl1, gc1 = gen
+        lines = doc.result.code.split("\n")[gl0:gl1 + 1]
+        if not lines:
+            return ""
+        if len(lines) == 1:
+            return lines[0][gc0:gc1]
+        lines[0] = lines[0][gc0:]
+        lines[-1] = lines[-1][:gc1]
+        return "\n".join(lines)
+
     def _hover(self, params):
+        """Native on an island, delegated on the Python around it.
+
+        Inside an island we answer on the SMALLEST described element under
+        the cursor (record vscode/108): hovering a prefixed name in a
+        forty-line `g{ }` should explain that name, not dump the whole
+        translated block."""
         doc = self.docs.get(params["textDocument"]["uri"])
         if doc is None or doc.result is None:
             return None
         pos = params["position"]
         seg = tr.island_at(doc.result.map, pos["line"], pos["character"])
-        if seg is not None:
-            gl0, gc0, gl1, gc1 = seg.gen
-            lines = doc.result.code.split("\n")[gl0:gl1 + 1]
-            if len(lines) == 1:
-                excerpt = lines[0][gc0:gc1]
-            else:
-                lines[0] = lines[0][gc0:]
-                lines[-1] = lines[-1][:gc1]
-                excerpt = "\n".join(lines)
-            sl0, sc0, sl1, sc1 = seg.src
-            return {"contents": {"kind": "markdown", "value":
-                    "**%s island**\n```python\n%s\n```" % (
-                        seg.kind.split(":", 1)[1], excerpt)},
-                    "range": {"start": {"line": sl0, "character": sc0},
-                              "end": {"line": sl1, "character": sc1}}}
-        return self._forward("textDocument/hover", params)
+        if seg is None:
+            return self._forward("textDocument/hover", params)
+        kind, src, code = tr.island_target(seg, pos["line"],
+                                           pos["character"])
+        if code is None:
+            code = self._gen_text(doc, seg.gen)
+        width = self.line_length or fmt_default()
+        sl0, sc0, sl1, sc1 = src
+        return {"contents": {"kind": "markdown",
+                             "value": hv.render(kind, code, width,
+                                                self.hover_translation)},
+                "range": {"start": {"line": sl0, "character": sc0},
+                          "end": {"line": sl1, "character": sc1}}}
 
     # --------------------------------------------------------- delegation
 

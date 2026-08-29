@@ -1,5 +1,40 @@
 ## Release Notes
 
+### [0.5.0] — 2026-08-29
+
+The hover panel says what an island *is* before it says what it becomes
+(record vscode/108). Until now it showed one thing — the generated Python of
+the whole island, unformatted — which answered "what does this compile to"
+and never "what am I looking at".
+
+- **Three blocks, in the shape Python tooling has taught people to read**: a
+  signature line (`(term) ex:local -> URIRef`), the description of that kind
+  of island with a link into the documentation, and the translation. Each
+  island kind has an entry in `ldpy/lsp/islanddoc.py`, and the suite fails
+  when the transpiler grows a kind with no entry, or when a documentation
+  anchor stops existing — a dead link in a hover is worse than no link,
+  because nobody reports it.
+- **The smallest element under the cursor, not the whole island.** Hovering
+  a prefixed name inside a forty-line `g{ }` used to dump the entire
+  translated block. `g{ }`, `m{ }`, `+{ }` and `-{ }` now record the terms
+  they contain, and the hover answers on the innermost one it can describe,
+  falling back to the island for the notation itself, for a `[ ]`, and for a
+  `{python}` hole. The terms are carried on the island's map segment rather
+  than added to the map: breakpoint snapping, the source map and request
+  forwarding all walk that flat list, and nesting spans inside it would
+  change what those three answer.
+- **The translation is formatted by `black`** when it is installed, and shown
+  verbatim when it is not, or when the fragment is not a Python module on its
+  own (the head of a `for @bindings in`). `black` normalises quotes, so the
+  block is the translation *formatted* — `ldpy -t` stays the place to read
+  the generated file byte for byte.
+- **`ldpy.hover.showTranslation`** turns the third block off. On by default.
+  It arrives through `initializationOptions` and stays live through
+  `workspace/didChangeConfiguration`, so toggling it restarts nothing.
+- Fixed on the way: `_:{expr}` had no semantic token, so the one island kind
+  whose whole point is that it looks like a blank node was coloured as
+  ordinary text.
+
 ### [0.4.0] — 2026-08-29
 
 Les suites de l'étude de corpus (fiche 012), arbitrées par Maxime le

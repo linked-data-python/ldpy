@@ -109,6 +109,7 @@ _KIND_TO_TYPE = {
     "island:pname": 2,                          # type
     "island:var": 3,                            # variable
     "island:firi": 4, "island:fnode": 4,        # macro
+    "island:bnode": 4,                          # macro (_:{expr})
     "island:graph": 4,                          # macro (région entière)
     # fiches 013-019
     "island:import": 5,                         # keyword (prefix import)
@@ -138,3 +139,33 @@ def semantic_tokens(lmap):
         data.extend([dline, dcol, length, ttype, 0])
         prev_line, prev_col = line, col
     return data
+
+
+def island_target(seg, line, character):
+    """The smallest DESCRIBED element of an island covering a position.
+
+    A composite island (`g{ }`, `m{ }`, `+{ }`, ...) records the terms it
+    contains as `parts` (record vscode/108). A hover wants the innermost one
+    — that is what the eye is on — and falls back to the island itself when
+    the position is on the notation rather than on a term, or when the island
+    has no parts at all.
+
+    Returns `(kind, src, gen_text)`; `gen_text` is None for the island
+    itself, whose generated text is read off the map's positions instead.
+    """
+    best = None
+    for kind, src, gen in getattr(seg, "parts", None) or ():
+        sl0, sc0, sl1, sc1 = src
+        if not (sl0, sc0) <= (line, character) < (sl1, sc1):
+            continue
+        if best is None or _span(src) < _span(best[1]):
+            best = (kind, src, gen)
+    if best is not None:
+        return best
+    return (seg.kind, seg.src, None)
+
+
+def _span(src):
+    """A rough size, to pick the innermost of two nested spans."""
+    sl0, sc0, sl1, sc1 = src
+    return (sl1 - sl0, sc1 - sc0)

@@ -173,6 +173,47 @@ class TranspileResult:
         self.warnings = warnings    # list[LdpyWarning]
 
 
+_BOOL_RE = re.compile(r"(?:true|false|True|False)\s*$")
+_STRING_START_RE = re.compile(r"[rbfuRBFU]{0,2}[\"']")
+
+
+def _term_kind(text):
+    """The island kind of a term, from the source it was written as.
+
+    `_g_node` dispatches on exactly these leading characters, so the two stay
+    in step, and `tests/test_hover_parts.py` pins each form against the kind
+    the SAME term gets outside an island, where the transpiler labels it
+    itself. None means "no hover of its own": a `[ ]` or `( )` whose contents
+    are recorded one by one anyway, a `{python}` hole, a labelled blank node
+    — for those the island's own hover is the honest answer.
+
+    Order matters twice over: `f"x"@en` is a literal and not a formatted
+    node, and `foo:bar` is a prefixed name and not anything beginning with f.
+    """
+    t = text.lstrip()
+    if t.startswith("_:{"):
+        return "bnode"
+    if t.startswith("_:"):
+        return None                     # labelled: no island kind of its own
+    if t[:1] == "<":
+        return "iri"
+    if t[:1] in "[({":
+        return None
+    if _STRING_START_RE.match(t):
+        return "literal"                # incl. f"..."@en, r"...", b"..."
+    if t[:1] in "?$":
+        return "fnode" if t[1:2] == "{" else "var"
+    if t[:1] == "f" and t[1:2] in "<{":
+        return "firi" if t[1:2] == "<" else "fnode"
+    if t[:1] == "e" and t[1:2] in "{<":
+        return "enode" if t[1:2] == "{" else "eiri"
+    if t[:1].isdigit() or (t[:1] in "+-." and t[1:2].isdigit()):
+        return "literal"
+    if _BOOL_RE.match(t):
+        return "literal"                # Turtle's true/false: a Literal
+    return "pname"
+
+
 class Transpiler:
     """Une instance par fichier. Usage : Transpiler(src, filename).run()."""
 
@@ -228,6 +269,10 @@ class Transpiler:
         self._graph_var = None      # variable Python du graphe courant, ou None
         # îlot de motif (fiche 016) : collecte des variables projetées
         self._match_vars = None
+        # terms of the island being parsed, and the finished list waiting
+        # for the `_end_island` that closes it (record vscode/108)
+        self._parts = None
+        self._pending_parts = None
         # binding courant (fiche 017)
         self._bindings_var = None
 
@@ -293,7 +338,9 @@ class Transpiler:
             sl, sc, gl, gc = mark
             self.map.add("island:" + kind,
                          (sl, sc, self.src_line, self.src_col),
-                         (gl, gc, self.gen_line, self.gen_col))
+                         (gl, gc, self.gen_line, self.gen_col),
+                         self._pending_parts)
+        self._pending_parts = None
         self.uses_runtime = True
         self.operand = False
         self.stmt_start = False
@@ -1668,6 +1715,24 @@ class Transpiler:
     # ------------------------------------------------------------------
 
     def _g_parse_triples(self):
+        """Collects the island's terms as `parts` while parsing it.
+
+        Saved and restored around the call, because an interpolation can
+        hold another island: `g{ ex:p f{ g{ ... } } }` runs a whole inner
+        island — `_end_island` included — in the middle of the outer one.
+        The finished list waits in `_pending_parts` for the `_end_island`
+        that closes THIS island; an inner island finds it None and attaches
+        nothing, which is what keeps the two from stealing each other's
+        terms.
+        """
+        saved = self._parts
+        self._parts = []
+        try:
+            return self._g_parse_triples_inner()
+        finally:
+            self._pending_parts, self._parts = self._parts, saved
+
+    def _g_parse_triples_inner(self):
         """Corps d'îlot de graphe : self.i juste après le '{' ouvrant.
         Consomme jusqu'au '}' fermant inclus ; retourne (triples, gctx)."""
         gctx = _GraphCtx()
@@ -1748,6 +1813,22 @@ class Transpiler:
             return
 
     def _g_verb(self, triples, gctx):
+        """Records the predicate as a `part`, then parses it — the sibling
+        of the wrapper on `_g_node`, for the position `_g_node` never sees."""
+        if self._parts is None or self._sub:
+            return self._g_verb_inner(triples, gctx)
+        sl, sc, i0 = self.src_line, self.src_col, self.i
+        gen = self._g_verb_inner(triples, gctx)
+        # `a` is Turtle's rdf:type shorthand, not a prefixed name: no kind
+        # of its own, so the island's hover answers for it
+        kind = (None if self.text[i0:self.i].strip() == "a"
+                else _term_kind(self.text[i0:self.i]))
+        if kind is not None:
+            self._parts.append(
+                (kind, (sl, sc, self.src_line, self.src_col), gen))
+        return gen
+
+    def _g_verb_inner(self, triples, gctx):
         t = self.text
         c = self._peek()
         if c == "a" and not (_name_char(self._peek(1)) or self._peek(1) == ":"):
@@ -1799,6 +1880,23 @@ class Transpiler:
         return "%s.Variable(%r)" % (RUNTIME_ALIAS, name)
 
     def _g_node(self, triples, gctx):
+        """Records the term as a `part` of the island, then parses it.
+
+        `_g_parse_triples` opens the list; everything a composite island
+        contains comes through here, so this one wrapper gives `g{ }`,
+        `m{ }`, `+{ }` and `-{ }` a hover per term (record vscode/108)
+        without touching the flat language map."""
+        if self._parts is None or self._sub:
+            return self._g_node_inner(triples, gctx)
+        sl, sc, i0 = self.src_line, self.src_col, self.i
+        gen, composite = self._g_node_inner(triples, gctx)
+        kind = _term_kind(self.text[i0:self.i])
+        if kind is not None:
+            self._parts.append(
+                (kind, (sl, sc, self.src_line, self.src_col), gen))
+        return gen, composite
+
+    def _g_node_inner(self, triples, gctx):
         """Parse un nœud de graphe. Retourne (expr, is_composite) ;
         is_composite vrai pour [..], (..) qui peuvent être sujets sans props."""
         t = self.text

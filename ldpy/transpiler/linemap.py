@@ -12,14 +12,23 @@ import json
 
 
 class Segment:
-    """One source/generated correspondence segment (copy, island:*, synthetic)."""
+    """One source/generated correspondence segment (copy, island:*, synthetic).
 
-    __slots__ = ("kind", "src", "gen")
+    A composite island (`g{ }`, `m{ }`, `+{ }`, `-{ }`) also carries `parts`:
+    the terms written inside it, as `(kind, src, gen_text)` (record
+    vscode/108). They are deliberately NOT segments of their own — the map is
+    a flat, ordered list that breakpoint snapping, the source map and request
+    forwarding all walk, and nesting spans inside it would change what those
+    three answer. Parts are read by the hover and by nothing else.
+    """
 
-    def __init__(self, kind, src, gen):
+    __slots__ = ("kind", "src", "gen", "parts")
+
+    def __init__(self, kind, src, gen, parts=None):
         self.kind = kind
         self.src = src  # (line0, col0, line1, col1), or None for synthetic
         self.gen = gen  # (line0, col0, line1, col1)
+        self.parts = parts or []
 
     def __repr__(self):
         return "Segment(%r, src=%r, gen=%r)" % (self.kind, self.src, self.gen)
@@ -29,6 +38,9 @@ class Segment:
         d = {"kind": self.kind, "gen": list(self.gen)}
         if self.src is not None:
             d["src"] = list(self.src)
+        if self.parts:
+            d["parts"] = [{"kind": k, "src": list(s), "gen": g}
+                          for k, s, g in self.parts]
         return d
 
 
@@ -60,12 +72,12 @@ class LanguageMap:
         self.generated_name = generated_name
         self.segments = []  # ordered by increasing gen AND src positions
 
-    def add(self, kind, src, gen):
+    def add(self, kind, src, gen, parts=None):
         """Add a segment (segments empty on both sides are ignored)."""
         # ignore segments that are empty on both sides
         if src is not None and src[:2] == src[2:] and gen[:2] == gen[2:]:
             return
-        self.segments.append(Segment(kind, src, gen))
+        self.segments.append(Segment(kind, src, gen, parts))
 
     # -- traduction ---------------------------------------------------------
 
@@ -123,7 +135,10 @@ class LanguageMap:
         m = cls(d.get("source", "<ldpy>"), d.get("generated"))
         for sd in d.get("segments", []):
             src = tuple(sd["src"]) if "src" in sd else None
-            m.segments.append(Segment(sd["kind"], src, tuple(sd["gen"])))
+            parts = [(pd["kind"], tuple(pd["src"]), pd["gen"])
+                     for pd in sd.get("parts", ())]
+            m.segments.append(
+                Segment(sd["kind"], src, tuple(sd["gen"]), parts))
         return m
 
     @classmethod

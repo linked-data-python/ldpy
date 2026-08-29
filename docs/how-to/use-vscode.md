@@ -27,9 +27,22 @@ through the language server, and run/debug commands.
 | `ldpy.backend` | `pylsp` | Python language server for delegation, or `none` |
 | `ldpy.buildDirectory` | `.ldpy-build` | where shadow `.py` files are built |
 | `ldpy.lineLength` | `88` | line length used by the formatter |
+| `ldpy.hover.showTranslation` | `true` | show the generated Python in the hover panel |
 | `ldpy.trace.server` | `off` | log the LSP traffic, for bug reports |
 
-Changing the first three restarts the language server.
+Changing the first three restarts the language server; the others are
+applied live.
+
+## Hovering
+
+Hover an island and you get what it *is* before what it becomes: a
+signature line, a sentence or two with a link into this documentation,
+and the Python it translates to, formatted by `black`. The answer is
+about the smallest element under the cursor — a prefixed name inside a
+long `g{ }` explains that name, not the whole block. Set
+`ldpy.hover.showTranslation` to `false` to keep only the explanation.
+See [the language server](language-server.md#the-hover-panel) for the
+details.
 
 ## Highlighting
 
