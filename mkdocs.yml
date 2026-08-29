@@ -3,7 +3,7 @@ site_description: >-
   Python extended with Semantic Web primitives — IRIs, RDF literals, Turtle
   graphs, patterns and SPARQL as expressions, transpiled by island parsing.
 site_url: https://linked-data-python.readthedocs.io/
-repo_url: https://gitlab.emse.fr/maxime.lefrancois/linked-data-python
+repo_url: https://github.com/linked-data-python/ldpy
 edit_uri: -/blob/main/docs/
 
 theme:

@@ -25,7 +25,7 @@ ldpy.install()
 
 Tracebacks need no translation: `.ldpy` code is compiled with the SOURCE
 file name and line numbers (mapped compilation — see the design note
-DESIGN_CHOICES/ldpy/011), so frames, `pdb` and `debugpy` speak `.ldpy`
+ldpy/011), so frames, `pdb` and `debugpy` speak `.ldpy`
 coordinates natively. The hook still keeps the language maps for tooling:
 
 ```python

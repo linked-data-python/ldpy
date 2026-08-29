@@ -1,4 +1,4 @@
-"""Formateur (pretty printer) des fichiers .ldpy — fiche DESIGN_CHOICES/ldpy/024.
+"""Formateur (pretty printer) des fichiers .ldpy — fiche ldpy/024.
 
 Le principe est celui du surligneur (fiche 023) : **le formateur est le
 transpileur**. On transpile pour obtenir la language map, qui dit exactement

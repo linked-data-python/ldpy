@@ -8,7 +8,7 @@ grammar of the VS Code extension), this lexer transpiles the source and reads
 the resulting :class:`~ldpy.transpiler.linemap.LanguageMap` — an ordered
 partition of the file into ``copy`` and ``island:KIND`` segments. Islands
 therefore highlight exactly where the transpiler sees them: a disambiguation
-rule that changes in ``DESIGN_CHOICES/ldpy/002`` changes the colouring with no
+rule that changes in ``ldpy/002`` changes the colouring with no
 edit here.
 
 **The tokenising is Pygments'.** Nothing here re-describes Python, Turtle or

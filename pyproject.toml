@@ -54,9 +54,9 @@ ldpy-format = "ldpy.formatter:main"
 ldpy = "ldpy.pygments_lexer:LdpyLexer"
 
 [project.urls]
-Homepage = "https://gitlab.emse.fr/maxime.lefrancois/linked-data-python"
+Homepage = "https://github.com/linked-data-python/ldpy"
 Documentation = "https://linked-data-python.readthedocs.io/"
-Source = "https://gitlab.emse.fr/maxime.lefrancois/linked-data-python"
+Source = "https://github.com/linked-data-python/ldpy"
 
 [tool.setuptools.packages.find]
 include = ["ldpy*"]

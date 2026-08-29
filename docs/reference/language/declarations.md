@@ -63,8 +63,7 @@ already-used prefix at the same level with a different IRI.
 Why block scope, and not file scope as in Turtle? Because the enclosing
 construct is Python's, and a declaration that outlived its suite would be the
 only thing in the file that did — see
-[the design record](https://gitlab.emse.fr/maxime.lefrancois/linked-data-python)
-`DESIGN_CHOICES/ldpy/004`.
+[the design record `ldpy/004`](https://github.com/linked-data-python/pilotage/blob/main/design/ldpy/004-semantique-prefix-base.md).
 
 ## Prefixes across modules
 

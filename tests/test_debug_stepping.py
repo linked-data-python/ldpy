@@ -1,4 +1,4 @@
-"""L'invariant de pas à pas de la fiche DESIGN_CHOICES/vscode/103.
+"""L'invariant de pas à pas de la fiche vscode/103.
 
 > Chaque événement `stopped` du débogueur sélectionne une région du fichier
 > `.ldpy`, et cette région change à chaque geste — jamais d'arrêt invisible

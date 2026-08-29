@@ -40,7 +40,7 @@ The transpiler is ~1 500 lines with no parsing dependency and sustains
 ## Quick start
 
 ```text
-git clone git@gitlab.emse.fr:maxime.lefrancois/linked-data-python.git
+git clone https://github.com/linked-data-python/ldpy.git
 cd linked-data-python && pip install -e .       # or: pip install -e .[lsp,debug]
 
 ldpy program.ldpy             # run a file
@@ -107,3 +107,10 @@ suite, and its assertions are the test.
 - The 2023 ANTLR-based release (v1, PyPI 0.0.4) is preliminary work, superseded
   by this island-parsing rewrite (the `main` branch of this repository; the 2023
   code remains on the legacy gitlab.com/coswot/ldpy).
+
+## Design records
+
+Every non-trivial choice in this repository is written down, one file per
+decision, in the [`pilotage`](https://github.com/linked-data-python/pilotage) repository. Comments and docs
+cite them by identifier — `ldpy/024`, `vscode/103` — which resolves to
+[`design/`](https://github.com/linked-data-python/pilotage/tree/main/design).

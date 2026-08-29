@@ -7,7 +7,7 @@ the design interesting, because it removes most of the obvious answers.
 
 This page collects the reasoning. The formal rules are in the
 [lexical reference](../reference/language/lexical.md); the decisions themselves
-are recorded one per file in `DESIGN_CHOICES/ldpy/`.
+are recorded one per file in `pilotage/design/ldpy/`.
 
 ## The doctrine: extend only where Python is illegal
 

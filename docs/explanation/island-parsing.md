@@ -68,7 +68,7 @@ by hand. A grammar would have surfaced them mechanically, as conflicts. The
 residual cases; each one has a test in both directions, and that discipline is
 the price of the approach.
 
-The alternatives were weighed and are recorded in `DESIGN_CHOICES/ldpy/001`:
+The alternatives were weighed and are recorded in `ldpy/001`:
 tree-sitter (fast and incremental, but a native binary, and it excludes
 MicroPython — kept as a possible *complement* for editors), ANTLR targeting
 C++ (a real speed-up, but a binary dependency and still paying to re-parse all

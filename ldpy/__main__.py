@@ -68,7 +68,7 @@ def main(argv=None):
     src_path = os.path.abspath(args.source)
     MAPS[args.source] = MAPS[src_path] = result.map
     # compilation remappée : tracebacks, pdb et debugpy parlent en
-    # coordonnées .ldpy (fiche DESIGN_CHOICES/ldpy/011)
+    # coordonnées .ldpy (fiche ldpy/011)
     code = compile_mapped(result.code, result.map, src_path)
     g = {"__name__": "__main__", "__file__": src_path}
     exec(code, g)

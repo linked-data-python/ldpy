@@ -1,4 +1,4 @@
-"""Formateur .ldpy (ldpy/formatter.py, fiche DESIGN_CHOICES/ldpy/024).
+"""Formateur .ldpy (ldpy/formatter.py, fiche ldpy/024).
 
 Trois propriétés tiennent lieu de spécification, et sont vérifiées sur tout
 ce que le dépôt contient d'ldpy (exemples + blocs de la documentation) :

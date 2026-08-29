@@ -1,6 +1,6 @@
 # How to debug a `.ldpy` program
 
-Since the mapped compilation (DESIGN_CHOICES/ldpy/011), `.ldpy` code objects
+Since the mapped compilation (ldpy/011), `.ldpy` code objects
 carry the source file name and SOURCE line numbers: tracebacks, `pdb` and
 `debugpy` work on the `.ldpy` file directly. The *shadow* mode (a real
 generated `.py` on disk) remains for tooling and inspection.

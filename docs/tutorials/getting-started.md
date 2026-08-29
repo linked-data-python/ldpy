@@ -10,7 +10,7 @@ knowledge graph from tabular data and queries it.
 ## 1. Install
 
 ```text
-git clone git@gitlab.emse.fr:maxime.lefrancois/linked-data-python.git
+git clone https://github.com/linked-data-python/ldpy.git
 cd linked-data-python
 pip install -e .            # rdflib comes with it; add [lsp,debug] for tooling
 ```

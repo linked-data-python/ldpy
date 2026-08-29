@@ -160,7 +160,7 @@ def snap_breakpoint_lines(lmap, lines_1based):
 # ---------------------------------------------------------------------------
 # Compilation « remappée » : le code généré est compilé avec les numéros de
 # ligne DU SOURCE .ldpy (via la map), si bien que tracebacks, pdb et debugpy
-# parlent directement en coordonnées .ldpy (fiche DESIGN_CHOICES/ldpy/011).
+# parlent directement en coordonnées .ldpy (fiche ldpy/011).
 # ---------------------------------------------------------------------------
 
 

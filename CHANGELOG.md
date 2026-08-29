@@ -4,7 +4,7 @@
 
 **Le langage conçu depuis le corpus** : huit constructions nouvelles, chacune
 dérivée d'une mesure sur 5 190 fichiers de 376 dépôts publics utilisant
-rdflib (fiches DESIGN_CHOICES/ldpy/013 à 020).
+rdflib (fiches ldpy/013 à 020).
 
 - **Préfixes entre modules** : tout `@prefix` de niveau module est exporté ;
   `from vocab import brick:, unit: as u:` importe des préfixes, en régime

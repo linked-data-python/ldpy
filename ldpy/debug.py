@@ -2,7 +2,7 @@
 
 Principe : PAS d'adaptateur DAP à écrire. Deux modes :
 
-- **direct** (`--run`, fiche DESIGN_CHOICES/ldpy/011) : le .ldpy est compilé
+- **direct** (`--run`, fiche ldpy/011) : le .ldpy est compilé
   en coordonnées source (compile_mapped) et exécuté DANS ce processus. Lancé
   sous debugpy (par l'extension VS Code : `python -m debugpy ... -m
   ldpy.debug --run f.ldpy`), les breakpoints posés dans le .ldpy se lient
@@ -31,7 +31,7 @@ from ldpy.transpiler.linemap import (LanguageMap, compile_mapped,
 
 
 # ---------------------------------------------------------------------------
-# Filtres de pas (fiche DESIGN_CHOICES/vscode/103)
+# Filtres de pas (fiche vscode/103)
 #
 # L'invariant : chaque arrêt du débogueur sélectionne une région du .ldpy.
 # Deux choses le violent — les trames du LANCEUR (ce module, sous celle de

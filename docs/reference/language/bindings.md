@@ -68,7 +68,7 @@ assert sorted(str(s) for s, p, o in out) == ["http://example.org/a",
     a prefixed name**: `ex:{?id}` yields `ex:id` on every row, with no error.
     Forging an IRI from a column is what `e<…{?id}>` is for — and it
     percent-encodes on the way. The trap and the two ways out are recorded in
-    [design record `ldpy/017`](https://gitlab.emse.fr/maxime.lefrancois/linked-data-python).
+    [design record `ldpy/017`](https://github.com/linked-data-python/pilotage/blob/main/design/ldpy/017-bindings-et-gabarits.md).
 
 Chained with a match island, it is a CONSTRUCT with no query engine and no
 query text:

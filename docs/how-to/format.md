@@ -78,8 +78,8 @@ formatter leaves it alone:
 assert len(kg) == 4
 ```
 
-The reasoning, and what would be needed to go further, is in the design record
-`DESIGN_CHOICES/ldpy/024`.
+The reasoning, and what would be needed to go further, is in
+[design record `ldpy/024`](https://github.com/linked-data-python/pilotage/blob/main/design/ldpy/024-formateur.md).
 
 ## What it guarantees
 

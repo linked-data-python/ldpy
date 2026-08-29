@@ -5,7 +5,7 @@ Usage :
     import monmodule        # trouve monmodule.ldpy sur sys.path
 
 Les modules .ldpy sont compilés en coordonnées SOURCE (compile_mapped,
-fiche DESIGN_CHOICES/ldpy/011) : tracebacks, pdb et debugpy pointent
+fiche ldpy/011) : tracebacks, pdb et debugpy pointent
 directement les lignes du .ldpy. Les LanguageMap des modules importés sont
 conservées dans MAPS (clé : chemin du fichier .ldpy) pour l'outillage."""
 
