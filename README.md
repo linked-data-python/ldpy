@@ -54,31 +54,31 @@ From Python: `import ldpy; ldpy.install()` then `import yourmodule` finds
 
 ## Documentation
 
-Read it at [`docs/`](docs/README.md) — start with the
-[home page](docs/README.md) for an overview, then:
+Read it at **<https://linked-data-python.readthedocs.io/>** — start with the
+home page for an overview, then:
 
-- **Tutorials** — [first steps](docs/tutorials/getting-started.md), then
-  [build a knowledge graph](docs/tutorials/build-a-knowledge-graph.md) from
+- **Tutorials** — [first steps](https://linked-data-python.readthedocs.io/en/latest/tutorials/getting-started/), then
+  [build a knowledge graph](https://linked-data-python.readthedocs.io/en/latest/tutorials/build-a-knowledge-graph/) from
   tabular data.
-- **How-to guides** — [run & import](docs/how-to/run-and-import.md),
-  [build graphs from tables](docs/how-to/build-graphs-from-tables.md),
-  [read and query](docs/how-to/query-a-graph.md),
-  [migrate from rdflib](docs/how-to/migrate-from-rdflib.md),
-  [VS Code](docs/how-to/use-vscode.md), [debugging](docs/how-to/debug.md),
-  [language server](docs/how-to/language-server.md),
-  [highlighting](docs/how-to/highlight-ldpy.md).
-- **Reference** — [the language](docs/reference/language/index.md), one page
-  per island family; [SPARQL expressions](docs/reference/sparql-expressions.md);
-  [CLI](docs/reference/cli.md); [Python API](docs/reference/api.md);
-  [language map formats](docs/reference/language-map.md).
-- **Explanation** — [why](docs/explanation/why.md),
-  [what real RDF code does](docs/explanation/what-real-code-does.md) (the
+- **How-to guides** — [run & import](https://linked-data-python.readthedocs.io/en/latest/how-to/run-and-import/),
+  [build graphs from tables](https://linked-data-python.readthedocs.io/en/latest/how-to/build-graphs-from-tables/),
+  [read and query](https://linked-data-python.readthedocs.io/en/latest/how-to/query-a-graph/),
+  [migrate from rdflib](https://linked-data-python.readthedocs.io/en/latest/how-to/migrate-from-rdflib/),
+  [VS Code](https://linked-data-python.readthedocs.io/en/latest/how-to/use-vscode/), [debugging](https://linked-data-python.readthedocs.io/en/latest/how-to/debug/),
+  [language server](https://linked-data-python.readthedocs.io/en/latest/how-to/language-server/),
+  [highlighting](https://linked-data-python.readthedocs.io/en/latest/how-to/highlight-ldpy/).
+- **Reference** — [the language](https://linked-data-python.readthedocs.io/en/latest/reference/language/), one page
+  per island family; [SPARQL expressions](https://linked-data-python.readthedocs.io/en/latest/reference/sparql-expressions/);
+  [CLI](https://linked-data-python.readthedocs.io/en/latest/reference/cli/); [Python API](https://linked-data-python.readthedocs.io/en/latest/reference/api/);
+  [language map formats](https://linked-data-python.readthedocs.io/en/latest/reference/language-map/).
+- **Explanation** — [why](https://linked-data-python.readthedocs.io/en/latest/explanation/why/),
+  [what real RDF code does](https://linked-data-python.readthedocs.io/en/latest/explanation/what-real-code-does/) (the
   corpus study that drove the language's second wave),
-  [designing the syntax](docs/explanation/designing-the-syntax.md),
-  [island parsing](docs/explanation/island-parsing.md),
-  [emission & semantics](docs/explanation/emission-and-semantics.md),
-  [tooling](docs/explanation/tooling.md),
-  [how this is tested](docs/explanation/how-it-is-tested.md).
+  [designing the syntax](https://linked-data-python.readthedocs.io/en/latest/explanation/designing-the-syntax/),
+  [island parsing](https://linked-data-python.readthedocs.io/en/latest/explanation/island-parsing/),
+  [emission & semantics](https://linked-data-python.readthedocs.io/en/latest/explanation/emission-and-semantics/),
+  [tooling](https://linked-data-python.readthedocs.io/en/latest/explanation/tooling/),
+  [how this is tested](https://linked-data-python.readthedocs.io/en/latest/explanation/how-it-is-tested/).
 
 Every `ldpy` and `python` block in the documentation is executed by the test
 suite, and its assertions are the test.

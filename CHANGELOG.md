@@ -1,5 +1,17 @@
 ## Release Notes
 
+### [0.2.1] — 2026-08-29
+
+- **Le chemin du fantôme est absolu** : `ldpy.debug --breakpoints` rendait un
+  chemin relatif, que VS Code enracinait à `/` — « Show transpiled Python »
+  échouait sur `/.ldpy-build/x.py`. Une sortie qui traverse un processus ne
+  peut pas être relative.
+- **La version n'est plus écrite en double** : elle vient de la distribution
+  installée. Les deux copies avaient dérivé, et un paquet 0.2.0 s'annonçait
+  `0.1.0.dev0` dans la barre d'état de l'éditeur.
+- **Documentation** : les liens du README pointent vers le site publié. En
+  relatif, ils ne menaient nulle part une fois la page rendue par PyPI.
+
 ### [0.2.0] — 2026-08-29
 
 **Le langage conçu depuis le corpus** : huit constructions nouvelles, chacune

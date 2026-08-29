@@ -211,9 +211,13 @@ def main(argv=None):
 
     if args.breakpoints:
         lines = [int(x) for x in args.breakpoints.split(",") if x.strip()]
+        # ABSOLUTE paths: this output crosses a process boundary, and a
+        # relative path means nothing to a reader that does not share our
+        # working directory. An editor turning ".ldpy-build/x.py" into a URI
+        # gets "/.ldpy-build/x.py", rooted at the filesystem root.
         print(json.dumps({
-            "shadow": py_path,
-            "map": map_path,
+            "shadow": os.path.abspath(py_path),
+            "map": os.path.abspath(map_path),
             "breakpoints": dict(zip(
                 lines, translate_breakpoints(result.map, lines)))}))
         return 0

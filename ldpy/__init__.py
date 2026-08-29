@@ -11,7 +11,19 @@ package but is no longer imported by default.
 from ldpy.transpiler import transpile, LdpySyntaxError, LdpyWarning
 from ldpy.importer import install, uninstall, install_excepthook
 
-__version__ = "0.1.0.dev0"
+#: Read from the installed distribution rather than written here: two copies
+#: of a version number drift, and this one had — a 0.2.0 install announced
+#: itself as 0.1.0.dev0 in the editor status bar. The fallback covers a source
+#: tree that was never installed.
+try:
+    from importlib.metadata import PackageNotFoundError, version as _version
+    try:
+        __version__ = _version("linked-data-python")
+    except PackageNotFoundError:                      # pragma: no cover
+        __version__ = "0.0.0+unknown"
+    del _version, PackageNotFoundError
+except ImportError:                                   # pragma: no cover
+    __version__ = "0.0.0+unknown"
 __date__ = "2026-08-26"
 
 

@@ -79,6 +79,10 @@ def test_cli_breakpoints_mode(tmp_path):
     d = json.loads(p.stdout)
     assert d["shadow"].endswith("prog.py")
     assert os.path.isfile(d["map"])
+    # absolute, because this output crosses a process boundary: an editor
+    # that turned a relative path into a URI would root it at "/"
+    assert os.path.isabs(d["shadow"]) and os.path.isabs(d["map"])
+    assert os.path.isfile(d["shadow"])
     assert d["breakpoints"]["2"] == 3
     assert d["breakpoints"]["5"] == 5    # prélude +1, effondrement du g{} -1
 

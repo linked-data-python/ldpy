@@ -55,3 +55,18 @@ def _missing(path):
 def test_public_api_documented(path):
     gaps = _missing(path)
     assert not gaps, "docstrings manquantes dans %s : %s" % (path, gaps)
+
+
+def test_version_comes_from_the_installed_distribution():
+    """Two copies of a version number drift, and this one did: a 0.2.0
+    install announced itself as 0.1.0.dev0 in the editor status bar."""
+    import ldpy
+    from importlib.metadata import version
+    assert ldpy.__version__ == version("linked-data-python")
+
+
+def test_probe_reports_that_same_version():
+    """`--probe` is what the VS Code status bar shows."""
+    from ldpy.debug import probe
+    import ldpy
+    assert probe()["version"] == ldpy.__version__
