@@ -12,6 +12,18 @@ import threading
 
 from ldpy.lsp.rpc import Endpoint, read_message, RpcClosed
 
+#: The backend judges GENERATED code. Style findings (line length, blank
+#: lines, continuation indents, semicolons…) describe the transpiler's
+#: output, not the user's source; re-projected onto the .ldpy they underline
+#: whole islands (record vscode/107). The shadow therefore opts out of every
+#: style plugin; semantic analyses (pyflakes' undefined names, unused
+#: imports) stay on.
+STYLE_PLUGINS = ("autopep8", "flake8", "mccabe", "pycodestyle",
+                 "pydocstyle", "pylint", "yapf")
+
+SHADOW_SETTINGS = {"pylsp": {"plugins": {
+    name: {"enabled": False} for name in STYLE_PLUGINS}}}
+
 
 class PythonBackend:
     """Lifecycle and delegation to `python -m pylsp` (or another argv)."""
@@ -45,6 +57,8 @@ class PythonBackend:
             }},
         }, timeout=30.0)
         self.endpoint.notify("initialized", {})
+        self.endpoint.notify("workspace/didChangeConfiguration",
+                             {"settings": SHADOW_SETTINGS})
         return self
 
     def _pump(self):

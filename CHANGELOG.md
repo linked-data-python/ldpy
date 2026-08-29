@@ -1,5 +1,18 @@
 ## Release Notes
 
+### [0.3.0] — 2026-08-29
+
+- **Le LSP ne relaie plus le style du code généré** : pylsp jugeait l'ombre
+  Python (lignes longues, indentation de continuation, points-virgules…) et
+  ses remontées, reprojetées sur le `.ldpy`, soulignaient des îlots entiers —
+  les « pâtés rouges » sur chaque îlot multi-lignes. Le serveur désactive
+  désormais les greffons de style du backend (pycodestyle, mccabe, flake8,
+  pylint, pydocstyle, autopep8, yapf) et filtre par défense ce qu'un backend
+  enverrait quand même ; les analyses sémantiques (pyflakes : noms non
+  définis, imports inutilisés) restent (fiche vscode/107).
+- **`serverInfo` du LSP annonce la version installée** au lieu d'une copie
+  écrite en dur — même règle que 0.2.1, appliquée au dernier endroit oublié.
+
 ### [0.2.1] — 2026-08-29
 
 - **Le chemin du fantôme est absolu** : `ldpy.debug --breakpoints` rendait un

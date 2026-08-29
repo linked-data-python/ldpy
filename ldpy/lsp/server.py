@@ -29,6 +29,12 @@ def fmt_default():
     from ldpy.formatter import DEFAULT_LINE_LENGTH
     return DEFAULT_LINE_LENGTH
 
+
+def _ldpy_version():
+    """The installed package version — never duplicated here."""
+    from ldpy import __version__
+    return __version__
+
 FORWARDED = {
     "textDocument/completion",
     "textDocument/definition",
@@ -123,13 +129,20 @@ class LdpyServer:
 
     def _on_backend_diags(self, shadow, diags):
         """The backend's Python diagnostics, re-projected onto the .ldpy.
-        Those landing on synthetic text (the prelude) are dropped."""
+        Those landing on synthetic text (the prelude) are dropped, and so is
+        everything a style linter says about the shadow: it judges GENERATED
+        code (record vscode/107). The backend is asked not to compute style
+        at all (SHADOW_SETTINGS); this filter covers a backend that does not
+        honour the configuration."""
+        from ldpy.lsp.backend import STYLE_PLUGINS
         doc = self.docs.get(tr.unshadow_uri(shadow))
         if doc is None or doc.result is None:
             return
         lmap = doc.result.map
         kept = []
         for d in diags:
+            if d.get("source") in STYLE_PLUGINS:
+                continue
             rng = d.get("range", {})
             start = tr.pos_to_ldpy(lmap, rng.get("start", {}))
             if start is None:
@@ -193,7 +206,7 @@ class LdpyServer:
                     # it instead of assuming it (record vscode/103)
                     "experimental": {"ldpyBreakpointLines": True},
                 },
-                "serverInfo": {"name": "ldpy-lsp", "version": "0.2.0"},
+                "serverInfo": {"name": "ldpy-lsp", "version": _ldpy_version()},
             }
         if method in ("initialized", "workspace/didChangeConfiguration",
                       "$/setTrace", "$/cancelRequest"):

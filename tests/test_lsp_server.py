@@ -247,6 +247,41 @@ def test_unknown_method_answered_not_fatal(lsp):
                        {"textDocument": {"uri": URI}})["data"] is not None
 
 
+def test_style_diagnostics_from_backend_are_dropped():
+    """A style linter judges the GENERATED shadow, not the user's source:
+    its findings, re-projected, would underline whole islands (record
+    vscode/107). Only semantic diagnostics (pyflakes…) come back."""
+    import io
+    from ldpy.lsp import translate as tr
+    from ldpy.lsp.server import Document, LdpyServer
+    from ldpy.transpiler import transpile
+
+    srv = LdpyServer(io.BytesIO(), io.BytesIO(), backend="none")
+    doc = Document(URI, "@prefix ex: <http://e/> .\nx = unknown_name\n", 1)
+    doc.result = transpile(doc.text, doc.uri)
+    srv.docs[URI] = doc
+    pos = tr.pos_to_py(doc.result.map, {"line": 1, "character": 4})
+    rng = {"start": pos, "end": dict(pos, character=pos["character"] + 3)}
+    srv._on_backend_diags(tr.shadow_uri(URI), [
+        {"range": rng, "source": "pycodestyle",
+         "message": "E501 line too long"},
+        {"range": rng, "source": "pyflakes",
+         "message": "undefined name 'unknown_name'"},
+    ])
+    assert [d["source"] for d in doc.py_diags] == ["pyflakes"]
+
+
+def test_backend_configuration_disables_style_plugins():
+    """The shadow settings sent at startup switch every style plugin off,
+    and leave pyflakes alone."""
+    from ldpy.lsp.backend import SHADOW_SETTINGS, STYLE_PLUGINS
+    plugins = SHADOW_SETTINGS["pylsp"]["plugins"]
+    assert "pycodestyle" in STYLE_PLUGINS
+    for name in STYLE_PLUGINS:
+        assert plugins[name] == {"enabled": False}
+    assert "pyflakes" not in plugins
+
+
 def test_native_only_mode_works_without_backend():
     c = Client(backend="none")
     try:

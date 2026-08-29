@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "linked-data-python"
-version = "0.2.1"
+version = "0.3.0"
 description = "Python extended with Semantic Web primitives: IRIs, RDF literals and Turtle-notation graphs as expressions, transpiled by island parsing."
 readme = "README.md"
 license = { text = "MIT" }
