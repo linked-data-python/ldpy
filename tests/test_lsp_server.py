@@ -131,7 +131,7 @@ def lsp():
 def test_initialize_capabilities(lsp):
     caps = lsp.caps["capabilities"]
     assert caps["hoverProvider"] is True
-    assert caps["semanticTokensProvider"]["legend"]["tokenTypes"]
+    assert "semanticTokensProvider" not in caps
     assert lsp.caps["serverInfo"]["name"] == "ldpy-lsp"
 
 
@@ -282,13 +282,10 @@ def test_references_translated_back(lsp):
     assert lines == [1, 2]
 
 
-# -------------------------------------------------------- semantic tokens
+# ------------------------------------------------------------ capabilities
 
-def test_semantic_tokens_full(lsp):
-    result = lsp.request("textDocument/semanticTokens/full",
-                         {"textDocument": {"uri": URI}})
-    data = result["data"]
-    assert data and len(data) % 5 == 0
+def test_textmate_remains_the_syntax_coloring_authority(lsp):
+    assert "semanticTokensProvider" not in lsp.caps["capabilities"]
 
 
 # ------------------------------------------------- robustesse / dégradation
@@ -297,8 +294,10 @@ def test_unknown_method_answered_not_fatal(lsp):
     assert lsp.request("textDocument/foldingRange",
                        {"textDocument": {"uri": URI}}) is None
     # le serveur répond encore ensuite
-    assert lsp.request("textDocument/semanticTokens/full",
-                       {"textDocument": {"uri": URI}})["data"] is not None
+    assert lsp.request("textDocument/hover", {
+        "textDocument": {"uri": URI},
+        "position": {"line": 0, "character": 2},
+    }) is not None
 
 
 def test_style_diagnostics_from_backend_are_dropped():

@@ -1,5 +1,14 @@
 ## Release Notes
 
+### [0.5.1] — 2026-09-01
+
+- **TextMate is the sole syntax-coloring authority in VS Code.** The language
+  server no longer publishes coarse semantic tokens that overrode the
+  `highlight-ldpy` grammar's scopes within composite islands.
+- **Direct-run tracebacks never expose the generated shadow file.** The
+  contract now verifies both the original `.ldpy` filename and source line,
+  and rejects `prog.py` in the traceback.
+
 ### [0.5.0] — 2026-08-29
 
 The hover panel says what an island *is* before it says what it becomes

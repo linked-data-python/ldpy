@@ -219,10 +219,6 @@ class LdpyServer:
                     "referencesProvider": True,
                     "signatureHelpProvider": {
                         "triggerCharacters": ["(", ","]},
-                    "semanticTokensProvider": {
-                        "legend": {"tokenTypes": tr.TOKEN_TYPES,
-                                   "tokenModifiers": []},
-                        "full": True},
                     # our own extension, announced so the client can detect
                     # it instead of assuming it (record vscode/103)
                     "experimental": {"ldpyBreakpointLines": True},
@@ -277,12 +273,6 @@ class LdpyServer:
             if doc is None or doc.result is None:
                 return {"lines": lines}
             return {"lines": snap_breakpoint_lines(doc.result.map, lines)}
-
-        if method == "textDocument/semanticTokens/full":
-            doc = self.docs.get(params["textDocument"]["uri"])
-            if doc is None or doc.result is None:
-                return {"data": []}
-            return {"data": tr.semantic_tokens(doc.result.map)}
 
         if method == "textDocument/hover":
             return self._hover(params)

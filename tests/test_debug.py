@@ -149,6 +149,7 @@ def test_run_direct_traceback_points_to_ldpy(tmp_path):
                   src="@prefix e: <http://e/> .\n\nboom()\n")
     assert p.returncode != 0
     assert 'prog.ldpy", line 3' in p.stderr
+    assert "prog.py" not in p.stderr
 
 
 def test_main_module_traceback_is_source_mapped(tmp_path):
