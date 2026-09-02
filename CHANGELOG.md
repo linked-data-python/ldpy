@@ -1,5 +1,15 @@
 ## Release Notes
 
+### [0.6.1] — 2026-09-02
+
+- **A tutorial that is a program**: `docs/tutorials/tour.ldpy`, one file you
+  run, whose comments introduce the notation section by section — declarations,
+  terms, `f<…>`, `g{ }`, the current graph with `+{ }` and `-{ }`, `m{ }`,
+  `e{ }`, `@bindings` over a CSV, `s{ }`, and back to rdflib. Each section
+  builds, prints and asserts what it claims, so running it to the end is the
+  proof. The page that shows it *includes* the file rather than copying it, and
+  the test suite runs it.
+
 ### [0.6.0] — 2026-09-02
 
 - **Documentation for the device.** A tutorial (run a programme on
