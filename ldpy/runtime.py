@@ -708,6 +708,30 @@ def new_graph(namespaces, base, identifier=None):
     return g
 
 
+def designate(namespaces, graph):
+    """'@graph EXPR' — the designated graph inherits the block's prefixes.
+
+    A graph CREATED by '@graph as g' already serialises with the prefixes in
+    scope (:func:`new_graph`); a graph merely DESIGNATED did not, so the same
+    block writing the same prefixed names into two graphs produced two
+    different serialisations. That was an inconsistency rather than a
+    decision, and record ldpy/027 settles it: both inherit.
+
+    The bindings are added to the graph's OWN manager, never by swapping it
+    for the shared cached one — a designated graph belongs to the caller and
+    may already carry bindings that matter. Anything that is not a graph, or
+    a backend without a namespace manager, passes through untouched: the
+    declaration's job is to designate, and it must not fail on the shape of
+    what it is given.
+    """
+    if namespaces:
+        try:
+            _backend.bind_namespaces(graph, namespaces)
+        except (AttributeError, TypeError):
+            pass                    # not a graph, or no binding support
+    return graph
+
+
 def add_to(graph, *triples, bindings=None):
     """'+{ ... }': instantiate and add to the current graph (record ldpy/014).
     A triple with a term still unbound is dropped — one cannot write an

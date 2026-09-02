@@ -27,6 +27,35 @@ host = "example.org"
 assert str(dyn:x) == "http://example.org/ns#x"
 ```
 
+### `as NAME` — when the namespace must survive as an object
+
+A prefix is lexical: it has no run-time object, and `ex:` on its own is never
+a value. That is deliberate — it keeps prefixed names checkable when the file
+is transpiled — but some code genuinely needs the `Namespace` *object*: to
+bind it on a graph it manages, to export it, to put it in a registry. `as`
+binds that object to a Python name, without changing what `ex:` means:
+
+```ldpy
+from rdflib import Graph
+@prefix ex: <http://example.org/ns#> as EX .
+registry = {"ex": EX}
+assert str(EX) == "http://example.org/ns#"
+assert EX.Thing == ex:Thing
+g = Graph()
+g.bind("ex", EX)
+```
+
+The name is an ordinary Python binding, so it follows Python's scope, and
+`global` / `nonlocal` in front of the declaration widen it like any other
+(see [scope modifiers](#scope-modifiers-global-and-nonlocal)). Choosing a
+name that differs from the prefix — `EX` for `ex:` — is the usual convention
+and avoids the warning the transpiler raises when a declared prefix and a
+Python name coincide.
+
+You rarely need it. Reach for `as` only when the object itself must travel:
+a `Namespace` that merely *produces* IRIs needs nothing, since the `URIRef`s
+it produces are ordinary values (record ldpy/027).
+
 ## `@base` — set the base IRI
 
 ```ldpy

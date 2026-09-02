@@ -288,3 +288,46 @@ def test_compound_suite_does_not_capture_python(run):
         """))
     assert g["n"] == 5 and g["d"] == {"a": 1}
     assert g["f"]("x") == "x" and g["keys"] == {"b"}
+
+
+# --------------------------------------------------------------- record 027
+# A graph CREATED by `@graph as g` already carried the block's prefixes; a
+# graph merely DESIGNATED carried none, so the same block writing the same
+# prefixed names into two graphs serialised them differently. The corpus
+# study met this as nineteen hand-written `g.bind()` calls in one function.
+
+def test_a_designated_graph_inherits_the_block_prefixes(run):
+    ns, _ = run("from rdflib import Graph\n"
+                "@prefix ex: <http://example.org/ns#> .\n"
+                "mine = Graph()\n"
+                "@graph mine\n"
+                "+{ ex:a ex:p 1 }\n")
+    assert ("ex", URIRef("http://example.org/ns#")) in list(
+        ns["mine"].namespaces())
+
+
+def test_created_and_designated_serialise_alike(run):
+    """The point of the fix: two graphs the same block fills the same way
+    must not differ in their serialisation."""
+    ns, _ = run("from rdflib import Graph\n"
+                "@prefix ex: <http://example.org/ns#> .\n"
+                "@graph as made\n"
+                "+{ ex:a ex:p 1 }\n"
+                "given = Graph()\n"
+                "@graph given\n"
+                "+{ ex:a ex:p 1 }\n")
+    assert "@prefix ex:" in ns["made"].serialize(format="turtle")
+    assert "@prefix ex:" in ns["given"].serialize(format="turtle")
+
+
+def test_designating_keeps_bindings_the_caller_already_had(run):
+    """A designated graph belongs to its caller: the block's prefixes are
+    ADDED to its own manager, never swapped for a shared one."""
+    ns, _ = run("from rdflib import Graph, Namespace\n"
+                "@prefix ex: <http://example.org/ns#> .\n"
+                "mine = Graph()\n"
+                'mine.bind("mine", Namespace("http://mine.example/"))\n'
+                "@graph mine\n"
+                "+{ ex:a ex:p 1 }\n")
+    got = {p for p, _ in ns["mine"].namespaces()}
+    assert "ex" in got and "mine" in got

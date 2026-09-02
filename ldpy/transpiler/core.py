@@ -1320,6 +1320,7 @@ class Transpiler:
         if end is None:
             return False
         k = self._skip_ws_ahead(end)
+        as_name, k = self._prefix_as_clause(k)
         if k >= self.n or t[k] != ".":
             return False
         # consommation effective
@@ -1348,8 +1349,39 @@ class Transpiler:
                                 scope_mode)
             gen = "__namespaces__[%r] = %s.Namespace(%r)" % (
                 prefix, RUNTIME_ALIAS, resolved)
+            if as_name:
+                # `as EX` binds the Namespace OBJECT to a Python name, for the
+                # code that needs it to survive the block (record ldpy/027).
+                gen = "__namespaces__[%r] = %s = %s.Namespace(%r)" % (
+                    prefix, as_name, RUNTIME_ALIAS, resolved)
+                if scope_mode:
+                    gen = "%s %s; %s" % (scope_mode, as_name, gen)
         self._end_island(kind, mark, gen)
         return True
+
+    def _prefix_as_clause(self, k):
+        """`as NAME` before a @prefix declaration's closing '.', or nothing.
+
+        `@prefix` is lexical and yields no Python value, which the corpus
+        study showed to be its most attested limit: code that must keep the
+        `Namespace` as an OBJECT — to `g.bind()` it, to export it, to put it
+        in a registry — had no translation at all (record ldpy/027). `as EX`
+        binds that object, without making a bare `ex:` a value (records
+        ldpy/002 and 004 refuse that, and still do).
+
+        Returns `(name, index after the clause)`; `(None, k)` when absent.
+        """
+        t = self.text
+        if t[k:k + 2] != "as":
+            return None, k
+        if k + 2 < self.n and _name_char(t[k + 2]):
+            return None, k                      # `assets`, not `as`
+        j = self._skip_ws_ahead(k + 2)
+        m = _PYNAME_RE.match(t, j)
+        if not m or j == k + 2:
+            self._error("nom Python attendu après 'as' dans la "
+                        "déclaration @prefix")
+        return m.group(0), self._skip_ws_ahead(m.end())
 
     def _prefix_firi_decl(self, j, prefix, scope_mode=None):
         """Consomme `@prefix p: f<...> .` (self.i sur '@', j sur 'f').
@@ -1579,7 +1611,10 @@ class Transpiler:
                     self._error("expression attendue après '@graph'")
                 if "\n" in expr:
                     self._error("l'expression de '@graph' tient sur sa ligne")
-                rhs = "(%s)" % expr
+                # The designated graph inherits the block's prefixes, exactly
+                # as a created one does (record ldpy/027).
+                rhs = "%s.designate(__namespaces__, (%s))" % (
+                    RUNTIME_ALIAS, expr)
         self._graph_ws_inline()
         if self._peek() not in "\n\r#;" and self._peek() != "":
             self._error("fin de ligne attendue après la déclaration @graph")

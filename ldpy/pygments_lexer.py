@@ -254,6 +254,10 @@ _NO_CURRENT_GRAPH = re.compile(r"sans graphe courant")
 #: input from looping.
 _MAX_SYNTHETIC = 24
 
+#: `as EX` closing a prefix declaration (record ldpy/027).
+_PREFIX_AS_RE = re.compile(
+    r"(>)(\s+)(as)(\s+)([A-Za-z_]\w*)(?=\s*\.)")
+
 #: Namespace of the synthetic prefixes. Never resolved — the map is thrown
 #: away after the tokens are read — but it has to be a legal IRI.
 _SYNTHETIC_NS = "urn:x-ldpy-highlight:"
@@ -400,10 +404,26 @@ class LdpyLexer(Lexer):
 
     # -- the ldpy-specific regions of an island body -------------------------
 
+    def _emit_prefix_as(self, text, m):
+        """The `as EX` of a prefix declaration: a keyword and a Python name."""
+        def emit(offset):
+            yield offset + m.start(3), Keyword, m.group(3)
+            yield offset + m.end(3), Text, m.group(4)
+            yield offset + m.start(5), Name.Variable, m.group(5)
+        return emit
+
     def _regions(self, text, flavour, is_query=False):
         """Locate what no Turtle or SPARQL lexer can read: interpolations and
         nested islands. Each becomes a (start, end, emit) region."""
         regions = []
+        if flavour == "turtle":
+            # `@prefix ex: <IRI> as EX .` (record ldpy/027): Turtle's own
+            # lexer knows the directive but not the clause, and would mark it
+            # Error. Mask it and emit it ourselves.
+            m = _PREFIX_AS_RE.search(text)
+            if m:
+                regions.append((m.start(3), m.end(5),
+                                self._emit_prefix_as(text, m)))
         i, n = 0, len(text)
         while i < n:
             c = text[i]

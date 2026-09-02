@@ -35,6 +35,24 @@ assert len(mine) == 1
 assert str(named.identifier) == "http://example.org/g1"
 ```
 
+Either form gives the graph the **prefixes in scope**, so it serialises with
+them and you never have to `bind()` them by hand:
+
+```ldpy
+@prefix ex: <http://example.org/ns#> .
+from rdflib import Graph
+mine = Graph()
+@graph mine
++{ ex:a ex:p 1 }
+assert "@prefix ex:" in mine.serialize(format="turtle")
+```
+
+For a designated graph the prefixes are *added* to the bindings it already
+carries — it belongs to its caller, and nothing it had is discarded. Until
+0.6.3 only a *created* graph inherited them, so the same block filling two
+graphs the same way serialised them differently; that was an inconsistency
+rather than a decision (record ldpy/027).
+
 The identifier is nothing more than rdflib's `Graph(identifier=…)`
 constructor parameter. `@graph` designates *a* graph, possibly named — never
 a dataset or a space of graphs; that usage was measured at 6.8 % of graph

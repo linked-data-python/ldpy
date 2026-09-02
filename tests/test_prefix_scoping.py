@@ -300,3 +300,50 @@ def test_never_declared_prefix_gives_no_warning():
     r = transpile("d = {foo:bar}\nx = arr[i:j]\n")
     assert r.warnings == []
     assert r.code == "d = {foo:bar}\nx = arr[i:j]\n"
+
+# --------------------------------------------------------------- record 027
+# `@prefix` is lexical and yields no Python value, which the corpus study
+# showed to be its most attested limit: code that must keep the Namespace as
+# an OBJECT — to `g.bind()` it, to export it, to put it in a registry — had
+# no translation at all. `as EX` binds that object. A bare `ex:` is still
+# never a value (records ldpy/002 and 004).
+
+def test_as_binds_the_namespace_object(run):
+    ns, _ = run("@prefix ex: <http://example.org/ns#> as EX .\n"
+                "iri = EX.Thing\n"
+                "prefixed = ex:Thing\n")
+    assert str(ns["EX"]) == "http://example.org/ns#"
+    assert ns["iri"] == ns["prefixed"]
+
+
+def test_as_serves_the_three_forms_the_corpus_needed(run):
+    ns, _ = run("from rdflib import Graph\n"
+                "@prefix ex: <http://example.org/ns#> as EX .\n"
+                "g = Graph()\n"
+                "g.bind('ex', EX)\n"
+                "registry = {'ex': EX}\n"
+                "exported = EX\n")
+    assert ("ex", URIRef("http://example.org/ns#")) in list(
+        ns["g"].namespaces())
+    assert ns["registry"]["ex"] is ns["exported"]
+
+
+def test_the_prefix_still_works_without_as(run):
+    ns, _ = run("@prefix ex: <http://example.org/ns#> .\n"
+                "t = ex:Thing\n")
+    assert str(ns["t"]) == "http://example.org/ns#Thing"
+    assert "EX" not in ns
+
+
+def test_as_needs_a_name():
+    with pytest.raises(LdpySyntaxError) as e:
+        transpile("@prefix ex: <http://example.org/> as .\n", "t.ldpy")
+    assert "as" in e.value.msg
+
+
+def test_a_prefix_named_as_something_is_not_an_as_clause(run):
+    """`as` must be a whole word: a declaration is not broken by an IRI
+    followed by nothing, nor by a name that merely starts with 'as'."""
+    ns, _ = run("@prefix ex: <http://example.org/ns#> as assets .\n"
+                "t = ex:Thing\n")
+    assert str(ns["assets"]) == "http://example.org/ns#"

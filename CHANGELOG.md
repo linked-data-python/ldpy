@@ -1,5 +1,30 @@
 ## Release Notes
 
+### [0.6.3] — 2026-09-02
+
+Two answers to the limit the corpus study attested most: `@prefix` is
+lexical, so it produces no Python value, and code that needs the `Namespace`
+as an **object** had no translation at all (record ldpy/027).
+
+- **A designated graph now inherits the block's prefixes.** A graph created
+  by `@graph as g` already serialised with them; one merely designated by
+  `@graph mine` carried none, so the same block filling two graphs the same
+  way serialised them differently. That was an inconsistency rather than a
+  decision. The prefixes are *added* to the graph's own bindings — it belongs
+  to its caller, and nothing it had is discarded. This removes the reason for
+  most hand-written `g.bind()` calls; one function in the corpus had
+  nineteen.
+- **`@prefix ex: <IRI> as EX .`** binds the `Namespace` object to a Python
+  name, for the code that must keep it: to `bind()` it on a graph it manages,
+  to export it, to put it in a registry. A bare `ex:` is still never a value.
+  The name follows Python's scope, and `global` / `nonlocal` widen it like
+  any other declaration.
+
+You rarely need `as`. A `Namespace` that merely *produces* IRIs needs
+nothing — the `URIRef`s it produces are ordinary values, and two regions in
+three of the corpus stratum that looked blocked were expressible for exactly
+that reason.
+
 ### [0.6.2] — 2026-09-02
 
 Bug fixes only, all found by the corpus study and all reproduced by hand

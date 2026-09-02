@@ -45,11 +45,13 @@ ISLANDS = {
     # -- declarations -------------------------------------------------------
 
     "prefix": IslandDoc(
-        "(declaration) @prefix ex: <IRI> .",
+        "(declaration) @prefix ex: <IRI> [as EX] .",
         "Binds `ex:` to a namespace IRI for the rest of the enclosing block. "
-        "A prefix is lexical: it has no run-time object, and `ex:` on its own "
-        "is never a value. Declaring it again in a deeper block shadows it, "
-        "the way a Python name would.",
+        "A prefix is lexical: `ex:` on its own is never a value. When the "
+        "code needs the Namespace as an OBJECT — to `bind()` it on a graph, "
+        "to export it, to put it in a registry — `as EX` binds that object "
+        "to a Python name too. Declaring the prefix again in a deeper block "
+        "shadows it, the way a Python name would.",
         _DECLS, "prefix-bind-a-prefix"),
 
     "base": IslandDoc(
@@ -69,7 +71,9 @@ ISLANDS = {
         "(declaration) @graph EXPR | @graph as NAME -> Graph",
         "Designates the current graph for the block — the one `+{ }`, `-{ }` "
         "and a receiver-less `m{ }` act on. `as NAME` creates a fresh graph "
-        "and binds it to NAME; `global` and `nonlocal` widen the scope.",
+        "and binds it to NAME; `global` and `nonlocal` widen the scope. "
+        "Either way the graph inherits the block's prefixes, so it "
+        "serialises with them.",
         _CURRENT, "graph-designate-or-create"),
 
     "bindings-decl": IslandDoc(
