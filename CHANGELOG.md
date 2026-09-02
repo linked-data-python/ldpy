@@ -1,5 +1,30 @@
 ## Release Notes
 
+### [0.5.2] — 2026-09-02
+
+- **The interactive console keeps the current graph between entries.** A
+  top-level `@graph` is a lexical declaration like `@prefix`, and it now
+  survives the entry that declares it, together with the current bindings and
+  the fresh-variable counter — so `@graph as g` on one line and `+{ ... }` on
+  the next write to the same graph, as they do in a file. The documentation's
+  snippets are now replayed a second time, typed line by line into the
+  console, by the same test that runs them as files.
+- **`@graph as g` no longer hangs the console.** Skipping inline whitespace
+  tested `self._peek() in " \t"`, and `"" in " \t"` is true in Python: at the
+  end of a buffer with no trailing newline the loop consumed nothing, for
+  ever. Two other sites had the same defect, one of which turned `BOUND(` at
+  end of buffer into an `AttributeError` instead of a syntax error.
+- **A semantic error is no longer mistaken for an unfinished entry.** The
+  console distinguishes the two by `at_eof`, which was set from the cursor
+  position alone; an error such as `'+{ ... }' without a current graph`, which
+  more input cannot repair, is now reported at once.
+- **`+{ }` and `-{ }` are statements, and print nothing.** `add_to` and
+  `remove_from` no longer return the graph, which the console echoed after
+  every addition.
+- **`ldpy.debug --root DIR`**: the shadow mirrors the tree under DIR, so one
+  build directory can hold a whole workspace without `a/m.ldpy` and
+  `b/m.ldpy` claiming the same `m.py`.
+
 ### [0.5.1] — 2026-09-01
 
 - **TextMate is the sole syntax-coloring authority in VS Code.** The language
