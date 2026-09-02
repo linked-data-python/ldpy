@@ -70,6 +70,12 @@ class LdpyConsole(code.InteractiveConsole):
         self._prefixes = dict(prefixes or {})
         self._prefix_cols = {k: 0 for k in self._prefixes}
         self._base = base
+        # The current graph and the current bindings are declarations too:
+        # like @prefix, a top-level @graph must survive to the next entry
+        # (otherwise `+{ ... }` after `@graph as g` sees no graph at all).
+        self._graph_var = None
+        self._bindings_var = None
+        self._counter = 0
 
     def runsource(self, source, filename=None, symbol="single"):
         """Transpile then compile one entry; True = incomplete entry
@@ -79,6 +85,10 @@ class LdpyConsole(code.InteractiveConsole):
         t.prefixes = dict(self._prefixes)
         t._prefix_col = dict(self._prefix_cols)
         t.base = self._base
+        t._graph_var = self._graph_var
+        t._bindings_var = self._bindings_var
+        # fresh names must not collide with those of the previous entries
+        t._ns_counter = self._counter
         try:
             result = t.run()
         except LdpySyntaxError as e:
@@ -98,6 +108,9 @@ class LdpyConsole(code.InteractiveConsole):
         self._prefixes = dict(t.prefixes)
         self._prefix_cols = dict(t._prefix_col)
         self._base = t.base
+        self._graph_var = t._graph_var
+        self._bindings_var = t._bindings_var
+        self._counter = t._ns_counter
         for w in result.warnings:
             self.write(str(w) + "\n")
         self.runcode(code_obj)

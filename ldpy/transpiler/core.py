@@ -345,13 +345,16 @@ class Transpiler:
         self.operand = False
         self.stmt_start = False
 
-    def _error(self, msg, line=None, col=None):
+    def _error(self, msg, line=None, col=None, incomplete=True):
         exc = LdpySyntaxError(msg, self.filename,
                               self.src_line if line is None else line,
                               self.src_col if col is None else col)
         # la console s'en sert pour distinguer « entrée incomplète » (îlot
-        # non fermé en fin de tampon) d'une vraie erreur de syntaxe
-        exc.at_eof = self.i >= self.n
+        # non fermé en fin de tampon) d'une vraie erreur de syntaxe.
+        # `incomplete=False` : erreur qu'une suite d'entrée ne répare pas
+        # (elle porte sur ce qui a déjà été lu), même si le curseur est en
+        # fin de tampon — sinon la console attendrait indéfiniment.
+        exc.at_eof = incomplete and self.i >= self.n
         raise exc
 
     def _warn(self, msg):
@@ -675,7 +678,7 @@ class Transpiler:
             if re.match(r"@(prefix|base|graph|bindings)\b", t[j:j + 10]):
                 self._close_copy()
                 self._take(m.end() - self.i)        # le mot-clé
-                while self._peek() in " \t":
+                while self._peek() in (" ", "\t"):
                     self._take(1)
                 if not self._try_prefix_or_base(scope_mode=name):
                     self._error("déclaration d'îlot attendue après "
@@ -1388,7 +1391,8 @@ class Transpiler:
             if not encl:
                 what = "prefix %s:" % name if kind == "prefix" else kind
                 self._error("nonlocal @%s : aucune déclaration englobante "
-                            "(comme le nonlocal de Python)" % what)
+                            "(comme le nonlocal de Python)" % what,
+                            incomplete=False)
             keep = encl[-1]
             target_col = self._scope_stack[keep][0]
             touched = [i for i in matches if i > keep]
@@ -1562,7 +1566,7 @@ class Transpiler:
         return self._take(m.end() - self.i)
 
     def _graph_ws_inline(self):
-        while self._peek() in " \t":
+        while self._peek() in (" ", "\t"):
             self._take(1)
 
     def _addremove_island(self, sign):
@@ -1581,7 +1585,7 @@ class Transpiler:
             self._error("'%s{ ... }' sans graphe courant : déclarez-le avec "
                         "'@graph <expression>' ou '@graph as g' (fiche 014), "
                         "ou donnez-le en suffixe — %s{ ... }(g)"
-                        % (sign, sign))
+                        % (sign, sign), incomplete=False)
         bvar = sfx_bindings if sfx_bindings else self._bindings_var
         fn = "add_to" if sign == "+" else "remove_from"
         args = [gvar]
@@ -2482,7 +2486,7 @@ class Transpiler:
             if word.upper() == "BOUND" and after == "(":
                 self._take(len(word) + 1)
                 self._e_ws()
-                if self._peek() not in "?$":
+                if self._peek() not in ("?", "$"):
                     self._error("BOUND attend une variable ?v")
                 self._take(1)
                 vm = _NAME_RE.match(t, self.i)

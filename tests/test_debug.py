@@ -170,3 +170,44 @@ def test_cli_under_real_debugpy(tmp_path):
     p = run_debug(tmp_path, ["--listen", "127.0.0.1:0"])
     assert p.returncode == 0, p.stderr
     assert p.stdout.strip().endswith("2")
+
+
+# ------------------------------------------------- où le .py est matérialisé
+
+def test_shadow_rel_without_root_is_the_basename():
+    from ldpy.debug import shadow_rel
+    assert shadow_rel("/w/a/m.ldpy") == "m.ldpy"
+
+
+def test_shadow_rel_mirrors_the_tree_under_the_root():
+    from ldpy.debug import shadow_rel
+    assert shadow_rel(os.path.join("/w", "a", "m.ldpy"), "/w") == \
+        os.path.join("a", "m.ldpy")
+
+
+def test_shadow_rel_never_climbs_out_of_the_output_directory():
+    """A source outside the root would give '../…': the shadow would land
+    beside the build directory instead of inside it."""
+    from ldpy.debug import shadow_rel
+    assert shadow_rel("/elsewhere/m.ldpy", "/w") == "m.ldpy"
+
+
+def test_cli_root_keeps_same_named_files_apart(tmp_path):
+    """One build directory for the whole workspace: `a/m.ldpy` and
+    `b/m.ldpy` must not both write `m.py`."""
+    out = tmp_path / "build"
+    shadows = []
+    for folder in ("a", "b"):
+        d = tmp_path / folder
+        d.mkdir()
+        (d / "m.ldpy").write_text(SRC)
+        env = dict(os.environ, PYTHONPATH=REPO)
+        p = subprocess.run(
+            [sys.executable, "-m", "ldpy.debug", str(d / "m.ldpy"),
+             "-o", str(out), "--root", str(tmp_path), "--breakpoints", "2"],
+            capture_output=True, text=True, cwd=REPO, env=env, timeout=120)
+        assert p.returncode == 0, p.stderr
+        shadows.append(json.loads(p.stdout)["shadow"])
+    assert len(set(shadows)) == 2
+    assert all(os.path.isfile(s) for s in shadows)
+    assert os.path.basename(os.path.dirname(shadows[0])) == "a"

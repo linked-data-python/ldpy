@@ -92,9 +92,28 @@ def probe():
 #: re-exported: debug tooling looks for them here (pure functions, defined
 #: alongside the map in ldpy/transpiler/linemap.py)
 __all__ = ["stepping_rules", "probe", "package_dir", "load_map",
+           "shadow_rel",
            "translate_breakpoints", "translate_frames",
            "snap_breakpoint_line", "snap_breakpoint_lines",
            "run_direct", "main"]
+
+
+def shadow_rel(source, root=None):
+    """Path of the shadow inside the output directory.
+
+    Without a root, the basename: the shadow sits beside the source, and two
+    files never meet. With one — a workspace whose whole build is gathered in
+    a single directory — the tree is mirrored, which is what keeps `a/m.ldpy`
+    and `b/m.ldpy` from writing the same `m.py`. A source outside the root
+    falls back to its basename rather than climbing out of the output
+    directory with `../`."""
+    name = os.path.basename(source)
+    if not root:
+        return name
+    rel = os.path.relpath(os.path.abspath(source), os.path.abspath(root))
+    if rel.startswith(os.pardir + os.sep) or rel == os.pardir:
+        return name
+    return rel
 
 
 def load_map(map_path):
@@ -167,6 +186,10 @@ def main(argv=None):
                              "straight in the .ldpy)")
     parser.add_argument("-o", "--out", default=DEFAULT_OUT,
                         help="shadow directory (default: %(default)s)")
+    parser.add_argument("--root", metavar="DIR",
+                        help="tree root the shadow mirrors: the .py is "
+                             "written at OUT/<path of the source relative "
+                             "to DIR> (default: OUT/<basename>)")
     parser.add_argument("--listen", metavar="HOTE:PORT",
                         help="start debugpy listening (e.g. 127.0.0.1:5678)")
     parser.add_argument("--wait-for-client", action="store_true",
@@ -201,8 +224,7 @@ def main(argv=None):
 
     try:
         py_path, map_path, result = build_file(
-            args.source, args.out,
-            rel=os.path.basename(args.source))
+            args.source, args.out, rel=shadow_rel(args.source, args.root))
     except LdpySyntaxError as e:
         print(str(e), file=sys.stderr)
         return 1

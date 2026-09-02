@@ -641,7 +641,6 @@ def add_to(graph, *triples, bindings=None):
         s2, p2, o2 = term(s), term(p), term(o)
         if s2 is not None and p2 is not None and o2 is not None:
             graph.add((s2, p2, o2))
-    return graph
 
 
 def remove_from(graph, *patterns, bindings=None):
@@ -665,13 +664,12 @@ def remove_from(graph, *patterns, bindings=None):
                     to_remove.add(inst)
         for tr in to_remove:
             graph.remove(tr)
-        return graph
+        return
     term = _materializer(bindings, keep_vars=True)
     for s, p, o in patterns:
         tr = tuple(None if isinstance(x, (Variable, bn)) else x
                    for x in (term(s), term(p), term(o)))
         graph.remove(tr)
-    return graph
 
 
 def graph(namespaces, base, *triples, bindings=None):

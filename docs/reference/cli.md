@@ -35,9 +35,15 @@ files in a tree are copied so mixed packages stay importable.
 
 ```text
 python -m ldpy.debug --run SOURCE [-- args...]
-python -m ldpy.debug SOURCE [-o OUT] [--listen H:P] [--wait-for-client]
-                     [--breakpoints L1,L2,...] [-- args...]
+python -m ldpy.debug SOURCE [-o OUT] [--root DIR] [--listen H:P]
+                     [--wait-for-client] [--breakpoints L1,L2,...]
+                     [-- args...]
 ```
+
+`--root DIR` says the shadow mirrors the tree under DIR: the `.py` goes to
+`OUT/<path of SOURCE relative to DIR>` instead of `OUT/<basename>`, which is
+what lets one build directory hold a whole workspace without `a/m.ldpy` and
+`b/m.ldpy` claiming the same `m.py`.
 
 `--run` executes SOURCE in-process, compiled in `.ldpy` coordinates
 (mapped compilation, fiche 011) — under pdb/debugpy, breakpoints bind on

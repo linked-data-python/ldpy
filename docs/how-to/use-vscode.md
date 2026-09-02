@@ -25,13 +25,29 @@ through the language server, and run/debug commands.
 |---|---|---|
 | `ldpy.pythonPath` | *(empty)* | interpreter carrying ldpy, the LSP, debugpy, black |
 | `ldpy.backend` | `pylsp` | Python language server for delegation, or `none` |
-| `ldpy.buildDirectory` | `.ldpy-build` | where shadow `.py` files are built |
+| `ldpy.buildDirectory` | `.ldpy-build` | where shadow `.py` files are built (see below) |
 | `ldpy.lineLength` | `88` | line length used by the formatter |
 | `ldpy.hover.showTranslation` | `true` | show the generated Python in the hover panel |
 | `ldpy.trace.server` | `off` | log the LSP traffic, for bug reports |
 
 Changing the first three restarts the language server; the others are
 applied live.
+
+### Where the generated Python lands
+
+Debugging materialises nothing: `Run` and `Debug` compile the `.ldpy` in its
+own coordinates and run it in place. Only **Show Transpiled Python** (and
+`python -m ldpy.build`) writes a file, and `ldpy.buildDirectory` says where:
+
+- a **relative** path hangs from the workspace folder of the file —
+  `.ldpy-build/` at the root of the project, mirroring its tree, so the
+  generated code stays inside the workspace and never appears beside a source
+  file in some subdirectory;
+- an **absolute** path is used as it is (a scratch directory outside the
+  project, if that is what you want);
+- a file opened outside any workspace folder builds beside itself.
+
+The directory is generated code: add it to `.gitignore`.
 
 ## Hovering
 
