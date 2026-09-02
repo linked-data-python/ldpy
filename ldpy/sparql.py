@@ -11,14 +11,14 @@ later, against a *solution mapping*:
 The semantics follow SPARQL 1.1: numeric promotion (integer < decimal <
 float < double, integer division -> decimal), errors PROPAGATED (unbound
 variable, incomparable types) and absorbed by ``||``/``&&``/``IF``/
-``COALESCE`` per SPARQL's three-valued truth table. No rdflib parser is used;
-rdflib only serves as the data model.
+``COALESCE`` per SPARQL's three-valued truth table. No parser of any RDF
+library is used: the terms come from ``ldpy.backend`` — rdflib or urdflib —
+so these expressions run on a device as well as on the host.
 """
 
 import re as _re
 
-from rdflib import BNode, Literal, URIRef, Variable, XSD
-from rdflib.term import Node
+from ldpy.backend import BNode, Literal, URIRef, Variable, XSD, Node
 
 from ldpy.runtime import node as _node
 

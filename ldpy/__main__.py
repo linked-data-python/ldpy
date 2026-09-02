@@ -30,6 +30,9 @@ def main(argv=None):
                         help="open the interactive console after the script.")
     parser.add_argument("-m", "--map", action="store_true",
                         help="also write the language map (<source>.map).")
+    parser.add_argument("--target", choices=["micropython"], default=None,
+                        help="transpile for a device: s{ } is refused here, "
+                             "at build time, where the message can be read.")
     parser.add_argument("source", nargs="?",
                         help=".ldpy (or .py) file to run.")
     args = parser.parse_args(argv)
@@ -45,7 +48,7 @@ def main(argv=None):
     with open(args.source, "r", encoding="utf-8") as f:
         source = f.read()
     try:
-        result = transpile(source, args.source)
+        result = transpile(source, args.source, target=args.target)
     except LdpySyntaxError as e:
         print(str(e), file=sys.stderr)
         return 1

@@ -1,5 +1,27 @@
 ## Release Notes
 
+### [Unreleased]
+
+- **The façade has a backend, and the backend can be urdflib.** The
+  generated code always went through `ldpy.runtime`; that module now takes
+  its terms and graphs from `ldpy.backend`, which is rdflib when rdflib
+  imports and [urdflib](https://github.com/linked-data-python/urdflib) on a
+  MicroPython device. `Namespace`, `RDF` and `XSD` are provided in Python
+  where the C module has none; the emitted graph is lazy over rdflib and
+  eager over urdflib, whose graphs add in place at C speed; the `Row` of an
+  `m{ }` no longer needs `tuple.__new__`, which MicroPython lacks.
+- **`--target micropython`** (`ldpy`, `ldpy.build`, `transpile(...,
+  target=)`): `s{ }` is refused at build time, on the host, where the message
+  can be read — a SPARQL query needs rdflib's engine, and the device has
+  none; `e{ }` and `m{ }` are pure Python over the terms and stay. The build
+  copies the device runtime (`runtime.py`, `backend.py`, `sparql.py`, a
+  minimal `__init__.py`) next to the emitted files, so that what is shipped
+  and what it imports travel together (record ldpy/026).
+- **The same programme runs on MicroPython.** `tests/test_target_micropython.py`
+  transpiles a programme with `+{ }`, `m{ }`, `e{ }` and `serialize()`,
+  runs it on a MicroPython built with urdflib (`LDPY_MICROPYTHON`) and gets
+  the host's answer.
+
 ### [0.5.2] — 2026-09-02
 
 - **The interactive console keeps the current graph between entries.** A

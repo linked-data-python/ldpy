@@ -217,7 +217,18 @@ def _term_kind(text):
 class Transpiler:
     """Une instance par fichier. Usage : Transpiler(src, filename).run()."""
 
-    def __init__(self, text, filename="<ldpy>", emit_prelude=True):
+    #: The targets a programme can be transpiled for. `None` is the host;
+    #: "micropython" is a device whose backend has no SPARQL engine, so
+    #: s{ } is refused HERE, at build time on the host, where the message
+    #: can be read — not on the device, at the first query.
+    TARGETS = (None, "micropython")
+
+    def __init__(self, text, filename="<ldpy>", emit_prelude=True,
+                 target=None):
+        if target not in self.TARGETS:
+            raise ValueError("unknown target %r (one of %s)"
+                             % (target, ", ".join(repr(t) for t in self.TARGETS)))
+        self.target = target
         self.text = text
         self.emit_prelude = emit_prelude
         self.n = len(text)
@@ -2090,6 +2101,11 @@ class Transpiler:
         transpilation (l'oracle, fiche 015)."""
         mark = self._begin_island()
         isl_line, isl_col = self.src_line, self.src_col
+        if self.target == "micropython":
+            self._error("s{ } is not available on the micropython target: "
+                        "a SPARQL query needs rdflib's engine, which the "
+                        "device does not have — write the pattern with "
+                        "m{ } and the filter with e{ }", incomplete=False)
         self._take(2)                                   # s{
         t = self.text
         pieces = []
@@ -2697,9 +2713,10 @@ class _GraphCtx:
         return "%s.bn(%d)" % (RUNTIME_ALIAS, self.labels[label])
 
 
-def transpile(source, filename="<ldpy>"):
+def transpile(source, filename="<ldpy>", target=None):
     """Transpile un source Linked-Data Python en Python.
 
+    `target` : None (l'hôte) ou "micropython" — voir Transpiler.TARGETS.
     Retourne un TranspileResult(code, map, prefixes, base, warnings).
     """
-    return Transpiler(source, filename).run()
+    return Transpiler(source, filename, target=target).run()
