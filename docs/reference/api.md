@@ -6,9 +6,11 @@
 from ldpy.transpiler import transpile, LdpySyntaxError, LdpyWarning, LanguageMap
 ```
 
-### `transpile(source, filename="<ldpy>") -> TranspileResult`
+### `transpile(source, filename="<ldpy>", target=None) -> TranspileResult`
 
-Transpiles a Linked-Data Python source string. Raises `LdpySyntaxError`
+Transpiles a Linked-Data Python source string. `target` is `None` (the host)
+or `"micropython"`, which refuses `s{ }` with an `LdpySyntaxError` and emits
+everything else unchanged (see [running on a device](../explanation/running-on-a-device.md)). Raises `LdpySyntaxError`
 (a `SyntaxError` subclass with 1-based `lineno`/`offset` and 0-based
 `line`/`col`) on invalid island syntax. Never executes anything.
 
@@ -39,6 +41,21 @@ Bidirectional position mapping (0-based lines/columns, exclusive ends).
 | `to_json()` / `from_json(s)` | JSON v1 (segments) |
 | `to_sourcemap_v3()` / `to_sourcemap_v3_json()` | standard Source Map v3 |
 
+## `ldpy.backend`
+
+```python
+from ldpy import backend
+assert backend.NAME in ("rdflib", "urdflib") and backend.HAS_SPARQL == (backend.NAME == "rdflib")
+```
+
+The RDF library under the façade, chosen by what imports: rdflib on
+CPython, [urdflib](https://github.com/linked-data-python/urdflib) on
+MicroPython. Exports `URIRef, BNode, Literal, Variable, Node, Graph,
+Namespace, RDF, XSD`, the flags `NAME`, `HAS_SPARQL`,
+`HAS_NAMESPACE_MANAGER`, and `new_graph(base, identifier)`,
+`bind_namespaces(graph, namespaces)`, `prepare_sparql(text, namespaces,
+update)`. Its public names are the contract a backend must meet.
+
 ## `ldpy.runtime`
 
 The façade the generated code calls (imported as `_ldpy_`); also usable
@@ -50,8 +67,8 @@ directly: `URIRef, Literal, Variable, Namespace, RDF` re-exports, plus
 - `pname(ns, *parts)` — dynamic prefixed name (imported or computed prefix);
 - `dtype(value)` — coerce a value to a datatype IRI (`{expr}` after `^^`);
   unlike `node`, a `str` becomes a `URIRef`, never a `Literal`;
-- `graph(namespaces, base, *triples, bindings=None)` — build an
-  `rdflib.Graph` from flattened triples with `bn(i)`/`slot(i, expr)`
+- `graph(namespaces, base, *triples, bindings=None)` — build a graph of
+  the backend from flattened triples with `bn(i)`/`slot(i, expr)`
   placeholders; with `bindings`, templates are instantiated;
 - `new_graph(namespaces, base, identifier=None)` — the graph created by
   `@graph as g`, serialization prefixes bound;

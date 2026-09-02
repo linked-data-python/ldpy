@@ -185,3 +185,11 @@ assert len(g) == 2
 Validation needs rdflib at transpile time. Without it the island is emitted
 anyway, with a warning: the transpiler never *depends* on rdflib to parse the
 language — it only uses it as an oracle.
+
+### On a device
+
+`s{ }` is the one island that needs rdflib at **run** time — its engine. A
+build with `--target micropython` therefore refuses it, on the host, with a
+message that names `m{ }` and `e{ }`; those two run on
+[urdflib](https://github.com/linked-data-python/urdflib) as they do here. See
+[running on a device](../../explanation/running-on-a-device.md).

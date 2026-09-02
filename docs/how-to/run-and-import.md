@@ -10,7 +10,8 @@ ldpy -i program.ldpy                   # then drop into the console
 ```
 
 `ldpy` and `python -m ldpy` are the same command; the console script comes with
-the package.
+the package. To run on MicroPython instead, build with `--target micropython`:
+see [build for MicroPython](build-for-micropython.md).
 
 ## Import `.ldpy` modules from Python
 

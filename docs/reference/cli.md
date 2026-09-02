@@ -8,7 +8,7 @@ without the scripts being on `PATH`.
 ## `python -m ldpy` — run, transpile, or open a console
 
 ```text
-python -m ldpy [-s] [-t] [-i] [-m] [source]
+python -m ldpy [-s] [-t] [-i] [-m] [--target micropython] [source]
 ```
 
 | Flag | Effect |
@@ -20,16 +20,21 @@ python -m ldpy [-s] [-t] [-i] [-m] [source]
 | `-i, --interactive` | open the console after the script, with its globals and prefixes |
 | `-m, --map` | also write `<source>.map` (language map JSON) |
 | `-v, --version` | print the version |
+| `--target micropython` | build for a device: `s{ }` is refused here, at build time — see [build for MicroPython](../how-to/build-for-micropython.md) |
 
 ## `python -m ldpy.build` — shadow files and maps
 
 ```text
-python -m ldpy.build SOURCE [-o OUT]      # file or directory (default OUT: .ldpy-build)
+python -m ldpy.build SOURCE [-o OUT] [--target micropython]   # file or directory (default OUT: .ldpy-build)
 ```
 
 For each `module.ldpy`: writes `module.py` (shadow), `module.ldpy.map`
 (language map, JSON v1) and `module.py.map` (Source Map v3). Plain `.py`
 files in a tree are copied so mixed packages stay importable.
+
+`--target micropython` refuses `s{ }` and copies the device runtime
+(`runtime.py`, `backend.py`, `sparql.py`, a minimal `__init__.py`) into
+`OUT/ldpy/`, so that the emitted files and what they import travel together.
 
 ## `python -m ldpy.debug` — run under a debugger
 

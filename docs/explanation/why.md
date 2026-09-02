@@ -18,14 +18,15 @@ Here is the same function twice. Seven triples, both times.
 ```ldpy
 @prefix sosa: <http://www.w3.org/ns/sosa/> .
 @prefix qudt: <http://qudt.org/schema/qudt/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
 @base <http://example.org/building/> .
 
 def observation(sensor, value, timestamp):
     return g{ f<sensor/{sensor}> a sosa:Sensor ;
                   sosa:madeObservation
                       [ a sosa:Observation ;
-                        sosa:resultTime {timestamp} ;
-                        sosa:hasSimpleResult
+                        sosa:resultTime {timestamp}^^xsd:dateTime ;
+                        sosa:hasResult
                             [ qudt:numericValue {value} ;
                               qudt:unit qudt:DEG_C ] ] }
 
@@ -33,7 +34,7 @@ assert len(observation("s1", 21.5, "2026-08-28")) == 7
 ```
 
 ```python
-from rdflib import Graph, BNode, Literal, Namespace, URIRef, RDF
+from rdflib import Graph, BNode, Literal, Namespace, URIRef, RDF, XSD
 SOSA = Namespace("http://www.w3.org/ns/sosa/")
 QUDT = Namespace("http://qudt.org/schema/qudt/")
 BASE = "http://example.org/building/"
@@ -45,8 +46,8 @@ def observation(sensor, value, timestamp):
     g.add((s, RDF.type, SOSA.Sensor))
     g.add((s, SOSA.madeObservation, obs))
     g.add((obs, RDF.type, SOSA.Observation))
-    g.add((obs, SOSA.resultTime, Literal(timestamp)))
-    g.add((obs, SOSA.hasSimpleResult, result))
+    g.add((obs, SOSA.resultTime, Literal(timestamp, datatype=XSD.dateTime)))
+    g.add((obs, SOSA.hasResult, result))
     g.add((result, QUDT.numericValue, Literal(value)))
     g.add((result, QUDT.unit, QUDT.DEG_C))
     return g
@@ -139,9 +140,12 @@ surface language — and it costs, as it turns out, nothing at all: ldpy works
 with the newest Python, and a file that stays within the MicroPython subset
 stays there after transpilation.
 
-The honest limit is the runtime: the façade still binds to rdflib, so R6 is
-argued by construction and enforced by an AST whitelist in the test suite, not
-yet demonstrated by execution on a device.
+The runtime followed: the façade takes its terms and graphs from a backend
+that is rdflib on the host and [urdflib](https://github.com/linked-data-python/urdflib)
+on MicroPython, and the same programme — `+{ }`, `m{ }`, `e{ }` and
+`serialize()` — transpiled on the host gives the host's answer on a
+MicroPython built with urdflib. What R6 costs, and the one construct it
+refuses, is [running on a device](running-on-a-device.md).
 
 ## Where to read on
 

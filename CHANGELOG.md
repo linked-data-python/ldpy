@@ -1,6 +1,13 @@
 ## Release Notes
 
-### [Unreleased]
+### [0.6.0] — 2026-09-02
+
+- **Documentation for the device.** A tutorial (run a programme on
+  MicroPython, on the Unix port, no hardware needed), a how-to guide (build
+  for MicroPython: the target, the bundle, `mpy-cross`, the seam between
+  programme and device), and an explanation (running on a device: the
+  façade, the backend, why SPARQL is two capabilities); the command-line and
+  API references, the rationale's R6 and the limitations list say the same.
 
 - **The façade has a backend, and the backend can be urdflib.** The
   generated code always went through `ldpy.runtime`; that module now takes

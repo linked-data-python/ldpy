@@ -47,6 +47,7 @@ nav:
   - Tutorials:
       - First steps: tutorials/getting-started.md
       - Build a knowledge graph: tutorials/build-a-knowledge-graph.md
+      - Run on MicroPython: tutorials/run-on-micropython.md
   - How-to guides:
       - Run and import: how-to/run-and-import.md
       - Build graphs from tables: how-to/build-graphs-from-tables.md
@@ -58,6 +59,7 @@ nav:
       - Language server: how-to/language-server.md
       - Format ldpy code: how-to/format.md
       - Highlight ldpy code: how-to/highlight-ldpy.md
+      - Build for MicroPython: how-to/build-for-micropython.md
   - Reference:
       - The language:
           - reference/language/index.md
@@ -80,4 +82,5 @@ nav:
       - Why island parsing: explanation/island-parsing.md
       - Emission and semantics: explanation/emission-and-semantics.md
       - Tooling architecture: explanation/tooling.md
+      - Running on a device: explanation/running-on-a-device.md
       - How this is tested: explanation/how-it-is-tested.md

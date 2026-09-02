@@ -202,6 +202,8 @@ is explained separately.
   your source pass through unchanged.
 - **`e{ }` may not be used inside `s{ }`**, and custom SPARQL functions called
   by IRI are not supported — use a `{python}` interpolation.
+- **`s{ }` does not run on a device**: `--target micropython` refuses it at
+  build time; `m{ }` and `e{ }` do run there.
 - **A plain literal has no notation outside an island**: a bare Python string
   stays a string. So does a *variable* language tag.
 - **A breakpoint inside a multi-line `g{ }`** binds on the island's first line:
