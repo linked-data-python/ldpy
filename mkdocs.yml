@@ -38,7 +38,11 @@ markdown_extensions:
       anchor_linenums: true
       use_pygments: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  # le tutoriel « tout le langage en un fichier » EST un .ldpy exécutable :
+  # la page l'inclut, elle ne le recopie pas — une copie dériverait.
+  - pymdownx.snippets:
+      base_path: [docs]
+      check_paths: true
   - pymdownx.superfences
   - pymdownx.details
 
@@ -47,6 +51,7 @@ nav:
   - Tutorials:
       - First steps: tutorials/getting-started.md
       - Build a knowledge graph: tutorials/build-a-knowledge-graph.md
+      - The whole language, in one file: tutorials/tour.md
       - Run on MicroPython: tutorials/run-on-micropython.md
   - How-to guides:
       - Run and import: how-to/run-and-import.md

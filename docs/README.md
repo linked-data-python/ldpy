@@ -87,6 +87,7 @@ This documentation is organised by what you came for.
 | I want to… | Go to |
 |---|---|
 | **Learn** ldpy from zero, hands on | [Tutorial: first steps](tutorials/getting-started.md), then [build a knowledge graph](tutorials/build-a-knowledge-graph.md) |
+| **See the whole notation at once**, in a file you run | [The whole language, in one file](tutorials/tour.md) |
 | **Get something done** | How-to guides: [run & import](how-to/run-and-import.md) · [build from tables](how-to/build-graphs-from-tables.md) · [query](how-to/query-a-graph.md) · [migrate from rdflib](how-to/migrate-from-rdflib.md) · [VS Code](how-to/use-vscode.md) · [debug](how-to/debug.md) · [build for MicroPython](how-to/build-for-micropython.md) |
 | **Look something up** | Reference: [the language](reference/language/index.md) · [SPARQL expressions](reference/sparql-expressions.md) · [command line](reference/cli.md) · [Python API](reference/api.md) |
 | **Understand why** | Explanation: [why ldpy](explanation/why.md) · [what real code does](explanation/what-real-code-does.md) · [designing the syntax](explanation/designing-the-syntax.md) · [island parsing](explanation/island-parsing.md) · [running on a device](explanation/running-on-a-device.md) |

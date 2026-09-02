@@ -1,0 +1,222 @@
+# A tour of Linked-Data Python, in one file you can run.
+#
+#     pip install linked-data-python
+#     ldpy tour.ldpy
+#
+# Every section below builds something, prints it, and asserts what it should
+# be. If the file runs to the end, the language did what these comments say.
+#
+# One rule underlies all of it: every valid Python file is a valid ldpy file,
+# byte for byte. Nothing here replaces Python — the notation is *added* to it.
+
+import csv
+import io
+
+from rdflib import Literal, URIRef, Variable
+
+
+# ---------------------------------------------------------------------------
+# 1. Declarations look like Turtle, and are lexical
+#
+# @prefix and @base hold from where they are written to the end of the block.
+# They are not assignments: they create no Python variable, they teach the
+# *notation* below them how to read a name.
+# ---------------------------------------------------------------------------
+
+@prefix ex:   <http://example.org/> .
+@prefix sosa: <http://www.w3.org/ns/sosa/> .
+@prefix qudt: <http://qudt.org/schema/qudt/> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@base <http://example.org/building/> .
+
+
+# ---------------------------------------------------------------------------
+# 2. A term is an expression
+#
+# Wherever Python expects a value, you may write an RDF term instead.
+# ---------------------------------------------------------------------------
+
+sensor = ex:thermometer               # a prefixed name -> URIRef
+absolute = <http://example.org/x>     # an absolute IRI
+relative = <room/R101>                # relative: resolved against @base
+question = ?value                     # a SPARQL variable
+
+assert sensor == URIRef("http://example.org/thermometer")
+assert relative == URIRef("http://example.org/building/room/R101")
+assert question == Variable("value")
+
+# Literals need their Turtle suffix. A bare Python string stays a Python
+# string — the language never silently turns your text into RDF.
+plain = "Thermometer A"               # still a str
+tagged = "Thermometer A"@en           # a Literal, with a language
+typed = "21.5"^^xsd:double            # a Literal, with a datatype
+
+assert isinstance(plain, str) and not isinstance(plain, Literal)
+assert tagged.language == "en" and typed.toPython() == 21.5
+
+print("1-2. terms  ", sensor, "|", relative, "|", tagged.n3(), "|", typed.n3())
+
+
+# ---------------------------------------------------------------------------
+# 3. Python goes inside the notation
+#
+# f<...> builds an IRI the way an f-string builds a string, and a prefixed name
+# can take a computed local part. Both are islands of their own, so they work
+# anywhere an expression is allowed.
+#
+# Braces mean *interpolation* only inside an island — everywhere else `{x}` is
+# Python's own brace syntax, and the language leaves it alone. Section 4 uses
+# them where they belong.
+# ---------------------------------------------------------------------------
+
+room = "R101"
+reading = 21.5
+
+assert f<room/{room}> == URIRef("http://example.org/building/room/R101")
+assert ex:{room} == URIRef("http://example.org/R101")   # a computed local name
+
+print("3.   built  ", f<room/{room}>, "|", ex:{room})
+
+
+# ---------------------------------------------------------------------------
+# 4. A graph is an expression too
+#
+# g{ ... } is Turtle: predicate-object lists with ';', object lists with ',',
+# blank nodes with '[ ]', collections with '( )'. It evaluates to an
+# rdflib.Graph, so everything you already do with rdflib still works.
+# ---------------------------------------------------------------------------
+
+g = g{ {sensor} a sosa:Sensor ;
+           ex:room f<room/{room}> ;
+           ex:label "Thermometer A"@en ;
+           sosa:madeObservation [ a sosa:Observation ;
+                                  sosa:hasSimpleResult {reading}^^xsd:double ] }
+
+assert len(g) == 6                     # 4 on the sensor, 2 on the blank node
+print("4.   graph  ", len(g), "triples, blank node included")
+
+
+# ---------------------------------------------------------------------------
+# 5. A current graph, and writing into it
+#
+# @graph names a graph and makes it current for the block; +{ } adds to it and
+# -{ } removes from it. This is the shape most RDF code takes: declare once,
+# then write.
+# ---------------------------------------------------------------------------
+
+@graph as kg
++{ {sensor} a sosa:Sensor ; ex:room f<room/{room}> }
+
+for i, celsius in enumerate([21.5, 22.0, 19.0]):
+    +{ f<obs/{i}> a sosa:Observation ;
+           sosa:madeBySensor {sensor} ;
+           sosa:hasSimpleResult {celsius}^^xsd:double }
+
+# -{ } removes, and an unbound variable in it is a wildcard: this drops the
+# result of obs/2 whatever its value, because the sensor was miscalibrated.
+-{ f<obs/2> sosa:hasSimpleResult ?any }
+
+assert len(kg) == 2 + 3 * 3 - 1
+print("5.   current", len(kg), "triples after three loops and one removal")
+
+
+# ---------------------------------------------------------------------------
+# 6. Reading it back: a graph pattern, with no engine
+#
+# m{ ... } is the same Turtle notation, matched against the current graph.
+# With one variable it yields terms; with several, rows you can unpack.
+# ---------------------------------------------------------------------------
+
+observations = list(m{ ?s a sosa:Observation })
+assert len(observations) == 3
+
+for s, v in m{ ?s sosa:hasSimpleResult ?v }:
+    assert s in observations and isinstance(v, Literal)
+
+assert bool(m{ {sensor} a sosa:Sensor })          # an existence test
+assert m{ ?s sosa:hasSimpleResult ?v }.count() == 2
+
+print("6.   matched", len(observations), "observations,",
+      m{ ?s sosa:hasSimpleResult ?v }.count(), "with a result")
+
+
+# ---------------------------------------------------------------------------
+# 7. Deferred expressions
+#
+# e{ ... } does not evaluate now: it builds a SPARQL expression you apply
+# later, to bindings. It is the tool for filters, and it follows SPARQL's
+# semantics — numeric promotion, errors, three-valued logic.
+# ---------------------------------------------------------------------------
+
+warm = e{ ?v > 21 }
+
+hot = sorted(str(s) for s, v in m{ ?s sosa:hasSimpleResult ?v }
+             if warm({"v": v}))
+assert hot == ["http://example.org/building/obs/0",
+               "http://example.org/building/obs/1"]
+
+print("7.   filter ", len(hot), "observations above 21 °C")
+
+
+# ---------------------------------------------------------------------------
+# 8. Rows become triples
+#
+# `for @bindings in <any iterable of mappings>` makes each mapping the current
+# bindings, so a template written once fills itself. Variables in the template
+# read from the row; a triple whose term stays unbound is dropped.
+# ---------------------------------------------------------------------------
+
+CSV = """id,celsius,room
+s1,21.5,R101
+s2,19.0,R102
+"""
+
+@graph as from_csv
+for @bindings in csv.DictReader(io.StringIO(CSV)):
+    +{ e<sensor/{?id}> a sosa:Sensor ;
+           ex:room e<room/{?room}> ;
+           sosa:hasSimpleResult ?celsius }
+
+assert len(from_csv) == 6
+assert URIRef("http://example.org/building/sensor/s1") in set(from_csv.subjects())
+
+# A CSV cell arrives as text, and stays text until you say otherwise: the
+# result above is a plain literal, not a double. Typing it is one interpolation
+# away — see the coercion reference for doing it once for a whole block.
+assert from_csv.value(URIRef("http://example.org/building/sensor/s1"),
+                      sosa:hasSimpleResult).datatype is None
+
+print("8.   mapped ", len(from_csv), "triples from 2 CSV rows")
+
+
+# ---------------------------------------------------------------------------
+# 9. And when you do want the engine: s{ ... }
+#
+# A full SPARQL query, checked when you save the file — a syntax error here is
+# reported at transpile time, not at run time. It runs on the current graph.
+# ---------------------------------------------------------------------------
+
+@graph kg
+rows = s{ SELECT ?s ?v WHERE { ?s sosa:hasSimpleResult ?v }
+          ORDER BY DESC(?v) }
+
+values = [float(row.v) for row in rows]
+assert values == [22.0, 21.5]
+
+print("9.   queried", values)
+
+
+# ---------------------------------------------------------------------------
+# 10. It was rdflib all along
+#
+# Everything above produced ordinary rdflib graphs and terms, so serialising,
+# merging and passing them to any library works as usual.
+# ---------------------------------------------------------------------------
+
+turtle = kg.serialize(format="turtle")
+assert "sosa:Observation" in turtle
+
+print("10.  serialised", len(turtle.splitlines()), "lines of Turtle")
+print()
+print("Everything asserted. Where to next:")
+print("  https://linked-data-python.readthedocs.io/reference/language/")
