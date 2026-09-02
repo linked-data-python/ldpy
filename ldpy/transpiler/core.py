@@ -592,6 +592,40 @@ class Transpiler:
     # chaînes et littéraux RDF
     # ------------------------------------------------------------------
 
+    # Island sigils that open with a brace or a chevron.  A hole beginning
+    # with one of these is an island the scanner will never reach.
+    _HOLE_ISLANDS = ("_:{", "g{", "m{", "s{", "e{", "e<", "f{", "f<", "?{")
+
+    def _island_in_fstring_hole(self, tok_start, end):
+        """The island opener written inside an f-string hole, or None.
+
+        The scanner does not descend into f-string interpolation holes: an
+        island written there would be copied verbatim into the generated
+        Python, which then fails with a message from CPython's f-string
+        parser that names nothing (record ldpy/012). Refusing it here, by
+        name, costs one scan of the token and turns a baffling failure into
+        an actionable one.
+        """
+        tok = self.text[tok_start:end]
+        if "f" not in tok[:3].lower() or "{" not in tok:
+            return None
+        i, n = 0, len(tok)
+        while i < n:
+            if tok[i] != "{":
+                i += 1
+                continue
+            if tok[i + 1:i + 2] == "{":         # '{{' is an escaped brace
+                i += 2
+                continue
+            j = i + 1
+            while j < n and tok[j] in " \t":
+                j += 1
+            for opener in self._HOLE_ISLANDS:
+                if tok.startswith(opener, j):
+                    return opener
+            i += 1
+        return None
+
     def _handle_string(self, start, prefix_start=None):
         """start : indice du guillemet. prefix_start : indice du préfixe de
         chaîne (r/b/f/u) déjà repéré, sinon None."""
@@ -607,6 +641,12 @@ class Transpiler:
         if suffix is None and t[end:end + 2] == "^^":
             suffix = ("datatype", None, end + 2)
         if suffix is None:
+            opener = self._island_in_fstring_hole(tok_start, end)
+            if opener is not None:
+                self._error(
+                    "îlot '%s' dans un trou d'f-string : le scanner n'y "
+                    "descend pas. Sortez la lecture dans une variable "
+                    "au-dessus de l'f-string." % opener)
             self._copy(end - self.i)
             self.operand = False
             self.stmt_start = False
@@ -2124,6 +2164,14 @@ class Transpiler:
             elif c in "\"'":
                 end = self._string_end(self.i)
                 pieces.append(self._take(end - self.i))
+            elif c == "<" and self._iriref_end(self.i) is not None:
+                # A full IRI is a token, not punctuation: its '#' is part of
+                # the IRI, not a comment. Without this the fragment of
+                # <http://example.org/ns#X> — the most ordinary shape an IRI
+                # takes in RDF — swallowed the rest of the line, closing
+                # brace included. `<` that does NOT open an IRI is SPARQL's
+                # less-than, and falls through to the single-character case.
+                pieces.append(self._take(self._iriref_end(self.i) - self.i))
             elif c == "#":
                 j = t.find("\n", self.i)
                 pieces.append(self._take((j if j != -1 else self.n) - self.i))

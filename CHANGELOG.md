@@ -1,5 +1,33 @@
 ## Release Notes
 
+### [0.6.2] — 2026-09-02
+
+Bug fixes only, all found by the corpus study and all reproduced by hand
+before being fixed.
+
+- **A `#` inside a full IRI is no longer read as a comment in `s{ }`.** The
+  SPARQL island scanner knew strings and comments but not IRIs, so the
+  fragment of `<http://example.org/ns#X>` — the most ordinary shape an IRI
+  takes in RDF — swallowed the rest of the line, closing brace included, and
+  the island failed to transpile with "'}' expected". `m{ }` and `g{ }` parse
+  IRIs as terms and never had the defect. A `<` that does not open an IRI is
+  still SPARQL's less-than.
+- **An island inside an f-string interpolation hole is now refused by name.**
+  The scanner does not descend into those holes, so the island used to be
+  copied verbatim into the generated Python, which CPython then rejected with
+  a message from its f-string parser that named nothing. It now says which
+  island, where, and what to do instead. Supporting islands there remains
+  open; refusing them clearly does not foreclose it.
+- **Two documentation corrections in the hover table**, which also feeds the
+  corpus study's translator instructions: `f<...>` does **not** percent-encode
+  (only `e<...>` does — `firi()` concatenates and resolves, nothing more), and
+  `.execute()` is not just for updates but for any query whose rdflib
+  `Result` you then call a method on.
+- **Two silent traps documented** in `how-to/migrate-from-rdflib.md`, both
+  with runnable proof: interpolating a bare `str` into `s{ }` coerces it to a
+  literal, so the query matches nothing without raising; and `"{x}"` inside a
+  literal does not interpolate — `f"{x}"` does.
+
 ### [0.6.1] — 2026-09-02
 
 - **A tutorial that is a program**: `docs/tutorials/tour.ldpy`, one file you

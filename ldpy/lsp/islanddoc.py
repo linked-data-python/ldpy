@@ -134,7 +134,9 @@ ISLANDS = {
         "A SPARQL query or update, parsed when the file is transpiled rather "
         "than at run time. `{expr}` in term position becomes an initial "
         "binding — never string pasting, so nothing here can be injected. "
-        "Call it on a graph to run it; `.execute()` runs an update.",
+        "Calling it on a graph gives a LAZY query; `.execute()` is what "
+        "forces it — for an update, and for any query whose rdflib `Result` "
+        "you then call a method on.",
         _QUERY, "s-a-sparql-query"),
 
     # -- terms --------------------------------------------------------------
@@ -169,10 +171,10 @@ ISLANDS = {
 
     "firi": IslandDoc(
         "(term) f<...{expr}...> -> URIRef",
-        "A formatted IRI: the braces interpolate as in an f-string, the "
-        "result is percent-encoded and then resolved against `@base`. "
-        "Encoding first is what keeps a space or a slash in a value from "
-        "changing the IRI's structure.",
+        "A formatted IRI: the braces interpolate as in an f-string, and the "
+        "result is resolved against `@base` if it is relative. It does NOT "
+        "percent-encode — the shape of the IRI is yours. To mint one from "
+        "data that may hold a space or a slash, use `e<...>`, which encodes.",
         _TERMS, "formatted-iris-f"),
 
     "fnode": IslandDoc(
@@ -202,7 +204,9 @@ ISLANDS = {
     "eiri": IslandDoc(
         "(expression) e<...{?var}...> -> Expr",
         "A deferred IRI: `f<...>`'s interpolation, except that the holes are "
-        "SPARQL expressions re-evaluated for each set of bindings.",
+        "SPARQL expressions re-evaluated for each set of bindings — and that "
+        "it percent-encodes what it interpolates. This is the form for "
+        "minting an IRI from a data column.",
         _SPARQL_EXPR, "deferred-iris-e"),
 }
 

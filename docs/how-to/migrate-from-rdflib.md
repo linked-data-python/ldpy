@@ -152,6 +152,46 @@ term = m{ ex:s ex:p ?v }.one()
 assert type(term).__name__ == "URIRef"
 ```
 
+## Trap 4: interpolating into `s{ }` coerces, and coerces silently
+
+An assembled query wraps its IRI in angle brackets, because at that point it
+is only text: `g.query(f"SELECT ?s WHERE {{ ?s a <{cls}> }}")`. The island's
+`{expr}` is not text substitution — it becomes an initial binding, and the
+value goes through the ordinary [coercion](../reference/language/coercion.md).
+A bare `str` therefore becomes a **literal**, and the query matches nothing:
+
+```ldpy
+@prefix ex: <http://example.org/> .
+from rdflib import URIRef
+@graph as g
++{ ex:a a ex:Thing }
+cls = "http://example.org/Thing"
+assert len(list(s{ SELECT ?s WHERE { ?s a {cls} } }.execute())) == 0
+assert len(list(s{ SELECT ?s WHERE { ?s a {URIRef(cls)} } }.execute())) == 1
+```
+
+Nothing raises. The result is simply empty, which is indistinguishable from
+"no match" — so a test whose fixture happens to be thin passes anyway. This is
+trap 2 in another position: wherever the original spelled an IRI by wrapping
+text in `<...>`, the translation has to say so.
+
+## Trap 5: `"{x}"` in a literal does not interpolate — `f"{x}"` does
+
+In term position `{expr}` interpolates: `ex:{name}`, a bare `{value}`, the
+`{dt}` after `^^`. Inside the **quoted part** of a literal it does not,
+exactly as in Python:
+
+```ldpy
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+x = "42"
+assert str("{x}"^^xsd:string) == "{x}"       # three characters, as written
+assert str(f"{x}"^^xsd:string) == "42"       # the value
+```
+
+This is consistent — a quoted string is a Python string, and Python needs the
+`f` too — but the two braces sit one character apart and only one of them
+interpolates. Nothing warns: the graph simply carries the wrong literal.
+
 ## What not to rewrite
 
 Some rdflib code has no better form in ldpy, and the notation is honest about
