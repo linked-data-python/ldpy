@@ -1,5 +1,14 @@
 ## Release Notes
 
+### [0.6.4] — 2026-09-03
+
+- **`as` works on a dynamic prefix too**: `@prefix p: f<http://{host}/ns#> as
+  P .` binds the `Namespace` built from the IRI resolved at that point — the
+  same object the prefix itself uses, so the two can never disagree. This
+  belongs with 0.6.3 and missed its tag by a few minutes; it is not an
+  afterthought but the form the corpus needed first, since every IRI of the
+  region that motivated `as` is computed at run time.
+
 ### [0.6.3] — 2026-09-02
 
 Two answers to the limit the corpus study attested most: `@prefix` is

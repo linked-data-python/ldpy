@@ -1392,6 +1392,10 @@ class Transpiler:
         self._take(j - self.i)              # '@prefix p:' + blancs
         parts = self._take_firi_parts()
         self._g_ws()
+        as_name, k = self._prefix_as_clause(self.i)
+        if as_name:
+            self._take(k - self.i)
+            self._g_ws()
         if self._peek() != ".":
             self._error("'.' attendu pour clore la déclaration @prefix")
         self._take(1)
@@ -1411,6 +1415,11 @@ class Transpiler:
                                 scope_mode)
             gen = "__namespaces__[%r] = %s.Namespace(%r)" % (
                 prefix, RUNTIME_ALIAS, resolved)
+            if as_name:
+                gen = "__namespaces__[%r] = %s = %s.Namespace(%r)" % (
+                    prefix, as_name, RUNTIME_ALIAS, resolved)
+                if scope_mode:
+                    gen = "%s %s; %s" % (scope_mode, as_name, gen)
         else:
             # global/nonlocal : réutiliser la variable de la liaison cible si
             # elle est dynamique — c'est elle que les usages du dehors lisent
@@ -1424,8 +1433,14 @@ class Transpiler:
             gen = "%s = %s.Namespace(%s.firi(%s)); __namespaces__[%r] = %s" % (
                 var, RUNTIME_ALIAS, RUNTIME_ALIAS,
                 self._firi_args(parts), prefix, var)
+            if as_name:
+                # `as EX` on a DYNAMIC prefix binds the Namespace built from
+                # the IRI resolved at that point — the same object the
+                # prefix itself uses, so the two can never disagree.
+                gen += "; %s = %s" % (as_name, var)
             if scope_mode:
-                gen = "%s %s; %s" % (scope_mode, var, gen)
+                names = var if not as_name else "%s, %s" % (var, as_name)
+                gen = "%s %s; %s" % (scope_mode, names, gen)
         self._end_island("prefix", mark, gen)
         return True
 

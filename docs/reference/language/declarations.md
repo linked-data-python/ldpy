@@ -52,6 +52,16 @@ name that differs from the prefix — `EX` for `ex:` — is the usual convention
 and avoids the warning the transpiler raises when a declared prefix and a
 Python name coincide.
 
+It works on a computed prefix as well, which is the case the corpus met
+first:
+
+```ldpy
+host = "example.org"
+@prefix dyn: f<http://{host}/ns#> as DYN .
+assert str(DYN) == "http://example.org/ns#"
+assert DYN["x"] == dyn:x
+```
+
 You rarely need it. Reach for `as` only when the object itself must travel:
 a `Namespace` that merely *produces* IRIs needs nothing, since the `URIRef`s
 it produces are ordinary values (record ldpy/027).

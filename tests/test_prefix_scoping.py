@@ -347,3 +347,24 @@ def test_a_prefix_named_as_something_is_not_an_as_clause(run):
     ns, _ = run("@prefix ex: <http://example.org/ns#> as assets .\n"
                 "t = ex:Thing\n")
     assert str(ns["assets"]) == "http://example.org/ns#"
+
+
+def test_as_works_on_a_dynamic_prefix_too(run):
+    """`@prefix p: f<…> as P .` — the form the corpus actually needed first.
+    Every IRI of the region that motivated `as` is computed at run time, so
+    `as` on the static form alone would not have covered its own use case."""
+    ns, _ = run("host = 'example.org'\n"
+                "@prefix dyn: f<http://{host}/ns#> as DYN .\n"
+                "a = DYN['x']\n"
+                "b = dyn:x\n")
+    assert str(ns["DYN"]) == "http://example.org/ns#"
+    assert ns["a"] == ns["b"]
+
+
+def test_a_dynamic_as_name_follows_the_scope_modifier(run):
+    ns, _ = run("host = 'example.org'\n"
+                "def f():\n"
+                "    global @prefix dyn: f<http://{host}/ns#> as DYN .\n"
+                "f()\n"
+                "seen = str(DYN)\n")
+    assert ns["seen"] == "http://example.org/ns#"
