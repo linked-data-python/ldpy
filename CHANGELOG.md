@@ -1,5 +1,15 @@
 ## Release Notes
 
+### Unreleased
+
+- **An RDF suffix on a variable is refused, and the refusal names itself.**
+  `{expr}@en` sticks a language tag to an interpolation, which is meaningful:
+  the Python value is the lexical form. `?v@en` never parsed, but the parser
+  only complained that the island's closing brace was missing. It is now a
+  decision the language states — a variable is already bound to a complete
+  term, there is nothing left to interpret — with a message that points at
+  `{expr}@en`. Same for `?v^^dt`.
+
 ### [0.6.4] — 2026-09-03
 
 - **`as` works on a dynamic prefix too**: `@prefix p: f<http://{host}/ns#> as

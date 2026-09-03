@@ -103,6 +103,18 @@ A variable is an ordinary value here. What it *means* depends on where it is
 used: a term in a [graph template](bindings.md), a projection in a
 [match island](querying.md), a hole in a [deferred expression](../sparql-expressions.md).
 
+An RDF suffix does **not** apply to a variable. `{expr}@en` is meaningful —
+the Python value is the lexical form, and the suffix says how to read it — but
+a variable is already bound to a complete term, so there is nothing left to
+interpret. The parser refuses, and says so:
+
+```text
++{ ex:s ex:p ?v@en }
+                ^ suffixe de langue interdit sur une variable
+```
+
+Write `{expr}@en` when you mean to build a literal from a Python value.
+
 ## Formatted IRIs — `f<...>`
 
 The counterpart of Python's f-string for IRIs: literal text with `{expr}`

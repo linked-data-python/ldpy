@@ -1980,9 +1980,35 @@ class Transpiler:
         if not m:
             self._error("nom de variable attendu après '%s'" % sigil)
         name = self._take(len(m.group(0)))
+        self._refuse_suffix_on_variable(sigil, name)
         if self._match_vars is not None and name not in self._match_vars:
             self._match_vars.append(name)
         return "%s.Variable(%r)" % (RUNTIME_ALIAS, name)
+
+    def _refuse_suffix_on_variable(self, sigil, name):
+        """`?v@en` and `?v^^xsd:int` are refused, and say why.
+
+        Sticking an RDF suffix on an *interpolation* is meaningful — the
+        Python value is the lexical form, and the suffix says how to read
+        it.  Sticking one on a variable is not: a variable is already bound
+        to a complete term, and there is nothing left to interpret.  Record
+        027 closes the question — the language refuses rather than coerces
+        — so the refusal has to name itself; before this, the parser only
+        complained that the island's closing brace was missing."""
+        c = self._peek()
+        m = _LANGTAG_RE.match(self.text, self.i)
+        if c == "@" and m:
+            what, written, advice = "de langue", m.group(0), "@en"
+        elif c == "^" and self._peek(1) == "^":
+            what, written, advice = "de type", "^^...", "^^xsd:string"
+        else:
+            return
+        self._error(
+            "suffixe %s interdit sur une variable : '%s%s%s' — une variable "
+            "est déjà liée à un terme complet, il n'y a rien à interpréter. "
+            "Pour construire un littéral, coller le suffixe à une "
+            "interpolation : '{expr}%s' (fiche 027)"
+            % (what, sigil, name, written, advice))
 
     def _g_node(self, triples, gctx):
         """Records the term as a `part` of the island, then parses it.

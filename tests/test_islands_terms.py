@@ -182,3 +182,43 @@ def test_datatype_interpolation_unclosed_is_an_error(run, prefixes):
     from ldpy.transpiler import LdpySyntaxError
     with pytest.raises(LdpySyntaxError):
         run(prefixes + "dt = xsd:date\nx = \"1\"^^{dt\n")
+
+
+# --------------------------------------------------------------- record 027
+# `{expr}@en` is meaningful — the Python value is the lexical form and the
+# suffix says how to read it.  `?v@en` is not: a variable is already bound to
+# a complete term.  Maxime closed the question on 2026-09-03 (refuse, do not
+# coerce); what this checks is that the refusal names itself, since before it
+# the parser only complained about a missing closing brace.
+
+def test_language_suffix_on_a_variable_is_refused(prefixes):
+    import pytest
+    from ldpy.transpiler import LdpySyntaxError
+    with pytest.raises(LdpySyntaxError) as exc:
+        transpile(prefixes + "@graph as g\n+{ ex:s ex:p ?v@fr-BE }\n")
+    assert "?v@fr-BE" in str(exc.value)
+    assert "{expr}@en" in str(exc.value)
+
+
+def test_datatype_suffix_on_a_variable_is_refused(prefixes):
+    import pytest
+    from ldpy.transpiler import LdpySyntaxError
+    with pytest.raises(LdpySyntaxError) as exc:
+        transpile(prefixes + "@graph as g\n+{ ex:s ex:p ?v^^xsd:integer }\n")
+    assert "suffixe de type" in str(exc.value)
+
+
+def test_the_refusal_reaches_every_island_that_binds_variables(prefixes):
+    import pytest
+    from ldpy.transpiler import LdpySyntaxError
+    for island in ("+{ ex:s ex:p ?v@en }", "-{ ex:s ex:p ?v@en }",
+                   "for b in m{ ?s ex:p ?v@en }: pass"):
+        with pytest.raises(LdpySyntaxError):
+            transpile(prefixes + "@graph as g\n" + island + "\n")
+
+
+def test_a_bare_variable_and_a_suffixed_interpolation_still_work(run, prefixes):
+    g, _ = run(prefixes + "@graph as g\nv = 'x'\n"
+               "+{ ex:s ex:p {v}@en }\n"
+               "-{ ex:s ex:q ?any }\n")
+    assert list(g["g"])[0][2] == Literal("x", lang="en")
