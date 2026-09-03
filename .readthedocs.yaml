@@ -1,4 +1,33 @@
 # Read the Docs — https://docs.readthedocs.io/en/stable/config-file/v2.html
+#
+# NOTHING BELOW controls which versions are published, or when a build runs.
+# Both are project settings on Read the Docs, and both were misconfigured on
+# 2026-09-03. Diagnosis, from the API rather than from guessing:
+#
+#   curl -s https://readthedocs.org/api/v3/projects/linked-data-python/versions/
+#
+# said Read the Docs already KNOWS all thirteen versions, tags included, but
+# that every tag has "active": false. Only `latest` (the default branch) and
+# `stable` (the highest tag) are active, which is Read the Docs' default: a
+# newly discovered version is created inactive and never built.
+#
+#   gh api repos/linked-data-python/ldpy/hooks
+#
+# returned `[]` — the repository has NO webhook. Read the Docs is therefore
+# never told about a push or a tag, so it builds only when asked, and learns
+# about new tags only on a manual resync. That single absence explains both
+# symptoms at once.
+#
+# The two fixes are dashboard actions, and only the project owner can do them:
+#
+#   1. Admin → Integrations → Add integration → "GitHub incoming webhook".
+#      Read the Docs then installs the hook itself, with its own secret. This
+#      restores automatic builds on push and on tag.
+#   2. Admin → Automation Rules → Add rule: match "Tag", version pattern
+#      `.*`, action "Activate version". Existing tags stay inactive and are
+#      activated one by one under Versions; the rule covers future ones.
+#
+# Neither can be done from this file, and no amount of editing it will help.
 version: 2
 
 build:
