@@ -1,6 +1,6 @@
 # 017 — `@bindings` et gabarits de graphes : `e{ … }` dans `g{ … }`
 
-**Date** : 2026-09-03 · **Statut** : implémenté
+**Date** : 2026-09-11 · **Statut** : implémenté
 
 **Origine** : décision D4 de la fiche `corpus/402` (mesures) ; phase 3 « graphes-gabarits »
 laissée hors périmètre par la fiche 007 ; manque structurel 3 de la fiche 012.
@@ -93,6 +93,32 @@ des clés et des valeurs (la politique complète de coercition est en fiche 020 
 elle décide qu'une colonne `age` est un `xsd:integer` et une colonne `uri` un
 `URIRef`, et rend une erreur lisible quand un élément de l'itérable n'est pas
 un mapping).
+
+Une **ligne de type namedtuple** est acceptée au même titre qu'un mapping :
+tout objet exposant `_fields` (une séquence de noms, dans l'ordre des valeurs)
+devient un binding par appariement positionnel — sans exiger `_asdict()`, que
+`collections.namedtuple` a mais que rien ne garantit ailleurs. Ce test couvre
+d'un coup trois origines : `collections.namedtuple` (la demande initiale,
+`pandas.DataFrame.itertuples()` en amont), et la propre `Row` du langage — ce
+qu'itère un `m{ … }` d'arité ≥ 2 (fiche 016) porte déjà `_fields`, donc
+`for @bindings in list(m{ … })` fonctionne sans code séparé. `_fields` a été
+préféré à `_asdict` précisément pour cette raison : c'est l'attribut que
+`Row`/`_RowSeq` portent déjà (ci-dessous), pas une méthode qu'il aurait fallu
+leur ajouter.
+
+Sur `ucollections.namedtuple` (MicroPython), à vérifier avant de déclarer le
+chemin fermé : sa mémoire est réduite — pas de `_asdict`, pas de `_replace` —
+et ce n'était pas gênant puisque `_fields` seul est utilisé ici, mais son
+exposition sur les instances n'est pas encore confirmée sur cible ; le lot
+d'appareil (fiche 026) exécute déjà le même `runtime.py`, donc la même
+fonction, mais aucun test `test_target_micropython.py` n'exerce ce chemin
+pour l'instant.
+
+Un `dataclasses.dataclass` n'est **pas** couvert : il n'a ni `.items()` ni
+`_fields`, et le couvrir demanderait `dataclasses.fields()` ou `vars(item)` —
+une deuxième voie de duck-typing, asymétrique entre les deux backends
+puisque `dataclasses` n'existe pas sur MicroPython. Hors périmètre tant
+qu'aucun dépôt du corpus ne le demande.
 
 La désambiguïsation décorateur suit la fiche 004, décision 5 : `@bindings` seul
 sur sa ligne, suivi de `(` ou de `.attr`, reste un décorateur Python.
@@ -238,10 +264,15 @@ confondent pas.
 10. `ex:{?id}` : différé par ligne, immédiat sans binding (`ex:{"hello"}`),
     non lié → triplet écarté, régime gabarit hors binding.
 11. Golden + identité + exécution (fiche 006) ; language map exacte.
+12. `for @bindings in …` sur une ligne namedtuple (`collections.namedtuple`) ;
+    sur une liste de `Row` issue d'un `m{ … }` d'arité ≥ 2 collectée hors de
+    la boucle ; non-régression sur le refus d'un élément qui n'est ni un
+    mapping ni une ligne à `_fields` (un entier, par exemple).
 
 Implémentation : commit `374a282`, 23 tests (`tests/test_bindings.py`) pour le
 cœur de la fiche ; commit `90d8b9d` (ldpy 0.4.0), 5 tests supplémentaires, pour
-`ex:{?id}`.
+`ex:{?id}` ; lignes namedtuple ajoutées en réponse à l'issue GitHub #1
+(Erdem Onal), 2 tests supplémentaires.
 
 ## Voir aussi
 

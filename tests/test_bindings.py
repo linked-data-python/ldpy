@@ -213,6 +213,36 @@ def test_for_bindings_nested_masking(run):
     assert g["a"] == Literal(2) and g["b"] == Literal(1)
 
 
+def test_for_bindings_over_namedtuples(run):
+    g, _ = run(textwrap.dedent("""\
+        from collections import namedtuple
+        @prefix ex: <http://e/> .
+        @graph as g
+        Row = namedtuple("Row", ["id", "value"])
+        rows = [Row("a", 1), Row("b", 2)]
+        for @bindings in rows:
+            +{ ex:{?id} ex:value ?value }
+        n = len(g)
+        """))
+    assert g["n"] == 2
+    assert (URIRef("http://e/a"), URIRef("http://e/value"), Literal(1)) in g["g"]
+    assert (URIRef("http://e/b"), URIRef("http://e/value"), Literal(2)) in g["g"]
+
+
+def test_for_bindings_over_rows_of_match(run):
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        @graph as src
+        +{ ex:c1 ex:reading 10 . ex:c2 ex:reading 25 }
+        @graph as out
+        rows = list(m{ ?s ex:reading ?v }(src))
+        for @bindings in rows:
+            +{ ?s ex:hasValue e{ ?v * 2 } }
+        vals = sorted(int(o) for s, o in m{ ?s ex:hasValue ?o }(out))
+        """))
+    assert g["vals"] == [20, 50]
+
+
 def test_for_bindings_non_mapping_raises(run):
     g, r = run("collected = []\n")
     src = "for @bindings in [1]:\n    pass\n"

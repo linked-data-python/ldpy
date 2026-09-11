@@ -602,7 +602,10 @@ class Bindings(dict):
 def as_bindings_iter(iterable):
     """'for @bindings in ...' (record ldpy/017): every element becomes the
     current bindings of the body. An m{ ... } yields its solutions (anonymous
-    variables excluded); any other iterable must produce mappings."""
+    variables excluded); any other iterable must produce mappings or
+    namedtuple-like rows — an object with a `_fields` sequence, which covers
+    `collections.namedtuple`, `pandas.DataFrame.itertuples()` rows, and
+    ldpy's own Row from m{ }."""
     if isinstance(iterable, Match):
         for sm in iterable.solutions():
             b = Bindings()
@@ -617,10 +620,14 @@ def as_bindings_iter(iterable):
             yield item
         elif hasattr(item, "items"):
             yield Bindings(item)
+        elif hasattr(item, "_fields"):
+            b = Bindings()
+            b.update(zip(item._fields, item))
+            yield b
         else:
             raise TypeError(
-                "for @bindings in ...: the iterable must produce mappings, "
-                "got %s" % type(item).__name__)
+                "for @bindings in ...: the iterable must produce mappings "
+                "or namedtuple-like rows, got %s" % type(item).__name__)
 
 
 _EXPR_CLASS = None
