@@ -271,8 +271,8 @@ confondent pas.
 
 Implémentation : commit `374a282`, 23 tests (`tests/test_bindings.py`) pour le
 cœur de la fiche ; commit `90d8b9d` (ldpy 0.4.0), 5 tests supplémentaires, pour
-`ex:{?id}` ; lignes namedtuple ajoutées en réponse à l'issue GitHub #1
-(Erdem Onal), 2 tests supplémentaires.
+`ex:{?id}` ; commit `ee63cdd`, 2 tests supplémentaires, lignes namedtuple
+ajoutées en réponse à l'issue GitHub #1 (Erdem Onal).
 
 ## Voir aussi
 
