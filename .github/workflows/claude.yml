@@ -54,10 +54,24 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Without this the agent can read the code and not run it. Issue #1 was
+      # fixed correctly and could not be shown to be, which cost a round trip
+      # and left a wrong claim about MicroPython standing in a design note.
+      - name: Install the package and its test dependencies
+        run: python -m pip install -e .[dev]
+
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Reading its own CI results is what lets Claude answer "why is the
-          # build red" instead of guessing.
-          claude_args: '--allowed-tools "Bash(gh run view:*),Bash(gh run list:*)"'
+          # Running the suite and reading its own CI results is what lets
+          # Claude answer "does this work" and "why is the build red" instead
+          # of reasoning about it by hand.
+          claude_args: >-
+            --allowed-tools
+            "Bash(python -m pytest:*),Bash(python steering/bin/coherence.py),Bash(python steering/bin/ouvert.py:*),Bash(gh run view:*),Bash(gh run list:*)"

@@ -53,4 +53,9 @@ jobs:
 
             Say nothing where you found nothing. A short review is a good
             review; a list of generic suggestions is noise.
-          claude_args: '--allowed-tools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"'
+          # `Tests` runs on the same pull request; letting the reviewer read
+          # its result is cheaper than installing the suite a second time,
+          # and stops it guessing at whether a change passes.
+          claude_args: >-
+            --allowed-tools
+            "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh run view:*),Bash(gh run list:*)"

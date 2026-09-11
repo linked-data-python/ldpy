@@ -243,6 +243,30 @@ def test_for_bindings_over_rows_of_match(run):
     assert g["vals"] == [20, 50]
 
 
+def test_for_bindings_over_a_micropython_style_row(run):
+    """MicroPython's `collections.namedtuple` exposes `_asdict()` and NOT
+    `_fields` — the reverse of CPython. `runtime.py` emits the same code on
+    both backends (record ldpy/026), so the row shape of the smaller one has
+    to be accepted too, or `for @bindings` is broken on device."""
+    g, _ = run(textwrap.dedent("""\
+        @prefix ex: <http://e/> .
+        @graph as g
+
+        class URow:                      # ce que voit MicroPython
+            def __init__(self, **kw):
+                self._d = kw
+            def _asdict(self):
+                return dict(self._d)
+
+        rows = [URow(id="a", value=1), URow(id="b", value=2)]
+        for @bindings in rows:
+            +{ ex:{?id} ex:value ?value }
+        n = len(g)
+        """))
+    assert g["n"] == 2
+    assert (URIRef("http://e/a"), URIRef("http://e/value"), Literal(1)) in g["g"]
+
+
 def test_for_bindings_non_mapping_raises(run):
     g, r = run("collected = []\n")
     src = "for @bindings in [1]:\n    pass\n"

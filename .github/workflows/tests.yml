@@ -1,0 +1,66 @@
+# The test suite, on every push and every pull request.
+#
+# This is the workflow that makes a claim about the code checkable by someone
+# who is not on Maxime's machine — an outside contributor, or an agent working
+# in a checkout it cannot run Python in. Issue #1 was fixed correctly and
+# could not be shown to be: the change was right, the reasoning was written
+# out by hand, and nothing could say so. A red or green mark on the commit is
+# what closes that gap.
+#
+# Three Python versions because `pyproject.toml` claims `>=3.10` and a claim
+# nothing checks is a wish. rdflib is NOT pinned here, unlike Maxime's local
+# venv (7.2.1, so the corpus studies stay reproducible): this job is where an
+# upstream change that breaks us should surface, and pinning it everywhere
+# would mean finding out from a user instead.
+
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  # A second push to the same branch cancels the first: the older answer is
+  # not worth the runner minutes once it is known to be out of date.
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false          # 3.10 failing must not hide 3.13 failing
+      matrix:
+        python: ['3.10', '3.12', '3.13']
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install the package and its test dependencies
+        run: python -m pip install -e .[dev]
+
+      - name: Run the test suite
+        run: python -m pytest tests -q
+
+  steering:
+    # The records have their own checker; it costs a second and it catches
+    # what no reader would — an index and a note that disagree, a number
+    # taken twice, a dead link.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check the steering records
+        run: python steering/bin/coherence.py
