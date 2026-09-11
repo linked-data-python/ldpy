@@ -602,7 +602,21 @@ class Bindings(dict):
 def as_bindings_iter(iterable):
     """'for @bindings in ...' (record ldpy/017): every element becomes the
     current bindings of the body. An m{ ... } yields its solutions (anonymous
-    variables excluded); any other iterable must produce mappings."""
+    variables excluded); any other iterable must produce mappings or
+    namedtuple-like rows.
+
+    Two duck-typed shapes are accepted for a row, and both are needed because
+    CPython and MicroPython expose different halves of the namedtuple API:
+
+    - `_fields`, a sequence of names in value order — CPython's
+      `collections.namedtuple`, a `pandas.DataFrame.itertuples()` row, and
+      ldpy's own Row from `m{ }` (record ldpy/016);
+    - `_asdict()`, when `_fields` is absent — this is the ONLY one
+      MicroPython's `collections.namedtuple` exposes, and only when the
+      firmware was built with `MICROPY_PY_COLLECTIONS_NAMEDTUPLE__ASDICT`.
+      Keying off `_fields` alone would have left `for @bindings` broken on
+      device, in a file record ldpy/026 requires to emit the same code on
+      both backends."""
     if isinstance(iterable, Match):
         for sm in iterable.solutions():
             b = Bindings()
@@ -617,10 +631,17 @@ def as_bindings_iter(iterable):
             yield item
         elif hasattr(item, "items"):
             yield Bindings(item)
+        elif hasattr(item, "_fields"):
+            b = Bindings()
+            b.update(zip(item._fields, item))
+            yield b
+        elif hasattr(item, "_asdict"):
+            # MicroPython's namedtuple: no _fields, _asdict() instead.
+            yield Bindings(item._asdict())
         else:
             raise TypeError(
-                "for @bindings in ...: the iterable must produce mappings, "
-                "got %s" % type(item).__name__)
+                "for @bindings in ...: the iterable must produce mappings "
+                "or namedtuple-like rows, got %s" % type(item).__name__)
 
 
 _EXPR_CLASS = None

@@ -1,6 +1,6 @@
 # 017 — `@bindings` et gabarits de graphes : `e{ … }` dans `g{ … }`
 
-**Date** : 2026-09-03 · **Statut** : implémenté
+**Date** : 2026-09-11 · **Statut** : implémenté
 
 **Origine** : décision D4 de la fiche `corpus/402` (mesures) ; phase 3 « graphes-gabarits »
 laissée hors périmètre par la fiche 007 ; manque structurel 3 de la fiche 012.
@@ -93,6 +93,36 @@ des clés et des valeurs (la politique complète de coercition est en fiche 020 
 elle décide qu'une colonne `age` est un `xsd:integer` et une colonne `uri` un
 `URIRef`, et rend une erreur lisible quand un élément de l'itérable n'est pas
 un mapping).
+
+Une **ligne de type namedtuple** est acceptée au même titre qu'un mapping :
+tout objet exposant `_fields` (une séquence de noms, dans l'ordre des valeurs)
+devient un binding par appariement positionnel. Cela couvre d'un coup
+`collections.namedtuple` (la demande initiale, `pandas.DataFrame.itertuples()`
+en amont) et la propre `Row` du langage — ce qu'itère un `m{ … }` d'arité ≥ 2
+(fiche 016) porte déjà `_fields`, donc `for @bindings in list(m{ … })`
+fonctionne sans code séparé.
+
+**`_fields` ne suffit pas : il faut aussi `_asdict()`**, parce que les deux
+backends exposent des moitiés différentes de l'API namedtuple. La source
+MicroPython (`py/objnamedtuple.c`) est nette : la recherche d'attribut sur une
+instance ne connaît que `_asdict` — encore n'est-il compilé que si
+`MICROPY_PY_COLLECTIONS_NAMEDTUPLE__ASDICT` est actif — et **jamais
+`_fields`**. C'est l'inverse exact de ce qu'on pouvait supposer d'une
+implémentation réduite. Comme `runtime.py` doit émettre le même code sur les
+deux cibles (fiche 026), s'en tenir à `_fields` aurait laissé
+`for @bindings` cassé sur appareil, silencieusement, jusqu'au premier essai
+réel. L'ordre est `.items()`, puis `_fields`, puis `_asdict()`.
+
+Reste ouvert : aucun test de `test_target_micropython.py` n'exerce ce chemin
+sur cible, et le lot d'appareil (fiche 026) n'a pas été rejoué depuis. Le test
+`test_for_bindings_over_a_micropython_style_row` imite la forme — un objet à
+`_asdict()` sans `_fields` — ce qui tient le code, pas le portage.
+
+Un `dataclasses.dataclass` n'est **pas** couvert : il n'a ni `.items()` ni
+`_fields`, et le couvrir demanderait `dataclasses.fields()` ou `vars(item)` —
+une deuxième voie de duck-typing, asymétrique entre les deux backends
+puisque `dataclasses` n'existe pas sur MicroPython. Hors périmètre tant
+qu'aucun dépôt du corpus ne le demande.
 
 La désambiguïsation décorateur suit la fiche 004, décision 5 : `@bindings` seul
 sur sa ligne, suivi de `(` ou de `.attr`, reste un décorateur Python.
@@ -238,10 +268,16 @@ confondent pas.
 10. `ex:{?id}` : différé par ligne, immédiat sans binding (`ex:{"hello"}`),
     non lié → triplet écarté, régime gabarit hors binding.
 11. Golden + identité + exécution (fiche 006) ; language map exacte.
+12. `for @bindings in …` sur une ligne namedtuple (`collections.namedtuple`) ;
+    sur une liste de `Row` issue d'un `m{ … }` d'arité ≥ 2 collectée hors de
+    la boucle ; sur une ligne à `_asdict()` sans `_fields`, la forme
+    MicroPython ; non-régression sur le refus d'un élément qui n'est ni un
+    mapping ni une ligne (un entier, par exemple).
 
 Implémentation : commit `374a282`, 23 tests (`tests/test_bindings.py`) pour le
 cœur de la fiche ; commit `90d8b9d` (ldpy 0.4.0), 5 tests supplémentaires, pour
-`ex:{?id}`.
+`ex:{?id}` ; commit `ee63cdd`, 2 tests supplémentaires, lignes namedtuple
+ajoutées en réponse à l'issue GitHub #1 (Erdem Onal).
 
 ## Voir aussi
 
