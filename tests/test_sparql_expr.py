@@ -12,9 +12,10 @@ from ldpy.sparql import SparqlError
 P = "@prefix ex: <http://example.org/ns#> .\n"
 
 
-def make(src):
+def make(src, prefixes=""):
     g = {"__name__": "t"}
-    exec(compile(transpile(P + src, "<t>").code, "<t>", "exec"), g)
+    exec(compile(transpile(P + prefixes + src, "<t>").code, "<t>", "exec"),
+         g)
     return g
 
 
@@ -153,6 +154,35 @@ def test_lang_builtins():
     v = Literal("bonjour", lang="fr-CA")
     assert g["l"](v=v) == Literal("fr-CA")
     assert g["m"].ebv(v=v) is True
+
+
+def test_strlang_and_strdt_build_the_term_a_suffix_cannot():
+    """`?v@en` and `?v^^dt` are refused — a variable is already bound to a
+    complete term (record ldpy/027). STRLANG and STRDT are the explicit way
+    to say what the suffix cannot, and they are standard SPARQL 1.1."""
+    g = make('a = e{ STRLANG(?v, "en") }\n'
+             "b = e{ STRDT(?v, xsd:integer) }\n",
+             prefixes='@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n')
+    assert g["a"](v=Literal("hello")) == Literal("hello", lang="en")
+    assert g["b"](v=Literal("42")) == Literal("42", datatype=XSD.integer)
+
+
+def test_strlang_and_strdt_refuse_a_term_that_is_already_complete():
+    """SPARQL 1.1 gives no result for an argument that already carries a tag
+    or a datatype; here that is an error, like the rest of this module."""
+    g = make('a = e{ STRLANG(?v, "en") }\nb = e{ STRDT(?v, ex:dt) }\n')
+    with pytest.raises(SparqlError):
+        g["a"](v=Literal("hello", lang="fr"))
+    with pytest.raises(SparqlError):
+        g["b"](v=Literal("42", datatype=XSD.integer))
+    with pytest.raises(SparqlError):
+        g["a"](v=URIRef("http://example.org/ns#s"))
+
+
+def test_strlang_refuses_an_empty_tag():
+    g = make('a = e{ STRLANG(?v, ?t) }\n')
+    with pytest.raises(SparqlError):
+        g["a"](v=Literal("hello"), t=Literal(""))
 
 
 def test_numeric_builtins():

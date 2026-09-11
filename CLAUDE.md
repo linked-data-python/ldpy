@@ -67,12 +67,9 @@ reasoning, not the product — and so do commit messages, for now.
   a change that was not tested.
 - Atomic commits, in French, signed
   `Co-Authored-By: Claude <noreply@anthropic.com>`.
-- Reference benchmark: the legacy ANTLR implementation ran at ≈ 170 lines/s.
-  The target here is > 10 000 lines/s; `bench/` measures it.
 
 ## What does not push itself
 
 This repository is public on GitHub (`origin`) and a `vX.Y.Z` tag triggers
 publication to PyPI and to both marketplaces — so a tag is a deliberate act,
-never a step in a routine. The `gitlab` remote has **never been pushed to**;
-that first push is Maxime's to make.
+never a step in a routine. 

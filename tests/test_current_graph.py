@@ -320,6 +320,58 @@ def test_created_and_designated_serialise_alike(run):
     assert "@prefix ex:" in ns["given"].serialize(format="turtle")
 
 
+def test_a_prefix_declared_after_the_designation_binds_too(run):
+    """The position of a declaration is not a trap: as long as the graph is
+    the current one, a prefix declared after `@graph` is in scope for it and
+    binds there, exactly like those declared before."""
+    ns, _ = run("from rdflib import Graph\n"
+                "before = 1\n"
+                "@prefix a: <http://a/> .\n"
+                "mine = Graph()\n"
+                "@graph mine\n"
+                "@prefix b: <http://b/> .\n"
+                "+{ a:s a:p a:o . b:s b:p b:o }\n")
+    got = {p for p, _ in ns["mine"].namespaces()}
+    assert "a" in got and "b" in got
+
+
+def test_both_declaration_orders_serialise_alike(run):
+    """The reason the previous test matters: swapping the two lines must not
+    change what comes out of the serialiser."""
+    src = ("from rdflib import Graph\n"
+           "mine = Graph()\n"
+           "%s"
+           "+{ late:s late:p late:o }\n")
+    ns_before, _ = run(src % ("@prefix late: <http://late/> .\n"
+                              "@graph mine\n"))
+    ns_after, _ = run(src % ("@graph mine\n"
+                             "@prefix late: <http://late/> .\n"))
+    assert (ns_before["mine"].serialize(format="turtle")
+            == ns_after["mine"].serialize(format="turtle"))
+
+
+def test_a_dynamic_prefix_declared_after_the_designation_binds_too(run):
+    """Same rule for the f-IRI form, which goes through its own emission
+    path and would otherwise drift from the static one."""
+    ns, _ = run("from rdflib import Graph\n"
+                "mine = Graph()\n"
+                "host = 'example.org'\n"
+                "@graph mine\n"
+                "@prefix dyn: f<http://{host}/ns#> .\n"
+                "+{ dyn:a dyn:p 1 }\n")
+    assert ("dyn", URIRef("http://example.org/ns#")) in list(
+        ns["mine"].namespaces())
+
+
+def test_no_current_graph_means_no_binding_call(run):
+    """A prefix declared with no graph in scope emits nothing extra — the
+    check is on the generated code, so the common case stays untouched."""
+    code = T("""
+        @prefix ex: <http://example.org/ns#> .
+        """).code
+    assert "bind_prefix" not in code
+
+
 def test_designating_keeps_bindings_the_caller_already_had(run):
     """A designated graph belongs to its caller: the block's prefixes are
     ADDED to its own manager, never swapped for a shared one."""

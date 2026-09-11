@@ -732,6 +732,24 @@ def designate(namespaces, graph):
     return graph
 
 
+def bind_prefix(graph, prefix, ns):
+    """'@prefix' declared while a graph is current — bind it there too.
+
+    :func:`designate` binds the prefixes in scope at the moment of
+    designation. A prefix declared AFTER, while that same graph is still the
+    current one, is in scope for it just as much: binding it here is what
+    makes the two orders serialise alike, instead of making the position of a
+    declaration a trap (record ldpy/027).
+
+    Same tolerance as :func:`designate`: anything that is not a graph, or a
+    backend without a namespace manager, passes through untouched.
+    """
+    try:
+        _backend.bind_namespaces(graph, {prefix: ns})
+    except (AttributeError, TypeError):
+        pass                        # not a graph, or no binding support
+
+
 def add_to(graph, *triples, bindings=None):
     """'+{ ... }': instantiate and add to the current graph (record ldpy/014).
     A triple with a term still unbound is dropped — one cannot write an

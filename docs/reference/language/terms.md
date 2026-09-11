@@ -115,6 +115,19 @@ interpret. The parser refuses, and says so:
 
 Write `{expr}@en` when you mean to build a literal from a Python value.
 
+To tag or type the value a *variable* is bound to, say it explicitly with
+standard SPARQL — `STRLANG` takes a lexical form and a language tag, `STRDT`
+a lexical form and a datatype IRI:
+
+```text
++{ ex:s ex:p e{ STRLANG(?v, "en") } }
++{ ex:s ex:q e{ STRDT(?v, xsd:integer) } }
+```
+
+Both work in `+{ }` and `-{ }`, wherever an [expression island](../sparql-expressions.md)
+may stand as a term — which needs a `@bindings` in scope, like any `e{ }`
+there. They refuse an argument that already carries a tag or a datatype.
+
 ## Formatted IRIs — `f<...>`
 
 The counterpart of Python's f-string for IRIs: literal text with `{expr}`

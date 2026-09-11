@@ -360,6 +360,47 @@ def DATATYPE(t):
     return t.datatype or XSD.string
 
 
+def STRLANG(t, lang):
+    """STRLANG(lexical form, language tag).
+
+    The way to give a bound variable a language tag: `?v@en` is refused —
+    a variable is already bound to a COMPLETE term, so there is nothing to
+    interpret (record ldpy/027) — whereas STRLANG says explicitly to take
+    the lexical form and read it as a tagged literal.
+
+    SPARQL 1.1 wants a plain literal with no tag and no datatype, and gives
+    no result otherwise; here that is an error, which is what the rest of
+    this module does with an argument of the wrong shape.
+    """
+    if not isinstance(t, Literal):
+        raise SparqlError("STRLANG wants a literal as its first argument")
+    if t.language or (t.datatype and t.datatype != XSD.string):
+        raise SparqlError(
+            "STRLANG wants a plain literal: %r already carries a %s"
+            % (str(t), "language tag" if t.language else "datatype"))
+    tag = str(lang)
+    if not tag:
+        raise SparqlError("STRLANG wants a non-empty language tag")
+    return Literal(str(t), lang=tag)
+
+
+def STRDT(t, dt):
+    """STRDT(lexical form, datatype IRI).
+
+    The counterpart of :func:`STRLANG` for `?v^^dt`, refused for the same
+    reason (record ldpy/027).
+    """
+    if not isinstance(t, Literal):
+        raise SparqlError("STRDT wants a literal as its first argument")
+    if t.language or (t.datatype and t.datatype != XSD.string):
+        raise SparqlError(
+            "STRDT wants a plain literal: %r already carries a %s"
+            % (str(t), "language tag" if t.language else "datatype"))
+    if not isinstance(dt, URIRef):
+        raise SparqlError("STRDT wants an IRI as its datatype")
+    return Literal(str(t), datatype=dt)
+
+
 def IRI(t, base=None):
     """IRI(str) — resolved against the lexical base of the call site."""
     s = str(t)

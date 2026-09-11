@@ -1356,8 +1356,24 @@ class Transpiler:
                     prefix, as_name, RUNTIME_ALIAS, resolved)
                 if scope_mode:
                     gen = "%s %s; %s" % (scope_mode, as_name, gen)
+        if kind == "prefix":
+            gen = self._bind_on_current_graph(gen, prefix)
         self._end_island(kind, mark, gen)
         return True
+
+    def _bind_on_current_graph(self, gen, prefix):
+        """Lie aussi le préfixe sur le graphe courant, s'il y en a un.
+
+        `@graph` lie les préfixes en portée au moment de la désignation. Un
+        préfixe déclaré APRÈS, tant que ce graphe reste courant, est en
+        portée pour lui tout autant : le lier ici est ce qui fait que les
+        deux ordres d'écriture sérialisent pareil, au lieu de faire de la
+        position d'une déclaration un piège (fiche 027).
+        """
+        if not self._graph_var:
+            return gen
+        return gen + "; %s.bind_prefix(%s, %r, __namespaces__[%r])" % (
+            RUNTIME_ALIAS, self._graph_var, prefix, prefix)
 
     def _prefix_as_clause(self, k):
         """`as NAME` before a @prefix declaration's closing '.', or nothing.
@@ -1441,6 +1457,7 @@ class Transpiler:
             if scope_mode:
                 names = var if not as_name else "%s, %s" % (var, as_name)
                 gen = "%s %s; %s" % (scope_mode, names, gen)
+        gen = self._bind_on_current_graph(gen, prefix)
         self._end_island("prefix", mark, gen)
         return True
 
@@ -2361,6 +2378,11 @@ class Transpiler:
         "STRBEFORE", "STRAFTER", "REPLACE", "REGEX", "ABS", "ROUND", "CEIL",
         "FLOOR", "SAMETERM", "ISIRI", "ISURI", "ISBLANK", "ISLITERAL",
         "ISNUMERIC", "LANGMATCHES", "ENCODE_FOR_IRI",
+        # STRLANG / STRDT : la façon de dire explicitement ce que `?v@en` et
+        # `?v^^dt` ne disent pas — une variable est liée à un terme complet,
+        # le suffixe est donc refusé (fiche 027) et ces deux-ci sont le
+        # chemin propre, en SPARQL standard.
+        "STRLANG", "STRDT",
     ))
 
     def _take_enode(self):

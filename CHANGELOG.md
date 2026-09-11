@@ -2,6 +2,23 @@
 
 ### Unreleased
 
+- **A prefix declared while a graph is current binds on it too.** `@graph`
+  gave the designated graph the prefixes in scope at that moment, and only
+  those: declaring `@prefix` on the next line left it unbound, so swapping
+  two lines changed the serialisation. It was a silent trap — nothing
+  reported the missing prefix, the output was merely less readable. The
+  position of a declaration no longer decides; both orders now serialise
+  alike.
+
+- **`STRLANG` and `STRDT` in `e{ }`.** The refusal of `?v@en` and `?v^^dt`
+  (below) is only defensible if saying it explicitly is possible. These two
+  standard SPARQL 1.1 functions are that way — take the lexical form a
+  variable is bound to, read it as a tagged or typed literal — and they were
+  missing from the expression island. They work in `+{ }` and `-{ }`, with a
+  `@bindings` in scope like any `e{ }` used as a term there; `m{ }` keeps
+  refusing expression islands, which is a decision and not an omission.
+  Both refuse an argument that already carries a language tag or a datatype.
+
 - **An RDF suffix on a variable is refused, and the refusal names itself.**
   `{expr}@en` sticks a language tag to an interpolation, which is meaningful:
   the Python value is the lexical form. `?v@en` never parsed, but the parser

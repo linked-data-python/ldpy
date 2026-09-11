@@ -1,6 +1,6 @@
 # 028 — L'espace des graphes nommés : ce que les îlots ne couvrent pas
 
-**Date** : 2026-09-03 · **Statut** : constats établis — arbitrage à ouvrir
+**Date** : 2026-09-11 · **Statut** : tranché — pas de forme quadruplet, la mesure ne la justifie pas
 **Origine** : campagne de traduction du 2026-09-03 (fiche `corpus/403`),
 régions `RDFLib/pyLODE`, `ktbs/rdfrest`, `jupyter-naas/abi`. Détache de la
 fiche [012](012-limites-revelees-par-le-corpus.md) un manque qui n'avait pas
@@ -45,18 +45,48 @@ en rdflib. La documentation le dit déjà ; ce que la campagne ajoute, c'est
 qu'une région peut être **correctement traduite en gardant du rdflib**, et que
 ce n'est alors ni un échec ni une dégradation.
 
-## Ce qui reste à trancher
+## La mesure
 
-Faut-il une forme de lecture quadruplet — `m{ }` sur un `Dataset`, avec une
-position de graphe — ou la frontière actuelle est-elle la bonne ?
+`surface.py` compte désormais les sélecteurs appliqués à un `Dataset`
+séparément (`trav_on_dataset`, strate de `corpus/403`). Sur les 444 dépôts du
+corpus :
 
-Deux éléments pour l'arbitrage, et ils ne vont pas dans le même sens. Contre :
-une seule région de la campagne l'a demandé, et `s{ }` couvre déjà le besoin
-dès qu'on accepte d'écrire une requête. Pour : la fiche 016 a montré que ce
-qui coûte dans le corpus n'est pas la requête mais la **lecture simple**, et
-il n'y a pas de raison que ce soit différent d'un cran plus haut. Le chiffre
-manque : `surface.py` ne compte pas les sélecteurs appliqués à un `Dataset`
-séparément de ceux appliqués à un `Graph`. **Le mesurer d'abord**, décider
-ensuite.
+| | sites | dépôts |
+|---|---|---|
+| sélecteurs, tous receveurs | 7 870 | 1 033 fichiers |
+| **dont sur un `Dataset`** | **270** | **23** |
 
-TODO Claude: mesurer d'abord. à priori je préfère ne pas ajouter de forme de lecture quadruplet, et voir si la demande vient de la communauté.
+**3,4 % des lectures, dans 5 % des dépôts** — et concentrées : `triplify_csv`
+et `shapes-of-you` en portent 132 à eux deux, soit la moitié.
+
+La ventilation par sélecteur est ce qui tranche :
+
+| sélecteur | sites |
+|---|---|
+| `triples` | 96 |
+| `objects` | 56 |
+| `subjects` | 51 |
+| **`quads`** | **32** |
+| `value` | 30 |
+| autres (`subject_objects`, `predicates`, `predicate_objects`) | 5 |
+
+**Seuls 32 sites sur 270 lisent réellement un quadruplet.** Les 238 autres
+sont des sélecteurs de triplets ordinaires, appelés sur un `Dataset` parce
+que c'est l'objet que le code a sous la main — ils lisent l'union ou le
+graphe par défaut, sans jamais nommer de graphe. Ils ne demandent aucune
+position de graphe : ils demandent que `@graph` accepte un `Dataset`, ce
+qu'il fait déjà, puisqu'il accepte une expression (fiche 014).
+
+## Décision : pas de forme de lecture quadruplet
+
+La frontière actuelle est la bonne. L'argument « pour » reposait sur la
+fiche 016 — ce qui coûte dans le corpus est la lecture simple, pas la requête
+— et il tombe : la lecture simple *sur un Dataset* est de la lecture de
+triplets, déjà couverte. Le besoin proprement quadruplet est de 32 sites dans
+le corpus entier, et `s{ }` avec `GRAPH ?g { … }` le porte dès qu'on accepte
+d'écrire une requête.
+
+Ajouter une position de graphe à `m{ }` coûterait une syntaxe de plus dans
+l'îlot le plus utilisé du langage, pour 0,4 % des lectures. **On attend que
+la demande vienne de la communauté** : c'est un ajout qu'on pourra toujours
+faire, alors qu'une syntaxe posée trop tôt ne se retire pas.

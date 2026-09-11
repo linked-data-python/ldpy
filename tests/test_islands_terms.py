@@ -217,6 +217,29 @@ def test_the_refusal_reaches_every_island_that_binds_variables(prefixes):
             transpile(prefixes + "@graph as g\n" + island + "\n")
 
 
+def test_strlang_is_the_way_the_refusal_leaves_open(run, prefixes):
+    """The refusal above is only defensible if saying it explicitly is
+    possible. STRLANG and STRDT are that way, in `+{ }` and `-{ }`; they need
+    a `@bindings` in scope, like any `e{ }` used as a term there."""
+    g, _ = run(prefixes + "@graph as g\n@bindings as b\n"
+               '+{ ex:s ex:p e{ STRLANG("bonjour", "en") } }\n'
+               '+{ ex:s ex:q e{ STRDT("42", xsd:integer) } }\n')
+    got = {t[2] for t in g["g"]}
+    assert Literal("bonjour", lang="en") in got
+    assert Literal("42", datatype=XSD.integer) in got
+
+
+def test_strlang_in_a_match_island_stays_refused(prefixes):
+    """`e{ }` as a matching filter is out of scope by decision, not by
+    omission (record ldpy/017) — adding STRLANG did not open that door."""
+    import pytest
+    from ldpy.transpiler import LdpySyntaxError
+    with pytest.raises(LdpySyntaxError) as exc:
+        transpile(prefixes + "@graph as g\n"
+                  'for b in m{ ?s ex:p e{ STRLANG(?v, "en") } }: pass\n')
+    assert "017" in str(exc.value) or "hors périmètre" in str(exc.value)
+
+
 def test_a_bare_variable_and_a_suffixed_interpolation_still_work(run, prefixes):
     g, _ = run(prefixes + "@graph as g\nv = 'x'\n"
                "+{ ex:s ex:p {v}@en }\n"

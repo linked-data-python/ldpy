@@ -1,6 +1,6 @@
 # 027 — `@prefix` sans objet d'exécution : les issues possibles
 
-**Date** : 2026-09-03 · **Statut** : implémenté — livré en ldpy 0.6.3
+**Date** : 2026-09-11 · **Statut** : implémenté — livré en ldpy 0.6.3, portée et STRLANG/STRDT depuis
 
 ## Contexte
 
@@ -54,13 +54,12 @@ l'exécution).
 
 Comportements à connaître :
 
-- **La portée compte au moment de la désignation** : un `@prefix` déclaré
-  *après* le `@graph` n'est pas lié sur ce graphe. C'est cohérent avec la
-  portée lexicale (Turtle est positionnel lui aussi), mais c'est un piège —
-  la désignation doit suivre les déclarations dont elle a besoin. 
-
-// TODO Claude: Non: tant qu'on a un graphe courant déclaré avec @graph, une déclaration de @prefix lie dessus. 
-
+- **La position de la déclaration ne compte pas** : tant qu'un graphe est le
+  graphe courant, un `@prefix` déclaré *après* le `@graph` lie sur lui comme
+  ceux qui l'étaient au moment de la désignation. Les deux ordres d'écriture
+  sérialisent donc pareil. C'était un piège tant que la position décidait, et
+  un piège silencieux : rien ne signalait le préfixe manquant, la
+  sérialisation était seulement moins lisible.
 - **rdflib ne remplace pas un préfixe existant** : si le graphe désigné porte
   déjà `ex:` pour une AUTRE IRI, `bind()` crée `ex1:` plutôt que d'écraser —
   on ne vole pas le préfixe de l'appelant.
@@ -87,7 +86,27 @@ colonnes après le vrai fautif). Le refus atteint `+{ }`, `-{ }` et `m{ }`,
 les trois îlots qui lient des variables ; `?v` nu et `{expr}@en` continuent
 de fonctionner.
 
-// est-ce que e{ STRLANG( ?v ,  "en" )  } et e{ STRDT( ?v , dt ) } sont bien des options, dans un `+{ }`, `-{ }` et `m{ }` ?
+### Ce que le refus laisse ouvert
+
+Un refus n'est défendable que si dire la chose explicitement reste possible.
+`STRLANG(?v, "en")` et `STRDT(?v, dt)` sont ce chemin : du SPARQL 1.1
+standard, qui dit ce que le suffixe ne dit pas — prendre la **forme lexicale**
+de la variable et la relire comme littéral étiqueté ou typé.
+
+Les deux fonctions manquaient à `e{ }` ; elles y sont. Périmètre exact :
+
+- **`+{ }` et `-{ }` : oui**, à la condition ordinaire de tout `e{ }` en
+  position de terme dans ces îlots — un `@bindings` en portée. Sans lui, il
+  n'y a aucune solution à instancier et le triplet n'est pas produit ; c'est
+  la sémantique des gabarits (fiche 017), et elle vaut pour `CONCAT` comme
+  pour `STRLANG`.
+- **`m{ }` : non**, et par décision, pas par omission : `e{ }` comme filtre
+  d'appariement est hors périmètre (fiche 017). Les deux nouvelles fonctions
+  n'ouvrent pas cette porte, et un test le tient.
+
+Elles refusent un argument qui porte déjà une étiquette ou un type — SPARQL
+1.1 n'y donne aucun résultat, ici c'est une erreur nommée, comme partout
+ailleurs dans le module.
 
 ## Frontières assumées
 

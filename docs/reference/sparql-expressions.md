@@ -59,7 +59,7 @@ Arithmetic follows SPARQL's numeric promotion; in particular
 
 | Category | Functions |
 |---|---|
-| Terms | `STR`, `LANG`, `DATATYPE`, `IRI`/`URI` (resolved against the lexical `@base`), `BNODE`, `SAMETERM`, `ISIRI`/`ISURI`, `ISBLANK`, `ISLITERAL`, `ISNUMERIC` |
+| Terms | `STR`, `LANG`, `DATATYPE`, `STRLANG`, `STRDT`, `IRI`/`URI` (resolved against the lexical `@base`), `BNODE`, `SAMETERM`, `ISIRI`/`ISURI`, `ISBLANK`, `ISLITERAL`, `ISNUMERIC` |
 | Strings | `CONCAT`, `UCASE`, `LCASE`, `STRLEN`, `SUBSTR`, `STRSTARTS`, `STRENDS`, `CONTAINS`, `STRBEFORE`, `STRAFTER`, `REPLACE`, `REGEX`, `ENCODE_FOR_IRI` |
 | Numbers | `ABS`, `ROUND`, `CEIL`, `FLOOR` |
 | Logic | `BOUND(?v)` (argument must be a variable), `IF`, `COALESCE` |
