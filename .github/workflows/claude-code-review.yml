@@ -1,0 +1,56 @@
+# Automatic review of every pull request.
+#
+# Trigger: a pull request opened or pushed to. Claude reads the diff and
+# leaves its remarks as inline comments. It reviews; it never pushes.
+#
+# This one runs unattended, so it spends quota without anyone asking. Two ways
+# to make it quieter, both one edit away: narrow the trigger with a `paths:`
+# filter, or drop `synchronize` from the types so that only the opening of a
+# pull request starts a review rather than every push to it.
+#
+# Same secret and same App installation as `claude.yml` — see its header.
+
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request. Use the repository's CLAUDE.md as the
+            authority on conventions; this comment does not override it.
+
+            Read the diff with `gh pr diff`, then comment inline on what you
+            actually found. Priorities, in order:
+
+            - correctness, and especially the parser invariants the test suite
+              is built around (golden output, identity, execution);
+            - a feature arriving without its tests;
+            - anything a third party reads that is not in English — comments,
+              docstrings, test names, error messages, documentation;
+            - performance, on the parsing path only, where it is measurable.
+
+            Say nothing where you found nothing. A short review is a good
+            review; a list of generic suggestions is noise.
+          claude_args: '--allowed-tools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"'
