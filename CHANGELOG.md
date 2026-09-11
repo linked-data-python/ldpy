@@ -1,6 +1,15 @@
 ## Release Notes
 
-### Unreleased
+### [0.6.5] — 2026-09-11
+
+- **`for @bindings` takes namedtuple rows.** Reported by Erdem Onal (issue
+  #1): `pandas.DataFrame.itertuples()` yields namedtuples, which are neither
+  `Bindings` nor mappings, so they were refused and needed an `_asdict()`
+  adapter. Two row shapes are now accepted — an object with `_fields`, or
+  failing that one with `_asdict()`. Both are needed: CPython's namedtuple
+  has `_fields`, MicroPython's has only `_asdict`. ldpy's own `Row`, what an
+  `m{ … }` of arity ≥ 2 yields, already carries `_fields`, so
+  `for @bindings in list(m{ … })` works now too.
 
 - **A prefix declared while a graph is current binds on it too.** `@graph`
   gave the designated graph the prefixes in scope at that moment, and only

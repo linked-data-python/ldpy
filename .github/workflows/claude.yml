@@ -63,7 +63,7 @@ jobs:
       # fixed correctly and could not be shown to be, which cost a round trip
       # and left a wrong claim about MicroPython standing in a design note.
       - name: Install the package and its test dependencies
-        run: python -m pip install -e .[dev]
+        run: python -m pip install -e '.[dev,lsp,debug,highlight,format]'
 
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
