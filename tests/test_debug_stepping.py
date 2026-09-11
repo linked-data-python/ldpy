@@ -220,7 +220,14 @@ def test_pas_entrant_dans_une_fonction_ldpy(traces):
     """`step in` sur `build(3)` entre dans le corps ldpy de la fonction, et
     `step out` en ressort — le tout en coordonnées .ldpy."""
     stops = traces["fonction"]
-    assert [st.line for st in stops][:3] == [4, 3, 4]
+    lignes = [st.line for st in stops][:3]
+    assert lignes[:2] == [4, 3]
+    # Sortir de `build` rend la main SUR la ligne d'appel (4) à partir de
+    # CPython 3.11 ; sur 3.10 la ligne courante a déjà avancé (5). Les deux
+    # sont des arrêts sur une région .ldpy et le geste a bien changé de
+    # région : l'invariant de la fiche 103 tient des deux côtés. Ce qui est
+    # propre à ldpy, et donc ce que ce test doit serrer, c'est la PROFONDEUR.
+    assert lignes[2] in (4, 5)
     assert stops[1].depth == stops[0].depth + 1
     assert stops[2].depth == stops[0].depth
 
