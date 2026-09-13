@@ -111,6 +111,7 @@ suite, and its assertions are the test.
 ## Design records
 
 Every non-trivial choice in this repository is written down, one file per
-decision, in the [`pilotage`](https://github.com/linked-data-python/pilotage) repository. Comments and docs
-cite them by identifier — `ldpy/024`, `vscode/103` — which resolves to
-[`design/`](https://github.com/linked-data-python/pilotage/tree/main/design).
+decision, in the `steering` directory. comments and docs
+cite them by identifier — `ldpy/024`.
+
+Non-trivial choices related to other repositories of the workspace, such as the [VS Code extension](https://github.com/linked-data-python/vscode-ldpy), can either be found in the `steering` directory of that repository, or in the [`pilotage` (private) repository](https://github.com/linked-data-python/pilotage/tree/main/design).
