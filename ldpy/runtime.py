@@ -1070,6 +1070,23 @@ def _prepare_sparql(text, namespaces, update):
     return prep
 
 
+# INSERT DATA / DELETE DATA admit no variables (SPARQL 1.1 Update, 3.1.1):
+# binding one through initBindings leaves the block holding a Variable, and
+# rdflib then inserts or deletes nothing, silently.  Inside such an update
+# an interpolated term is therefore written into the text, as the term it
+# is.  Found by the corpus study.
+_GROUND_DATA = re.compile(r"\b(INSERT|DELETE)\s+DATA\b", re.I)
+
+
+def _grounded(text, values):
+    """``text`` with each ``?name`` / ``$name`` of ``values`` replaced by
+    the N-Triples form of its term."""
+    for name, value in values.items():
+        text = re.sub(r"[?$]%s(?![\w])" % re.escape(str(name)),
+                      lambda _m, t=node(value).n3(): t, text)
+    return text
+
+
 class PreparedQuery:
     """The value of an s{ ... } island (record ldpy/015): a prepared, lazy query.
 
@@ -1110,6 +1127,12 @@ class PreparedQuery:
             raise RuntimeError(
                 "s{ } with no graph: declare '@graph ...' in scope, or "
                 "apply the query to a graph — s{ ... }(g)")
+        if self.update and _GROUND_DATA.search(self.text):
+            values = dict(self.bindings or {})
+            values.update(self.interps)
+            prep = _prepare_sparql(_grounded(self.text, values),
+                                   self.namespaces, True)
+            return self.graph.update(prep)
         prep = _prepare_sparql(self.text, self.namespaces, self.update)
         if self.update:
             return self.graph.update(prep, initBindings=self._init_bindings())

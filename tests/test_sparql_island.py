@@ -47,6 +47,32 @@ def test_insert_data_update(run):
     assert (URIRef("http://e/new"), None, None) in g["g"]
 
 
+# INSERT DATA / DELETE DATA admit no variables: an interpolated term bound as
+# initBindings left the block holding a Variable, and nothing was written,
+# without an error.  Found by the corpus study.
+
+def test_insert_data_takes_an_interpolated_term(run):
+    g, _ = run(DATA + "who = ex:new\nlabel = 'x y'\n"
+                      "s{ INSERT DATA { {who} a ex:T ; ex:label {label} } }"
+                      ".execute()\n")
+    assert (URIRef("http://e/new"), URIRef("http://e/label"),
+            Literal("x y")) in g["g"]
+
+
+def test_delete_data_takes_an_interpolated_term(run):
+    g, _ = run(DATA + "v = 2\ns{ DELETE DATA { ex:b ex:v {v} } }.execute()\n")
+    assert (URIRef("http://e/b"), URIRef("http://e/v"), Literal(2)) \
+        not in g["g"]
+    assert (URIRef("http://e/a"), URIRef("http://e/v"), Literal(1)) in g["g"]
+
+
+def test_an_interpolated_name_is_not_a_prefix_of_another(run):
+    g, _ = run(DATA + "s{ INSERT DATA { ex:z ex:v {1} , {10} } }.execute()\n")
+    assert {o for o in g["g"].objects(URIRef("http://e/z"),
+                                       URIRef("http://e/v"))} \
+        == {Literal(1), Literal(10)}
+
+
 def test_multiline_query_with_comment(run):
     g, _ = run(DATA + textwrap.dedent("""\
         n = len(list(s{
