@@ -1,6 +1,6 @@
 # 027 — `@prefix` sans objet d'exécution : les issues possibles
 
-**Date** : 2026-09-11 · **Statut** : implémenté — livré en ldpy 0.6.3, portée et STRLANG/STRDT depuis
+**Date** : 2026-10-30 · **Statut** : implémenté — livré en ldpy 0.6.3, portée et STRLANG/STRDT depuis
 
 ## Contexte
 
@@ -63,6 +63,15 @@ Comportements à connaître :
 - **rdflib ne remplace pas un préfixe existant** : si le graphe désigné porte
   déjà `ex:` pour une AUTRE IRI, `bind()` crée `ex1:` plutôt que d'écraser —
   on ne vole pas le préfixe de l'appelant.
+- **Une liaison en plus n'est pas une différence de sens.** Le graphe
+  désigné garde ses triplets et ses liaisons ; il en gagne. Un code rdflib
+  qui n'avait jamais lié `so:` sérialise `<http://schema.org/Dataset>`, sa
+  traduction sous `@graph` sérialise `so:Dataset` : même graphe, autre
+  écriture, et un consommateur qui relit la sortie obtient le même graphe.
+  C'est la règle de l'étude du corpus : l'équivalence porte sur les triplets
+  et sur les liaisons que l'original pose, des liaisons en plus sont
+  tolérées. Qui veut un graphe intact écrit `+{ … }(g)` : le suffixe d'appel
+  (fiche 019) désigne le graphe d'un seul îlot et ne lie rien.
 
 `as` lève la limite là où l'objet doit survivre ET où le préfixe sert aussi
 lexicalement, pas partout où un `Namespace` est construit : une région où le
