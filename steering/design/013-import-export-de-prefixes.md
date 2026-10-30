@@ -1,6 +1,6 @@
 # 013 — Import et export de préfixes entre modules
 
-**Date** : 2026-09-03 · **Statut** : implémenté — extension aux `Namespace` rdflib ordinaires à trancher
+**Date** : 2026-10-30 · **Statut** : implémenté — extension aux `Namespace` rdflib ordinaires à trancher
 
 **Origine** : décision D1 de la fiche `corpus/402` (analyse de surface) ;
 manque structurel 3 de la fiche 012.
@@ -170,26 +170,22 @@ Implémentation : commit `0191c78`, 20 tests (`tests/test_prefix_import.py`).
 ## Limite révélée par le corpus : une condition d'applicabilité
 
 `from m import brick:` ne fonctionne que si le module `m` **est un module
-ldpy**, c'est-à-dire s'il expose `__namespaces__`. Sur les quatre régions
-étudiées par la strate `ns_import_project` (fiche `corpus/403`) :
+ldpy**, c'est-à-dire s'il expose `__namespaces__`. Aucun dépôt du corpus
+n'en a un : les 22 traductions de l'échantillon (fiche `corpus/403`) qui
+emploient la construction importent toutes d'un module de shim où le
+traducteur a écrit `__namespaces__` à la main. Le besoin, lui, est partout
+— des namespaces de projet employés massivement en position de terme
+(`umd-lib/plastron` : `owl.sameAs`, `edm.Agent`, `bibo.Letter`…).
 
-- `umd-lib/plastron` — une douzaine de namespaces de projet employés
-  massivement **en position de terme** (`owl.sameAs`, `edm.Agent`,
-  `bibo.Letter`…). `plastron.namespaces` n'exporte rien de tel : aucun ne
-  qualifie ;
-- `pyiron/semantikon` — même situation, `semantikon.ontology` non plus ;
-- `statnett/KGraphPy` — le seul cas créditable, et seulement parce que le
-  module de namespaces était assez petit pour être reproduit dans le contexte
-  de la région ; le namespace effectivement importé s'est en outre révélé
-  **inutilisé comme terme**, donc rien n'a été crédité.
-
-**La densité d'usage ne suffit pas.** Trois régions sur quatre emploient
-vraiment un namespace de projet en position de terme et n'ont pourtant pas
-droit à la construction, parce qu'un paquet tiers déjà publié ne s'édite pas.
-Ce n'est pas une limite d'expressivité mais une condition d'applicabilité :
-`ns_import_project` mesure d'abord la rareté de `__namespaces__` dans la
-nature, ensuite seulement le gain de la notation — à énoncer tel quel dans
-l'article.
+Ce n'est pas une limite d'expressivité mais une **condition
+d'applicabilité** : la construction paie une fois le module exportateur
+écrit en ldpy, ce qu'un corpus de code antérieur au langage ne peut pas
+montrer. L'étude la compte donc à part, sans citation ni gain
+(`UNATTESTED` dans `corpus-study/rdfeval/constructions.py`), et l'article la
+présente comme un bénéfice d'adoption. Quand elle sert dans un fichier, elle
+ne remplace pas un import Python dont le module se sert aussi comme objet
+(`MaxBerktoldRWTH/BRICKbuilder` réexporte `QUDT` puis écrit
+`QUDT.degreeCelsius`) : le préfixe importé ne lie aucun nom.
 
 ## Question ouverte : reconnaître un `Namespace` rdflib ordinaire
 
@@ -199,8 +195,8 @@ Deux suites possibles, à arbitrer, qui rejoignent la fiche
 1. **reconnaître un `Namespace` rdflib ordinaire** à l'import — `from
    plastron.namespaces import edm:` irait chercher l'objet `Namespace` exporté
    et en dériverait la liaison. C'est la voie qui débloque du code existant
-   sans rien demander à l'amont, et la seule qui fasse une différence
-   mesurable sur le corpus ;
+   sans rien demander à l'amont, et la seule qui rendrait la construction
+   attestable sur le corpus ;
 2. **déclarer côté consommateur** — l'utilisateur écrit lui-même le `@prefix`
    correspondant, ce qui est la situation actuelle et n'a rien de scandaleux :
    une ligne par namespace, une fois par fichier.
