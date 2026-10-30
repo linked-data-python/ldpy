@@ -1,6 +1,6 @@
 # 014 — Graphe courant : `@graph`, `+{ … }` et `-{ … }`
 
-**Date** : 2026-09-03 · **Statut** : implémenté
+**Date** : 2026-10-30 · **Statut** : implémenté
 
 **Origine** : décisions D2 et D6 de la fiche `corpus/402` ; défaut 4 de la
 fiche 012 (« mutation seulement par `+=` »).
@@ -68,6 +68,19 @@ pas le déclarer — `+{ P }(g)`, `+{ P }(g, b)`, `+{ P }(bindings=b)` — selon
 règle unique de la fiche 019 : un îlot suivi d'une parenthèse reçoit
 explicitement le contexte qu'il aurait lu autour de lui, graphe d'abord,
 binding ensuite.
+
+**Évaluer, puis écrire.** Un bloc est une instruction, pas une suite
+d'appels : tous ses termes sont évalués, de gauche à droite, avant que le
+premier triplet soit écrit ou retiré. Si l'un lève — une interpolation, ou
+la matérialisation d'une variable liée par une politique de coercition
+(fiche 020) — le graphe reste tel qu'il était. Une suite de `g.add` laisse au
+contraire les triplets déjà ajoutés ; un code qui compte sur ce graphe
+partiel garde les premiers triplets dans un bloc à part. C'est la lecture
+d'un bloc Turtle comme une seule affirmation, celle de `g.addN([…])` en
+Python et d'`INSERT DATA` en SPARQL ; et elle ne fait pas dépendre l'effet
+d'une erreur de l'ordre dans lequel `;` et `,` se déplient. L'étude du
+corpus n'a trouvé que deux régions sur 303 où le dépôt peut atteindre ce
+cas, et dans l'une le graphe partiel est de toute façon jeté.
 
 Code émis : `_ldpy_.add_to(<graphe courant>, …)` et `_ldpy_.remove_from(…)` —
 pas de `+=`, car celui-ci exige une cible assignable, ce qui interdirait une
@@ -160,8 +173,12 @@ espace de graphes.
 8. Cible non assignable : propriété en lecture seule et graphe global de module
    (les deux cas de la fiche 012) fonctionnent sans `global` ni `__iadd__`.
 9. Golden + identité + exécution (fiche 006) ; language map exacte.
+10. Évaluer, puis écrire : une interpolation qui lève au troisième terme
+    laisse le graphe inchangé, pour `+{ }` comme pour `-{ }` ; de même une
+    variable liée dont la politique de coercition lève, dans `add_to`.
 
-Implémentation : commit `6dd5d77`, 22 tests (`tests/test_current_graph.py`).
+Implémentation : commit `6dd5d77`, 22 tests (`tests/test_current_graph.py`) ;
+la matérialisation complète avant écriture dans `add_to`, et le test 10.
 
 ## Voir aussi
 

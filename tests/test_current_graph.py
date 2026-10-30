@@ -383,3 +383,53 @@ def test_designating_keeps_bindings_the_caller_already_had(run):
                 "+{ ex:a ex:p 1 }\n")
     got = {p for p, _ in ns["mine"].namespaces()}
     assert "ex" in got and "mine" in got
+
+
+# ------------------------------------- evaluate, then write (record ldpy/014)
+
+_FAILING_BLOCK = textwrap.dedent("""\
+    @prefix ex: <http://e/> .
+    @graph as g
+    +{ ex:a ex:keep 0 }
+    def boom():
+        raise ValueError("boom")
+    try:
+        %s{ ex:a ex:p 1 ; ex:keep 0 ; ex:q {boom()} }
+    except ValueError:
+        pass
+    """)
+
+
+def test_add_writes_nothing_when_a_later_term_raises(run):
+    """A block is one statement: every term is evaluated before the first
+    triple is written, so an interpolation that raises leaves the graph as
+    it was — unlike a sequence of g.add, which leaves the earlier ones."""
+    ns, _ = run(_FAILING_BLOCK % "+")
+    assert set(ns["g"]) == {(URIRef(E + "a"), URIRef(E + "keep"), Literal(0))}
+
+
+def test_remove_removes_nothing_when_a_later_term_raises(run):
+    ns, _ = run(_FAILING_BLOCK % "-")
+    assert set(ns["g"]) == {(URIRef(E + "a"), URIRef(E + "keep"), Literal(0))}
+
+
+def _failing_policy():
+    from ldpy.runtime import Coercion
+
+    def refuse(value):
+        raise ValueError("cannot coerce %r" % (value,))
+    return Coercion({("y",): refuse})
+
+
+def test_add_writes_nothing_when_materialising_a_later_term_raises():
+    """The same holds when the failure comes from materialising a bound
+    variable — a coercion policy (record ldpy/020) runs inside add_to, not
+    while its arguments are evaluated."""
+    from rdflib.term import Variable
+    from ldpy import runtime
+    g = Graph()
+    a, p, q = URIRef(E + "a"), URIRef(E + "p"), URIRef(E + "q")
+    with _failing_policy(), pytest.raises(ValueError, match="cannot coerce"):
+        runtime.add_to(g, (a, p, Variable("x")), (a, q, Variable("y")),
+                       bindings={"x": 1, "y": 2})
+    assert len(g) == 0

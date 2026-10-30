@@ -774,12 +774,17 @@ def bind_prefix(graph, prefix, ns):
 def add_to(graph, *triples, bindings=None):
     """'+{ ... }': instantiate and add to the current graph (record ldpy/014).
     A triple with a term still unbound is dropped — one cannot write an
-    unknown term."""
+    unknown term. Every triple is materialised before the first is written:
+    a term that raises (a coercion policy, record ldpy/020) leaves the graph
+    as it was."""
     term = _materializer(bindings, keep_vars=False)
+    ready = []
     for s, p, o in triples:
         s2, p2, o2 = term(s), term(p), term(o)
         if s2 is not None and p2 is not None and o2 is not None:
-            graph.add((s2, p2, o2))
+            ready.append((s2, p2, o2))
+    for t in ready:
+        graph.add(t)
 
 
 def remove_from(graph, *patterns, bindings=None):

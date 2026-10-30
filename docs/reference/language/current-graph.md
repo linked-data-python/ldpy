@@ -116,6 +116,29 @@ like SPARQL's `DELETE WHERE`:
 assert len(g) == 2
 ```
 
+### A block is evaluated, then written
+
+A `+{ }` or `-{ }` block is one statement, not a sequence of calls: every
+term is evaluated, left to right, before the first triple is written or
+removed. If one raises, the graph is left as it was.
+
+```ldpy
+@prefix ex: <http://example.org/> .
+@graph as g
+def unknown():
+    raise ValueError("no value")
+try:
+    +{ ex:s ex:p 1 ; ex:q {unknown()} }
+except ValueError:
+    pass
+assert len(g) == 0                   # not even `ex:s ex:p 1`
+```
+
+A sequence of `g.add(…)` calls behaves differently: the triples added before
+the failing one stay. Code that relies on that partial graph — rare, since
+the exception usually discards it — must keep the earlier triples in a block
+of their own.
+
 ## Which graph does an island use?
 
 `+{ }`, `-{ }`, `m{ }` and `s{ }` all read the current graph. If none is
