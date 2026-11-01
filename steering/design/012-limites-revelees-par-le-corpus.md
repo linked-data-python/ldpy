@@ -1,6 +1,6 @@
 # 012 — Catalogue des limites révélées par l'étude de corpus
 
-**Date** : 2026-09-03 · **Statut** : constats établis — catalogue, chaque point traité dans sa fiche
+**Date** : 2026-11-01 · **Statut** : constats établis — catalogue, chaque point traité dans sa fiche
 
 **Source** : revue humaine des 40 traductions de `github/examples/`
 (fiche 401), et les campagnes de traduction stratifiée (fiche `corpus/403`).
@@ -22,7 +22,7 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 | datatype interpolé sur f-string (`f"{v}"^^{dt}`) | corrigé (vérifié) |
 | `+{ }` / `-{ }` non capturés après un mot-clé composé (`if x: +{ … }`) — Python invalide émis, sans lever | corrigé, ldpy 0.4.0, commit `90d8b9d` |
 | `for @bindings in` coerce à l'entrée et casse la logique Python qui suit (`b["col"] != ""` devient toujours vrai) | corrigé, ldpy 0.4.0, commit `90d8b9d` : `Bindings` garde une face brute, exposée par `b.raw` |
-| un îlot dans un trou d'f-string (`f"{m{ ?s ex:p ?o }.first()}"`) est recopié verbatim dans le Python émis, qui ne compile plus ; le message d'erreur vient du parseur d'f-string et ne nomme pas la cause | ouvert — TODO ldpy. Deux réponses possibles : descendre dans les trous d'f-string comme dans le reste (le trou est un contexte d'expression, R1 s'y appliquerait naturellement), ou refuser explicitement avec un message qui le dise — moins cher, supprime l'essentiel du mal |
+| un îlot dans un trou d'f-string (`f"{m{ ?s ex:p ?o }.first()}"`) est recopié verbatim dans le Python émis, qui ne compile plus ; le message d'erreur vient du parseur d'f-string et ne nomme pas la cause | refusé avec un message qui nomme la cause et le contournement, ldpy 0.6.2, commit `750304e` ; descendre dans le trou reste possible |
 | interpolation d'un identifiant nu qui est aussi un préfixe de chaîne Python (`{r}`, `{b}`, `{f}`, `{u}`) : `IndexError` dans le lexer | ouvert — TODO ldpy |
 | `@graph NAME .` : le point final est recopié dans le Python émis, l'erreur surgit en aval | ouvert — TODO ldpy |
 
@@ -90,6 +90,32 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
   qu'une fois, le suffixe coûte même une ligne de moins que la déclaration.
 - **Le joker fait exactement ce que la référence promet**, sur les trois
   positions, y compris l'effacement multi-valeurs d'un coup.
+
+## À trancher
+
+- **`None` interpolé** devient `Literal('None')` : `-{ }` ne retire rien
+  sans lever, un motif `m{ }` cherche un littéral là où rdflib fait un
+  joker (catalogue, « en attente d'arbitrage »). Accepter la proposition —
+  `node(None)` lève `TypeError` en nommant les deux écritures voulues, la
+  variable joker et l'alias exporté `ldpy.ANY`, même règle dans `m{ }` ?
+
+## Ce qui reste
+
+- Les deux défauts ouverts du catalogue : `{r}` et ses pareils, `@graph NAME .`.
+- `docs/reference/language/current-graph.md` dit encore « designate the
+  existing Python variable `g` » : `@graph g` capture la **valeur** de `g`,
+  pas le nom, et une réaffectation ultérieure envoie les écritures dans un
+  graphe que plus rien n'atteint.
+- Une chaîne qui ressemble à une IRI, interpolée dans `s{ }`, devient un
+  littéral sans erreur (catalogue, renvoi 020) : à verser aux pièges de
+  `migrate-from-rdflib.md` et à la référence de `s{ }`.
+- `ex:{expr}` est refusé dans `s{ }` avec le message du parseur SPARQL de
+  rdflib (« Expected SelectQuery, found '?' »), qui ne nomme pas la cause ;
+  le contournement `@prefix … as S .` puis `{S[term]}` existe. Même remède
+  que pour `?v@en` (fiche 027) : un refus qui se nomme.
+- Verser au catalogue les constats de la campagne du 2026-09-03 restés
+  hors fiche : `_:label` n'est pas `BNode("label")`, les lectures sans îlot,
+  la dérive de lignes.
 
 ## Ce que le catalogue dit d'ensemble
 

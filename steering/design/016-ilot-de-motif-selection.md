@@ -1,6 +1,6 @@
 # 016 — Îlot de motif `m{ … }` : lire le graphe
 
-**Date** : 2026-09-03 · **Statut** : implémenté
+**Date** : 2026-11-01 · **Statut** : implémenté
 
 **Origine** : décision D5 de la fiche `corpus/402` (mesures) ; manque
 structurel 5 de la fiche 012 (« aucun îlot de *filtrage* »).
@@ -363,6 +363,14 @@ comme un choix de l'auteur, pas comme un repli.
 Le rappel de coercition qui vaut ici — un prédicat qui est une chaîne Python
 contenant une IRI se coerce en littéral et ne matche rien — est en fiche
 [020](020-coercition-python-rdf.md).
+
+## À trancher
+
+- **Une réduction « première solution, lever sur aucune »** : `.first()` ne
+  lève pas sur zéro solution, `.one()` lève sur deux, et seul
+  `next(iter(m{ … }))` fait ce que fait `next(…)` sans défaut — forme que la
+  réparation des paires du corpus a dû employer. Faut-il une réduction
+  dédiée ? Sans elle, ces paires restent-elles `directly-expressible` ?
 
 ## Tests imposés
 

@@ -1,6 +1,6 @@
 # 027 — `@prefix` sans objet d'exécution : les issues possibles
 
-**Date** : 2026-10-30 · **Statut** : implémenté — livré en ldpy 0.6.3, portée et STRLANG/STRDT depuis
+**Date** : 2026-11-01 · **Statut** : implémenté — livré en ldpy 0.6.3, portée et STRLANG/STRDT depuis
 
 ## Contexte
 
@@ -143,6 +143,15 @@ ses dix-neuf `global` servis par `global @prefix … as EX .`.
 `arborist` et `JustlyAI` comparaient un graphe dont aucun triplet ne dépend
 des préfixes, si bien qu'une traduction cassée restait verte. Leurs pilotes
 rendent maintenant les liaisons du graphe et les globals exportés.
+
+## À trancher
+
+- **`@graph g` remplace la liaison d'un espace de noms que le graphe portait
+  déjà sous un autre préfixe** (`bind()` de rdflib remplace par défaut) :
+  sept traductions du corpus faisaient perdre au graphe sérialisé un préfixe
+  posé par le dépôt, et l'étude compte désormais une liaison perdue comme
+  une différence (fiche corpus/403). Garder, et le dire plus haut, ou lier
+  sans écraser (`bind(…, override=False)`) ?
 
 ## Voir aussi
 

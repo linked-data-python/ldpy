@@ -1,6 +1,6 @@
 # 021 — Coloration syntaxique : réutiliser l'existant, couvrir les frameworks communs
 
-**Date** : 2026-09-03 · **Statut** : chantier ouvert — cinq moteurs faits, Rouge et tree-sitter restent
+**Date** : 2026-11-01 · **Statut** : chantier ouvert — cinq moteurs faits, Rouge et tree-sitter restent
 
 ## La forme retenue : un dépôt, une spécification
 
@@ -109,6 +109,15 @@ corrigés (détail en fiche 002) :
 
 La spécification d'îlots partagée entre moteurs de coloration n'est donc plus
 seulement dérivée du transpileur : dans ces deux cas, elle l'a contrôlé.
+
+## Ce qui reste
+
+- Rouge et tree-sitter, les deux moteurs restants.
+- Polissage : aucun test du cas limite `{}` dans le masquage ; tags de
+  langue et fonctions SPARQL partagent une couleur (jeton `Name.Function`
+  de `SparqlLexer`) ; aucun test croisé entre la grammaire TextMate de
+  `vscode-ldpy` et le lexer Pygments ; une grammaire TextMate Turtle/SPARQL
+  à vendorer.
 
 ## Prochaine action concrète
 

@@ -215,6 +215,16 @@ surestime le bénéfice.
 7. Performance : le banc de matérialisation (fiche 009) ne régresse pas
    mesurablement sans politique installée.
 
+## À trancher
+
+- **Le tag de langue calculé n'a pas de notation** : `"…"@{expr}` n'existe
+  pas, et `Literal(v, lang=k)` sur un dictionnaire indexé par codes de
+  langue (`Informasjonsforvaltning/concepttordf`) reste en Python, passé par
+  `{expr}` — correct, mais c'est le cas où la notation ne sert plus.
+  Notation (`{v}@{k}` ?), refus nommé, ou statu quo assumé ? Question
+  distincte de `?v@en`, refusé (fiche 027) : ici la valeur est une forme
+  lexicale, seul le tag est calculé.
+
 ## Questions ouvertes
 
 - L'ergonomie réelle du dictionnaire à clés hétérogènes (tuples et types) sur du

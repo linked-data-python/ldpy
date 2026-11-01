@@ -1,6 +1,6 @@
 # 015 — Îlot SPARQL `s{ … }`
 
-**Date** : 2026-09-03 · **Statut** : implémenté
+**Date** : 2026-11-01 · **Statut** : implémenté
 
 **Origine** : décision D3 de la fiche `corpus/402`. Prolonge la fiche 007
 (expressions SPARQL différées `e{ … }`, implémentées) vers la requête complète.
@@ -201,6 +201,20 @@ pour `initBindings` se vérifie telle quelle : variable **projetée** → liaiso
 en suffixe d'appel ; variable **non projetée** → interpolation en position de
 terme. Et un `initNs` dont tous les préfixes sont déjà pré-liés par rdflib est
 inerte.
+
+## À trancher
+
+- **L'objet que rend `s{ }` ne passe pas dans `graph.query()` de rdflib** (il
+  n'a pas d'`algebra`) : un code qui tient la requête pour la confier à une
+  fonction qui appelle `graph.query(q)` ne peut pas recevoir un `s{ }`. Le
+  rendre acceptable, ou l'assumer et le dire ?
+- **`s{ }(g)` passe toujours `initBindings`, même vide, et une requête déjà
+  analysée** : un objet-graphe sans ce paramètre (kglab) lève, un store qui
+  refuse la requête analysée (oxrdflib) laisse rdflib répondre en silence
+  avec son propre moteur. Ne passer `initBindings` que s'il y a des
+  liaisons, et le texte plutôt que l'arbre ?
+- **`f<{x}>` est refusé dans `s{ }`** : manque à combler, ou frontière
+  assumée ?
 
 ## Tests imposés
 
