@@ -1,5 +1,16 @@
 ## Release Notes
 
+### [Unreleased]
+
+- **A bare number in an island is a Turtle number.** `4.5` is an
+  `xsd:decimal`, as in Turtle, where it used to become a Python float, hence
+  an `xsd:double`: an island read by someone who knows Turtle must not
+  mislead them. `4.` is now the integer 4 and the statement's full stop;
+  `04`, valid Turtle, no longer produces invalid Python; and `1_000`, `0x10`
+  or `1j`, which are Python but not Turtle, are refused with a hint to write
+  a Python value as `{…}`. Integers and doubles still go through the
+  coercion policy.
+
 ### [0.6.5] — 2026-09-11
 
 - **`for @bindings` takes namedtuple rows.** Reported by Erdem Onal (issue

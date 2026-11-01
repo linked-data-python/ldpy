@@ -53,6 +53,16 @@ STRING_PREFIXES = frozenset((
 _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 _LANGTAG_RE = re.compile(r"@([A-Za-z]+(?:-[A-Za-z0-9]+)*)")
 _NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+# Turtle's three numeric literals (Turtle 1.1, productions 19-21), tried
+# longest first. A bare number in an island is RDF, not Python: `4.5` is an
+# xsd:decimal, `4.` the integer 4 followed by the statement's full stop, and
+# `04`, `1_000` or `0x10` are not Python literals one may paste in.
+_TURTLE_NUMBER_RE = re.compile(
+    r"(?P<double>[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)[eE][+-]?[0-9]+)"
+    r"|(?P<decimal>[+-]?[0-9]*\.[0-9]+)"
+    r"|(?P<integer>[+-]?[0-9]+)")
+_XSD_DECIMAL = "http://www.w3.org/2001/XMLSchema#decimal"
 #: commentaire Python jusqu'à la fin de ligne (fiche 013, détection d'import)
 _COMMENT_RE = re.compile(r"#[^\n]*")
 
@@ -2132,14 +2142,7 @@ class Transpiler:
         if c in "\"'" or (c and c in "rbfuRBFU" and self._peek(1) in "\"'"):
             return self._g_literal(), False
         if c.isdigit() or c in "+-" or (c == "." and self._peek(1).isdigit()):
-            start = self.i
-            if c in "+-":
-                self._take(1)
-            end = self._number_end(self.i)
-            if end == self.i:
-                self._error("nombre attendu")
-            self._take(end - self.i)
-            return "%s.node(%s)" % (RUNTIME_ALIAS, t[start:self.i]), False
+            return self._turtle_number(), False
         if _name_start(c) or c == ":":
             m = _NAME_RE.match(t, self.i)
             word = m.group(0) if m else ""
@@ -2151,6 +2154,32 @@ class Transpiler:
                 return RUNTIME_ALIAS + ".node(False)", False
             return _maybe_impure(self._take_pname(in_island=True), gctx), False
         self._error("terme RDF attendu")
+
+    def _turtle_number(self):
+        """A bare number in term position, read as Turtle reads it.
+
+        An integer or a double becomes a Python int or float handed to
+        `node()`, as before — the coercion policy (record 020) still sees
+        it. A decimal has no Python literal that rdflib would type
+        `xsd:decimal` (a float is an `xsd:double`): it is emitted as the
+        typed literal it abbreviates, `"4.5"^^xsd:decimal`."""
+        m = _TURTLE_NUMBER_RE.match(self.text, self.i)
+        if m is None:
+            self._error("nombre attendu")
+        lexical = m.group(0)
+        after = self.text[m.end():m.end() + 1]
+        if after and (after.isalnum() or after == "_"):
+            self._error("%r is not a Turtle number (a Python value is "
+                        "written {…})"
+                        % self.text[self.i:self._number_end(m.end())])
+        self._take(len(lexical))
+        if m.group("decimal"):
+            return "%s.Literal(%r, datatype=%s.URIRef(%r))" % (
+                RUNTIME_ALIAS, lexical, RUNTIME_ALIAS, _XSD_DECIMAL)
+        if m.group("integer"):
+            # `04` is Turtle, not Python: the value, written canonically
+            return "%s.node(%d)" % (RUNTIME_ALIAS, int(lexical))
+        return "%s.node(%s)" % (RUNTIME_ALIAS, lexical)
 
     def _interp_with_suffix(self, expr):
         """Terme interpolé de graphe, avec suffixe RDF optionnel COLLÉ :

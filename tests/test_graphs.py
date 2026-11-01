@@ -1,7 +1,10 @@
 """Graphes g{ ... } : construction, bnodes, collections, imbrications."""
 
+import pytest
 from rdflib import Graph, URIRef, Literal, Variable, BNode, RDF
 from rdflib.compare import isomorphic
+
+from ldpy.transpiler import LdpySyntaxError
 
 
 def ttl(text):
@@ -122,9 +125,45 @@ def test_literals_in_graph(run, prefixes):
         "http://www.w3.org/2001/XMLSchema#string")) in vals
     assert Literal("tagué", lang="fr") in vals
     assert Literal(-5) in vals
-    assert Literal(2.5) in vals
+    assert Literal("2.5", datatype=URIRef(
+        "http://www.w3.org/2001/XMLSchema#decimal")) in vals
     assert Literal(True) in vals
     assert Literal(False) in vals
+
+
+@pytest.mark.parametrize("objects", [
+    "4.5, -0.5, .5, +2.25",            # DECIMAL: xsd:decimal, not a float
+    "4, -5, +7, 04",                    # INTEGER, leading zero included
+    "4.5e0, 1E3, .5e-1, 3.e2",          # DOUBLE
+])
+def test_bare_numbers_are_turtle_numbers(run, prefixes, objects):
+    """rdflib reading the same Turtle is the oracle: a bare number in an
+    island is an RDF literal with Turtle's datatype, whatever Python would
+    make of the same characters."""
+    g, _ = run(prefixes + "gr = g{ ex:s ex:p %s }\n" % objects)
+    expected = Graph().parse(data=prefixes + "ex:s ex:p %s ." % objects,
+                             format="turtle")
+    assert isomorphic(g["gr"], expected)
+
+
+def test_a_full_stop_after_a_number_ends_the_triple(run, prefixes):
+    # `4.` is the integer 4 and the statement's full stop, as in Turtle
+    g, _ = run(prefixes + "gr = g{ ex:s ex:p 4. ex:t ex:q 5 }\n")
+    assert set(g["gr"].objects()) == {Literal(4), Literal(5)}
+
+
+@pytest.mark.parametrize("number", ["1_000", "0x10", "1j"])
+def test_a_python_only_number_is_refused(run, prefixes, number):
+    with pytest.raises(LdpySyntaxError, match="not a Turtle number"):
+        run(prefixes + "gr = g{ ex:s ex:p %s }\n" % number)
+
+
+def test_a_bare_decimal_matches_a_decimal(run, prefixes):
+    src = prefixes + (
+        'data = g{ ex:a ex:w "4.5"^^xsd:decimal . ex:b ex:w "4.5"^^xsd:double }\n'
+        "found = [s for s in m{ ?s ex:w 4.5 }(data)]\n")
+    g, _ = run(src)
+    assert g["found"] == [URIRef("http://example.org/ns#a")]
 
 
 def test_relative_iris_in_graph(run):

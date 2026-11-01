@@ -1,6 +1,6 @@
 # 020 — Coercition Python → RDF : une politique, configurable
 
-**Date** : 2026-09-03 · **Statut** : implémenté
+**Date** : 2026-11-01 · **Statut** : implémenté
 
 ## Contexte
 
@@ -121,6 +121,30 @@ bon endroit** dans la documentation : le piège est couvert dans
 `migrate-from-rdflib.md` pour `URIRef(x)` vs `f<{x}>`, mais pas pour
 l'interpolation d'un `m{ }` ni d'un `s{ }`, qui sont les deux positions où la
 campagne l'a effectivement rencontré.
+
+## Un nombre nu d'un îlot est un nombre Turtle
+
+Un nombre écrit nu dans un îlot est lu selon les trois productions de Turtle
+(`INTEGER`, `DECIMAL`, `DOUBLE`), non comme un littéral Python
+(`_turtle_number`, `ldpy/transpiler/core.py`) :
+
+- `4.5`, `.5`, `-0.5` sont des **`xsd:decimal`**. Aucun littéral Python ne
+  donne ce type à rdflib — un `float` devient un `xsd:double` —, le décimal
+  est donc émis comme le littéral typé qu'il abrège,
+  `Literal("4.5", datatype=xsd:decimal)`, et ne passe pas par `node()` : pas
+  plus que `"4.5"^^xsd:decimal`, il n'a de valeur Python à convertir ;
+- un entier et un double restent une valeur Python confiée à `node()`, donc
+  à la politique de coercition, comme avant ; `04` est écrit `4`, parce
+  qu'il est du Turtle et pas du Python ;
+- `4.` est l'entier 4 suivi du point qui clôt l'énoncé, comme en Turtle ;
+- `1_000`, `0x10`, `1j` sont refusés à la transpilation, avec l'indication
+  qu'une valeur Python s'écrit `{…}`.
+
+L'oracle est rdflib lisant le même Turtle (`tests/test_graphs.py`) : un
+lecteur qui connaît Turtle ne doit pas être trompé par un îlot. Aucune des
+365 traductions de l'étude de corpus n'écrivait de décimal nu ; trois
+fichiers de l'espace de travail en avaient, dont l'exemple `for_stmt.ldpy`,
+dont les valeurs deviennent des décimaux.
 
 ## Le suffixe `^^` n'existe qu'en position de terme
 
