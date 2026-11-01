@@ -1,6 +1,6 @@
 ## Release Notes
 
-### [Unreleased]
+### [0.7.0] — 2026-11-01
 
 - **A bare number in an island is a Turtle number.** `4.5` is an
   `xsd:decimal`, as in Turtle, where it used to become a Python float, hence
@@ -10,6 +10,17 @@
   or `1j`, which are Python but not Turtle, are refused with a hint to write
   a Python value as `{…}`. Integers and doubles still go through the
   coercion policy.
+
+- **`+{ }` and `-{ }` evaluate every term before writing anything.** If one
+  term raises — a coercion policy refusing a value, say — the graph is left
+  as it was; it used to keep the triples written before the failing one.
+
+- **Interpolation in `s{ INSERT DATA … }` / `s{ DELETE DATA … }` writes the
+  term into the query.** A DATA block admits no variable (SPARQL 1.1 Update,
+  3.1.1): bound through `initBindings`, the interpolated term stayed a
+  variable, and rdflib inserted or deleted nothing, without an error. In an
+  update holding such a block, each interpolated term is now written in its
+  N-Triples form.
 
 ### [0.6.5] — 2026-09-11
 
