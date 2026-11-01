@@ -2297,6 +2297,19 @@ class Transpiler:
             elif c == "#":
                 j = t.find("\n", self.i)
                 pieces.append(self._take((j if j != -1 else self.n) - self.i))
+            elif c == "f" and self._sparql_firi_ahead():
+                # f<…{expr}…> : the IRI is computed, so it is bound like an
+                # interpolated term — a fresh variable, never text spliced
+                # into the query. Static, it is an IRI written in full.
+                parts = self._take_firi_parts()
+                if all(p[0] for p in parts):
+                    pieces.append(" <%s> " % self._resolve(
+                        "".join(p[1] for p in parts)))
+                else:
+                    name = "__i%d" % len(interps)
+                    interps.append("%s.firi(%s)" % (
+                        RUNTIME_ALIAS, self._firi_args(parts)))
+                    pieces.append(" ?%s " % name)
             elif c == "{":
                 inner = self._sparql_brace_content(self.i)
                 if inner is not None and self._is_ldpy_expression(inner):
@@ -2328,6 +2341,19 @@ class Transpiler:
                                repr(self.base) if self.base else "None",
                                gvar, self._bkw(), is_update))
         self._end_island("sparql", mark, gen)
+
+    def _sparql_firi_ahead(self):
+        """On 'f' inside s{ }: does an f-IRI start here? Not when the 'f'
+        ends a name — `?f<3` is a comparison, `ex:ref` a prefixed name."""
+        t, i = self.text, self.i
+        if t[i + 1:i + 2] != "<":
+            return False
+        if i > 0 and (t[i - 1].isalnum() or t[i - 1] in "_?$:-"):
+            return False
+        j = i + 2
+        while j < self.n and _is_iri_char(t[j]) and t[j] != "{":
+            j += 1
+        return j < self.n and t[j] in "{>"
 
     def _sparql_brace_content(self, i):
         """Contenu du bloc {...} équilibré commençant en i (sans consommer),

@@ -241,6 +241,17 @@ def test_sparql_une_accolade_reste_groupe_ou_interpolation():
     assert transpiled_ast(out) == transpiled_ast(source)
 
 
+def test_sparql_une_f_iri_reste_un_terme():
+    """`f<…{x}…>` dans `s{ }` est un terme lié (fiche 015) : la mise en page
+    ne le coupe pas, et le sens ne bouge pas."""
+    source = ("@prefix ex: <http://e/> .\n"
+              "x = 'a'\n"
+              "r = s{ SELECT ?v WHERE { f<http://e/{x}> ex:v ?v } }\n")
+    out = format_source(source)
+    assert "        f<http://e/{x}> ex:v ?v\n" in out
+    assert transpiled_ast(out) == transpiled_ast(source)
+
+
 def test_les_bordures_dun_ilot_sont_normalisees():
     source = "@prefix ex: <http://e/> .\na = g{ex:s ex:p 1}\nb = g{}\n"
     assert format_source(source) == (

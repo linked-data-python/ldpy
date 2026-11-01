@@ -87,6 +87,13 @@ Interpoler un motif entier, une clause ou un chemin de propriété redeviendrait
 de la substitution textuelle, avec les risques que l'on venait de supprimer :
 c'est une erreur de transpilation.
 
+Une IRI formatée `f<…{expr}…>` est un terme comme un autre : l'IRI se
+calcule (`firi`, résolue contre le `@base` en portée), puis se lie à une
+variable fraîche — jamais épissée dans le texte. Sans trou, `f<…>` s'écrit
+en IRI pleine. Un `f` qui termine un nom (`?f<3`, `ex:ref<…`) reste ce
+qu'il est. Une interpolation qui vaut `None` lève, comme dans les autres
+îlots ; `ldpy.ANY` laisse la variable non liée (fiche 012).
+
 ### 4. Le prologue est hérité
 
 Il ne s'écrit pas dans l'îlot : il vient du `@prefix` ambiant — ce que `initNs`
@@ -102,6 +109,28 @@ syntaxe — une IRI en vaut une autre pour cela.
 à `{`, jamais du Python valide.
 
 ### 6. Exécution par suffixe d'appel, et `execute()`
+
+Ce qui part vers le graphe : la requête préparée par rdflib (validée une
+fois, en cache, `@base` compris), avec `initBindings` **seulement s'il y a
+des liaisons** — un objet-graphe dont `query()` ne prend que la requête
+(kglab) l'accepte alors. Si le receveur refuse la forme préparée, une
+seconde tentative lui passe le **texte**, `BASE` et `PREFIX` écrits en
+tête. Une requête se retente sur n'importe quelle erreur ; une mise à jour
+seulement sur un refus de l'appel lui-même (`TypeError`, `AttributeError`,
+`NotImplementedError`) : après un échec qui a pu modifier le graphe, la
+rejouer n'est pas sûr. Un store qui refuse la forme préparée en silence
+(oxrdflib) n'est pas une erreur : rdflib y répond avec son propre moteur,
+juste, mais pas celui du store.
+
+L'objet se confie aussi à `graph.query(q)` / `graph.update(q)` de rdflib,
+qui évalue un objet requête par son `algebra` et son `prologue` : l'îlot
+les expose. Les liaisons de rdflib étant celles de l'appelant, les termes
+interpolés voyagent dans le texte, écrits comme les termes qu'ils sont — la
+règle déjà appliquée à `INSERT DATA`. Deux choses ne voyagent pas ainsi et
+lèvent `TypeError` plutôt que de se perdre : un nœud anonyme interpolé
+(dans un motif, un nœud anonyme est une variable) et des liaisons portées
+par l'îlot (suffixe d'appel, `@bindings`) qui nomment une variable de la
+requête — à passer en `initBindings=`.
 
 `s{ Q }(g)` exécute la requête sur `g`, `s{ Q }(g, b)` avec `b` en liaisons
 initiales, et sans suffixe la requête s'exécute sur le graphe et le binding
@@ -194,6 +223,9 @@ parce qu'elles emploient une interpolation textuelle là où l'îlot n'offre que
 du binding sémantique ; l'article doit le dire plutôt que de compter ces
 régions comme des échecs de langage.
 
+`f<{x}>` se lie (décision 3) ; ce qui reste hors de portée, ce sont l'IRI entre chevrons d'une f-string
+(`<{uri}>`, du texte), le motif entier et la clause.
+
 **Ce qui ne pose aucun problème** : quand le texte est littéral, l'îlot est un
 remplacement mécanique, y compris avec `UNION`, `FILTER`, les agrégats et un
 prologue `PREFIX` concaténé qui se réduit à des `@prefix`. La coupure annoncée
@@ -201,20 +233,6 @@ pour `initBindings` se vérifie telle quelle : variable **projetée** → liaiso
 en suffixe d'appel ; variable **non projetée** → interpolation en position de
 terme. Et un `initNs` dont tous les préfixes sont déjà pré-liés par rdflib est
 inerte.
-
-## À trancher
-
-- **L'objet que rend `s{ }` ne passe pas dans `graph.query()` de rdflib** (il
-  n'a pas d'`algebra`) : un code qui tient la requête pour la confier à une
-  fonction qui appelle `graph.query(q)` ne peut pas recevoir un `s{ }`. Le
-  rendre acceptable, ou l'assumer et le dire ?
-- **`s{ }(g)` passe toujours `initBindings`, même vide, et une requête déjà
-  analysée** : un objet-graphe sans ce paramètre (kglab) lève, un store qui
-  refuse la requête analysée (oxrdflib) laisse rdflib répondre en silence
-  avec son propre moteur. Ne passer `initBindings` que s'il y a des
-  liaisons, et le texte plutôt que l'arbre ?
-- **`f<{x}>` est refusé dans `s{ }`** : manque à combler, ou frontière
-  assumée ?
 
 ## Tests imposés
 
@@ -234,8 +252,15 @@ inerte.
 7. Non-régression `e{ … }` (fiche 007) : les deux îlots coexistent.
 8. Golden + identité + exécution (fiche 006) ; language map exacte sur des
    requêtes multilignes.
+9. `graph.query(q)` / `graph.update(q)` de rdflib acceptent l'îlot, termes
+   interpolés compris ; nœud anonyme interpolé et liaisons portées lèvent.
+10. Pas d'`initBindings` sans liaison ; seconde tentative par le texte ;
+    une mise à jour n'est pas rejouée après un échec.
+11. `f<…{x}…>` lié, `f<…>` sans trou écrit en IRI, `?f<3` reste une
+    comparaison ; `@base` s'applique aux IRI relatives de la requête.
 
-Implémentation : commit `7d7cf91`, 15 tests (`tests/test_sparql_island.py`).
+Implémentation : commit `7d7cf91` (îlot), et les trois points tranchés le
+2026-11-01 ; `tests/test_sparql_island.py`.
 
 ## Voir aussi
 

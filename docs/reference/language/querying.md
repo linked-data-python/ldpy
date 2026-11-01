@@ -77,6 +77,28 @@ rows = sorted((str(s), int(v)) for s, v in m{ ?s ex:reading [ ex:value ?v ] })
 assert rows == [("http://example.org/a", 21), ("http://example.org/b", 22)]
 ```
 
+### `None` is not a wildcard — `ldpy.ANY` is
+
+rdflib reads `None` in `g.triples((s, p, None))` as "any term". An
+interpolated `{x}` holding `None` does not: it raises `TypeError`, in every
+island. Silently matching a literal `"None"` — what it used to do — is the
+worst way for a read to fail. Write a variable or `[]` where the wildcard is
+part of the pattern, and interpolate `ldpy.ANY` where it arrives as data —
+it matches any term, is never projected, and two of them are two wildcards.
+It also stands where `[]` cannot, in predicate position:
+
+```ldpy
+import ldpy
+@prefix ex: <http://example.org/> .
+@graph as g
++{ ex:a ex:p 1 ; ex:q 2 . ex:b ex:p 3 }
+any_ = ldpy.ANY
+assert sorted(set(m{ ?s {any_} {any_} })) == [ex:a, ex:b]
+pattern = (ex:a, None, None)                     # a pattern received as data
+s, p, o = (any_ if t is None else t for t in pattern)
+assert m{ {s} {p} {o} }.count() == 2
+```
+
 ### Joins, in written order
 
 Several patterns are joined by shared variables, evaluated as nested loops in
@@ -157,7 +179,14 @@ injection that 238 corpus occurrences perform by hand cannot happen here.
 cls = ex:Sensor
 rows = [r for r in s{ SELECT ?s WHERE { ?s a {cls} } }]
 assert len(rows) == 1
+name = "a"
+assert bool(s{ ASK { f<http://example.org/{name}> a ex:Sensor } })
 ```
+
+A [formatted IRI](terms.md) `f<…{expr}…>` is a term too, and is bound the
+same way: the IRI is computed, then bound — never spliced into the text. An
+interpolated `None` raises, as in the other islands; `ldpy.ANY` leaves the
+variable unbound.
 
 Inside `s{ }`, `{` is ambiguous between a SPARQL group and an interpolation.
 The transpiler settles it with an oracle: balanced content is an interpolation
@@ -165,6 +194,35 @@ The transpiler settles it with an oracle: balanced content is an interpolation
 never does, and an interpolation outside term position makes the query invalid
 — so rdflib enforces the restriction on its own. (The
 [syntax highlighter asks the same oracle](../../how-to/highlight-ldpy.md).)
+
+### Handed to rdflib
+
+A function that calls `graph.query(q)` or `graph.update(q)` accepts an
+island: rdflib runs it with its own engine, and the interpolated terms
+travel with it, written into the query as the terms they are. Two things
+cannot travel that way, and raise `TypeError` instead of being dropped: an
+interpolated blank node (in a query pattern, a blank node is a variable),
+and bindings the island carries from a call suffix or `@bindings` — pass
+those to rdflib as `initBindings=`.
+
+```ldpy
+@prefix ex: <http://example.org/> .
+@graph as g
++{ ex:a a ex:Sensor . ex:b a ex:Other }
+def count(graph, query):
+    return len(graph.query(query))
+cls = ex:Sensor
+assert count(g, s{ SELECT ?s WHERE { ?s a {cls} } }) == 1
+```
+
+Run on its own — iterated, tested, `execute()`d — the island hands its
+graph rdflib's prepared query, with `initBindings` only when there is
+something to bind, so a graph-like object whose `query()` takes the query
+alone accepts it. If the object refuses the prepared form, the island tries
+again with the query text, `PREFIX` and `BASE` written out. An update is
+retried only when the call itself was refused (`TypeError`,
+`AttributeError`, `NotImplementedError`), never after a failure that may
+have changed the graph.
 
 ### Updates
 

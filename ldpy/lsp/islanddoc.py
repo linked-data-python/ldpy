@@ -120,7 +120,9 @@ ISLANDS = {
         "(statement) -{ ... } [ (GRAPH) ]",
         "Removes from the current graph every triple matching the pattern. "
         "An unbound variable is a wildcard here, not a hole: this is a "
-        "SPARQL `DELETE WHERE`, not a list of triples to subtract.",
+        "SPARQL `DELETE WHERE`, not a list of triples to subtract. An "
+        "interpolated `None` raises; a wildcard that arrives as data is "
+        "`ldpy.ANY`.",
         _CURRENT, "and-write-to-it"),
 
     # -- reading ------------------------------------------------------------
@@ -136,8 +138,9 @@ ISLANDS = {
     "sparql": IslandDoc(
         "(expression) s{ ... } -> Query",
         "A SPARQL query or update, parsed when the file is transpiled rather "
-        "than at run time. `{expr}` in term position becomes an initial "
-        "binding — never string pasting, so nothing here can be injected. "
+        "than at run time. `{expr}` or `f<…{expr}…>` in term position "
+        "becomes an initial binding — never string pasting, so nothing "
+        "here can be injected. rdflib's `graph.query()` accepts it. "
         "Calling it on a graph gives a LAZY query; `.execute()` is what "
         "forces it — for an update, and for any query whose rdflib `Result` "
         "you then call a method on.",

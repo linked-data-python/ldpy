@@ -233,3 +233,159 @@ def test_a_hash_inside_a_string_is_not_a_comment_either():
            "@graph as g\n"
            'q = s{ SELECT ?s WHERE { ?s ex:v "a#b" } }\n')
     assert 'a#b' in transpile(src, "t.ldpy").code
+
+
+# ------------------------------------------- handed over to graph.query()
+
+def test_graph_query_accepts_an_island(run):
+    """A function that runs `graph.query(q)` can receive an s{ }."""
+    g, _ = run(DATA + textwrap.dedent("""\
+        def run_it(graph, q):
+            return sorted(str(r[0]) for r in graph.query(q))
+        q = s{ SELECT ?s WHERE { ?s a ex:Sensor } }
+        found = run_it(g, q)
+        """))
+    assert g["found"] == ["http://e/a", "http://e/b"]
+
+
+def test_graph_query_keeps_the_interpolated_terms(run):
+    g, _ = run(DATA + textwrap.dedent("""\
+        cls, v = ex:Sensor, 2
+        q = s{ SELECT ?s WHERE { ?s a {cls} ; ex:v {v} } }
+        found = [str(r[0]) for r in g.query(q)]
+        also = [str(r[0]) for r in g.query(q, initBindings={"s": ex:a})]
+        """))
+    assert g["found"] == ["http://e/b"]
+    assert g["also"] == []
+
+
+def test_graph_query_refuses_an_interpolated_blank_node(run):
+    g, _ = run(DATA + textwrap.dedent("""\
+        from rdflib import BNode
+        blank = BNode()
+        q = s{ SELECT ?p WHERE { {blank} ?p ?o } }
+        """))
+    with pytest.raises(TypeError) as exc:
+        g["g"].query(g["q"])
+    assert "blank node" in str(exc.value)
+
+
+def test_graph_query_refuses_carried_bindings_it_would_lose(run):
+    g, _ = run(DATA + textwrap.dedent("""\
+        q = s{ SELECT ?v WHERE { ?s ex:v ?v } }(None, {"s": ex:a})
+        """))
+    with pytest.raises(TypeError) as exc:
+        g["g"].query(g["q"])
+    assert "initBindings" in str(exc.value)
+
+
+def test_graph_update_accepts_an_island(run):
+    g, _ = run(DATA + textwrap.dedent("""\
+        t = ex:Gauge
+        g.update(s{ INSERT { ?s a {t} } WHERE { ?s a ex:Sensor } })
+        g.update(s{ INSERT DATA { ex:z a {t} } })
+        n = len(list(g.subjects(None, t)))
+        """))
+    assert g["n"] == 3
+
+
+# -------------------------------------- initBindings only when there are
+
+class _NoInitBindings:
+    """A graph-like object whose query() takes the query alone (kglab)."""
+
+    def __init__(self, graph):
+        self.graph = graph
+        self.calls = []
+
+    def query(self, q):
+        self.calls.append(q)
+        return self.graph.query(q)
+
+
+class _TextOnly:
+    """A receiver that refuses rdflib's prepared form (a remote store)."""
+
+    def __init__(self, graph):
+        self.graph = graph
+        self.calls = []
+
+    def query(self, q, initBindings=None):
+        if not isinstance(q, str):
+            raise TypeError("expected a query string")
+        self.calls.append(q)
+        return self.graph.query(q, initBindings=initBindings)
+
+    def update(self, q, initBindings=None):
+        if not isinstance(q, str):
+            raise RuntimeError("store failed half-way")
+        self.graph.update(q, initBindings=initBindings)
+
+
+def test_no_init_bindings_passed_when_there_are_none(run):
+    g, _ = run(DATA + "q = s{ SELECT ?s WHERE { ?s a ex:Sensor } }\n")
+    other = _NoInitBindings(g["g"])
+    assert len(list(g["q"](other))) == 2
+    assert len(other.calls) == 1 and not isinstance(other.calls[0], str)
+
+
+def test_the_text_is_a_second_attempt(run):
+    g, _ = run(DATA + textwrap.dedent("""\
+        cls = ex:Sensor
+        q = s{ SELECT ?s WHERE { ?s a {cls} } }
+        """))
+    other = _TextOnly(g["g"])
+    assert len(list(g["q"](other))) == 2
+    text = other.calls[0]
+    assert "PREFIX ex: <http://e/>" in text and "?__i0" in text
+
+
+def test_an_update_is_not_retried_after_a_failure(run):
+    g, _ = run(DATA + "u = s{ INSERT { ?s a ex:Gauge } WHERE { ?s a ex:Sensor } }\n")
+    with pytest.raises(RuntimeError):
+        g["u"](_TextOnly(g["g"])).execute()
+
+
+# ------------------------------------------------------ f<…> inside s{ }
+
+def test_formatted_iri_in_sparql_is_bound(run):
+    g, r = run(DATA + textwrap.dedent("""\
+        name = "a"
+        n = len(list(s{ SELECT ?v WHERE { f<http://e/{name}> ex:v ?v } }))
+        """))
+    assert g["n"] == 1
+    assert "firi(" in r.code and "?__i0" in r.code
+
+
+def test_formatted_iri_without_hole_is_an_iri(run):
+    g, r = run(DATA + "n = len(list(s{ SELECT ?v WHERE { f<http://e/a> ex:v ?v } }))\n")
+    assert g["n"] == 1
+    assert "<http://e/a>" in r.code
+
+
+def test_formatted_iri_resolves_against_base(run):
+    g, _ = run(textwrap.dedent("""\
+        @base <http://e/> .
+        @prefix ex: <http://e/> .
+        @graph as g
+        +{ ex:a ex:v 1 }
+        name = "a"
+        n = len(list(s{ SELECT ?v WHERE { f<{name}> ex:v ?v } }))
+        """))
+    assert g["n"] == 1
+
+
+def test_a_variable_named_f_before_less_than_is_a_comparison(run):
+    g, _ = run(DATA + "n = len(list(s{ SELECT ?s WHERE { ?s ex:v ?f FILTER(?f<3) } }))\n")
+    assert g["n"] == 2
+
+
+def test_base_applies_to_relative_iris(run):
+    g, _ = run(textwrap.dedent("""\
+        @base <http://e/> .
+        @prefix ex: <http://e/> .
+        @graph as g
+        +{ ex:a a ex:T }
+        n = len(list(s{ SELECT ?s WHERE { ?s a <T> } }))
+        """))
+    assert g["n"] == 1

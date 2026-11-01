@@ -150,7 +150,31 @@ def _bnode_cached(label, _cache={}):
     return b
 
 
-_PASSTHROUGH = frozenset((_URIRef, Literal, BNode, Variable, bn))
+class _Wildcard:
+    """The type of `ldpy.ANY` (record ldpy/012)."""
+    __slots__ = ()
+
+    def __repr__(self):
+        return "ldpy.ANY"
+
+
+#: rdflib's `None` wildcard, under a name that cannot be mistaken for a
+#: missing value. Interpolated into `-{ }` or `m{ }` it matches any term, as
+#: `None` does in `g.remove((s, p, None))` and `g.triples((s, p, None))`;
+#: in `s{ }` it leaves the variable unbound. It cannot be written: `+{ }`
+#: and `g{ }` refuse it.
+ANY = _Wildcard()
+
+_NONE_IS_NOT_A_TERM = (
+    "None is not an RDF term. To match any term, write a variable — ?any "
+    "in -{ }, an unprojected [] in m{ } — or interpolate ldpy.ANY; to "
+    "write nothing, test the value before the island")
+
+_ANY_IS_NOT_WRITABLE = (
+    "ldpy.ANY is a wildcard: it matches in -{ } and m{ }, and cannot be "
+    "written by +{ } or g{ }")
+
+_PASSTHROUGH = frozenset((_URIRef, Literal, BNode, Variable, bn, _Wildcard))
 
 
 _COERCION_STACK = []
@@ -222,10 +246,15 @@ def node(value, field=None):
     bindings, instantiation — the single entry point of record ldpy/020).
     An already built RDF term is never reconverted. With no policy pushed,
     Python -> Literal, rdflib choosing the datatype.
+    None raises TypeError: it used to become Literal('None'), so that a
+    pattern received as data — `(s, p, None)` — removed nothing and matched
+    nothing, without a word (record ldpy/012). `ANY` passes through.
     Dispatch on the exact type first: rdflib's isinstance/ABC path dominated
     the materialisation profile (see OPTIMIZATION.md)."""
     if type(value) in _PASSTHROUGH:
         return value
+    if value is None:
+        raise TypeError(_NONE_IS_NOT_A_TERM)
     if isinstance(value, (Node, bn)):
         return value
     if _COERCION_STACK:
@@ -572,9 +601,13 @@ class Bindings(dict):
         return _MappingProxy(self._raw)
 
     def __setitem__(self, key, value):
+        # None is unbound, as everywhere bindings are read (_bind_get,
+        # instantiateBGP): a CSV row with an empty cell drops the triples
+        # that need it instead of writing Literal('None').
         k = str(key)
         self._raw[k] = value
-        dict.__setitem__(self, k, node(value, field=k))
+        dict.__setitem__(self, k,
+                         None if value is None else node(value, field=k))
 
     def __getitem__(self, key):
         return dict.__getitem__(self, str(key))
@@ -669,18 +702,24 @@ def _bind_get(bindings, var):
     return v
 
 
-def _materializer(bindings=None, keep_vars=True):
+def _materializer(bindings=None, keep_vars=True, wildcards=False):
     """Build the term materialiser of the islands (records ldpy/014, 016, 017).
 
     bn(i) -> a BNode fresh per evaluation (memoised per index); slot -> a
     shared value; Variable -> the bound value if bound, else the Variable
-    itself (keep_vars, template regime) or None (triple to drop)."""
+    itself (keep_vars, template regime) or None (triple to drop). ANY is
+    kept where a pattern is materialised (wildcards) and refused where a
+    triple is written."""
     bnodes = {}
     slots = {}
 
     def _term(t):
         tt = type(t)
         if tt in _PASSTHROUGH:
+            if tt is _Wildcard:
+                if wildcards:
+                    return t
+                raise TypeError(_ANY_IS_NOT_WRITABLE)
             if tt is bn:
                 b = bnodes.get(t.index)
                 if b is None:
@@ -690,7 +729,10 @@ def _materializer(bindings=None, keep_vars=True):
                 if bindings is not None:
                     v = _bind_get(bindings, t)
                     if v is not None:
-                        return node(v, field=str(t))
+                        v = node(v, field=str(t))
+                        if type(v) is _Wildcard and not wildcards:
+                            raise TypeError(_ANY_IS_NOT_WRITABLE)
+                        return v
                 return t if keep_vars else None
             return t
         if tt is slot:
@@ -809,9 +851,9 @@ def remove_from(graph, *patterns, bindings=None):
         for tr in to_remove:
             graph.remove(tr)
         return
-    term = _materializer(bindings, keep_vars=True)
+    term = _materializer(bindings, keep_vars=True, wildcards=True)
     for s, p, o in patterns:
-        tr = tuple(None if isinstance(x, (Variable, bn)) else x
+        tr = tuple(None if isinstance(x, (Variable, bn, _Wildcard)) else x
                    for x in (term(s), term(p), term(o)))
         graph.remove(tr)
 
@@ -927,9 +969,13 @@ def _match_prepare(patterns, bindings):
     init = {}
     if bindings:
         for k, v in bindings.items():
-            init[Variable(str(k))] = node(v)
+            if v is not None:                   # None: unbound
+                v = node(v)
+                if type(v) is not _Wildcard:    # ANY: unbound too
+                    init[Variable(str(k))] = v
     out = []
     slots = {}
+    wild = 0
     for s, p, o in patterns:
         tr = []
         for t in (s, p, o):
@@ -940,6 +986,12 @@ def _match_prepare(patterns, bindings):
                 if t.bound:
                     slots[t.index] = node(t.value)
                 t = slots[t.index]
+            if type(t) is _Wildcard:
+                # each ANY its own variable, never projected, never shared:
+                # numbered in order, so that two preparations of the same
+                # patterns agree (remove_from's DELETE WHERE prepares twice)
+                t = Variable("__any%d" % wild)
+                wild += 1
             if isinstance(t, Variable) and t in init:
                 t = init[t]
             tr.append(t)
@@ -1062,13 +1114,13 @@ _SPARQL_CACHE = {}      # (text, ns key) -> prepared query
 _SPARQL_CACHE_MAX = 64  # bounded; hand-written (no lru_cache: record ldpy/008)
 
 
-def _prepare_sparql(text, namespaces, update):
-    key = (text, update, tuple(sorted((k, str(v))
-                                      for k, v in namespaces.items())))
+def _prepare_sparql(text, namespaces, update, base=None):
+    key = (text, update, base, tuple(sorted((k, str(v))
+                                            for k, v in namespaces.items())))
     hit = _SPARQL_CACHE.get(key)
     if hit is not None:
         return hit
-    prep = _backend.prepare_sparql(text, namespaces, update)
+    prep = _backend.prepare_sparql(text, namespaces, update, base)
     if len(_SPARQL_CACHE) >= _SPARQL_CACHE_MAX:
         _SPARQL_CACHE.pop(next(iter(_SPARQL_CACHE)))
     _SPARQL_CACHE[key] = prep
@@ -1087,16 +1139,31 @@ def _grounded(text, values):
     """``text`` with each ``?name`` / ``$name`` of ``values`` replaced by
     the N-Triples form of its term."""
     for name, value in values.items():
+        term = node(value)
+        if type(term) is _Wildcard:
+            raise TypeError(_ANY_IS_NOT_WRITABLE)
         text = re.sub(r"[?$]%s(?![\w])" % re.escape(str(name)),
-                      lambda _m, t=node(value).n3(): t, text)
+                      lambda _m, t=term.n3(): t, text)
     return text
+
+
+def _mentions(text, name):
+    """Does the query text use the variable ``name``?"""
+    return re.search(r"[?$]%s(?![\w])" % re.escape(str(name)), text) \
+        is not None
+
+
+#: What a receiver raises when it refuses the form of the call — a prepared
+#: query, or the initBindings parameter — before running anything.
+_REFUSALS = (TypeError, AttributeError, NotImplementedError)
 
 
 class PreparedQuery:
     """The value of an s{ ... } island (record ldpy/015): a prepared, lazy query.
 
     Iterating it (or testing it) runs it on its graph; calling it binds it —
-    the call suffix of record ldpy/019: graph first, bindings second."""
+    the call suffix of record ldpy/019: graph first, bindings second. Handed
+    to rdflib's graph.query() or graph.update(), it runs there too."""
 
     __slots__ = ("text", "interps", "namespaces", "base",
                  "graph", "bindings", "update")
@@ -1119,29 +1186,94 @@ class PreparedQuery:
                              self.update)
 
     def _init_bindings(self):
+        # None in the bindings and ANY anywhere leave the variable unbound;
+        # an interpolated None raises in node(), as in the other islands.
         init = {}
         if self.bindings:
             for k, v in self.bindings.items():
-                init[Variable(str(k))] = node(v)
+                if v is not None:
+                    v = node(v)
+                    if type(v) is not _Wildcard:
+                        init[Variable(str(k))] = v
         for name, value in self.interps:
-            init[Variable(name)] = node(value)
+            value = node(value)
+            if type(value) is not _Wildcard:
+                init[Variable(name)] = value
         return init
+
+    def _text_with_prologue(self, text):
+        """The query as a self-standing text: BASE and PREFIX written out,
+        for a receiver that knows neither the prefixes in scope nor
+        rdflib's prepared form."""
+        head = ["BASE <%s>" % self.base] if self.base else []
+        head.extend("PREFIX %s: <%s>" % (k, v)
+                    for k, v in self.namespaces.items())
+        head.append(text)
+        return "\n".join(head)
 
     def _execute(self):
         if self.graph is None:
             raise RuntimeError(
                 "s{ } with no graph: declare '@graph ...' in scope, or "
                 "apply the query to a graph — s{ ... }(g)")
-        if self.update and _GROUND_DATA.search(self.text):
+        text = self.text
+        if self.update and _GROUND_DATA.search(text):
             values = dict(self.bindings or {})
             values.update(self.interps)
-            prep = _prepare_sparql(_grounded(self.text, values),
-                                   self.namespaces, True)
-            return self.graph.update(prep)
-        prep = _prepare_sparql(self.text, self.namespaces, self.update)
-        if self.update:
-            return self.graph.update(prep, initBindings=self._init_bindings())
-        return self.graph.query(prep, initBindings=self._init_bindings())
+            text = _grounded(text, values)
+            init = {}
+        else:
+            init = self._init_bindings()
+        run = self.graph.update if self.update else self.graph.query
+        # rdflib's prepared form first: validated once, cached. Bindings
+        # only if there are some — a graph-like object without the
+        # parameter (kglab) accepts the call then. If the receiver refuses
+        # the prepared form, the text, as a second attempt. An update is
+        # retried only on a refusal of the call itself, never after a
+        # failure that may have changed the graph.
+        prep = _prepare_sparql(text, self.namespaces, self.update,
+                               self.base)
+        try:
+            return run(prep, initBindings=init) if init else run(prep)
+        except (_REFUSALS if self.update else Exception):
+            full = self._text_with_prologue(text)
+            return run(full, initBindings=init) if init else run(full)
+
+    # -- handed over to rdflib's graph.query() / graph.update() ------------
+    #
+    # rdflib evaluates a query object that is not a string through its
+    # `algebra` and `prologue`. Its own initBindings are the caller's, so
+    # the interpolated terms travel in the text, written as the terms they
+    # are — the INSERT DATA rule above. A blank node cannot: in a query
+    # pattern it is a variable.
+
+    def _handed_over(self):
+        if self.bindings and any(_mentions(self.text, k)
+                                 for k in self.bindings):
+            raise TypeError(
+                "this s{ } carries bindings, which graph.query() cannot take "
+                "from the query object: pass them as initBindings=, or run "
+                "it with s{ … }(g, bindings)")
+        text = self.text
+        if self.interps:
+            for _name, value in self.interps:
+                if isinstance(node(value), BNode):
+                    raise TypeError(
+                        "an s{ } that interpolates a blank node cannot be "
+                        "handed to graph.query(): run it with s{ … }(g)")
+            text = _grounded(text, dict(self.interps))
+        return _prepare_sparql(text, self.namespaces, self.update,
+                               self.base)
+
+    @property
+    def algebra(self):
+        """rdflib's algebra of the query — what graph.query() evaluates."""
+        return self._handed_over().algebra
+
+    @property
+    def prologue(self):
+        """rdflib's prologue of the query (prefixes and base in scope)."""
+        return self._handed_over().prologue
 
     def execute(self):
         """Run the query and return rdflib's result.

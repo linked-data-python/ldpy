@@ -45,3 +45,12 @@ def instantiateBGP(input, solutionMappings, initialGraph=None):
     (re-export of ldpy.runtime.instantiateBGP, v1 compatibility)."""
     from ldpy.runtime import instantiateBGP as _f
     return _f(input, solutionMappings, initialGraph)
+
+
+def __getattr__(name):
+    """`ldpy.ANY`, rdflib's `None` wildcard under its own name (record
+    ldpy/012), loaded with the runtime only when asked for."""
+    if name == "ANY":
+        from ldpy.runtime import ANY
+        return ANY
+    raise AttributeError("module 'ldpy' has no attribute %r" % name)

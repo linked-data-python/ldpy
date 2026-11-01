@@ -62,7 +62,12 @@ The façade the generated code calls (imported as `_ldpy_`); also usable
 directly: `URIRef, Literal, Variable, Namespace, RDF` re-exports, plus
 
 - `node(value, field=None)` — coerce a Python value to an RDF term (terms
-  pass through); `field` feeds the coercion policy (fiche 020);
+  pass through); `field` feeds the coercion policy (fiche 020); `None`
+  raises `TypeError`, `ANY` passes through;
+- `ANY` — the wildcard: interpolated into `-{ }` or `m{ }` it matches any
+  term, as `None` does in rdflib's `triples()` and `remove()`; in `s{ }` it
+  leaves the variable unbound; `+{ }` and `g{ }` refuse it (also
+  `ldpy.ANY`);
 - `firi(*parts, base=None)` — join parts, resolve against `base` if relative;
 - `pname(ns, *parts)` — dynamic prefixed name (imported or computed prefix);
 - `dtype(value)` — coerce a value to a datatype IRI (`{expr}` after `^^`);
@@ -81,7 +86,8 @@ directly: `URIRef, Literal, Variable, Namespace, RDF` re-exports, plus
   update=False)` → `PreparedQuery` — the `s{ }` island (lazy, cached).
   Iterating or truth-testing runs it; `execute()` runs it and returns rdflib's
   result, which is what an `INSERT`/`DELETE` needs since it has no solutions
-  to iterate;
+  to iterate. It exposes `algebra` and `prologue`, so rdflib's
+  `graph.query(q)` / `graph.update(q)` accept it;
 - `Bindings` — mapping with str/Variable keys and RDF-coerced values;
   `as_bindings_iter(iterable)` — the `for @bindings in …` adapter;
 - `Coercion(rules)` — the Python → RDF coercion policy (also exported as
@@ -125,7 +131,8 @@ import ldpy
 - `ldpy.transform_source(source, filename)` — v1-compatible shim returning
   `(code, prefixes, map)`;
 - `ldpy.transpile` — re-export of the above;
-- `ldpy.Coercion(rules)` — Python → RDF coercion policy (fiche 020).
+- `ldpy.Coercion(rules)` — Python → RDF coercion policy (fiche 020);
+- `ldpy.ANY` — the wildcard of `-{ }` and `m{ }` (see `ldpy.runtime.ANY`).
 
 ## `ldpy.sparql`
 

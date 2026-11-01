@@ -41,7 +41,7 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 | `m{ }` ne paie pas sur un parcours complet (`list(g)` vs `list(m{ ?s ?p ?o }(g))`) | [016](016-ilot-de-motif-selection.md) — recommandation : `list(g)` pour le parcours complet, `m{ }` pour les motifs sélectifs |
 | la jointure implicite de `m{ }` change la cardinalité quand les prédicats sont indépendamment optionnels | [016](016-ilot-de-motif-selection.md) |
 | `.first()` ne rend pas un `g.value(…, default)` non-`None` ; `.one()` n'égale pas `next(iter)` (qui ignore le surplus) | [016](016-ilot-de-motif-selection.md) |
-| une lecture à plus d'une position libre (`g.subjects()` sans prédicat ni objet) n'a pas de forme brève | [016](016-ilot-de-motif-selection.md) |
+| une lecture à plus d'une position libre (`g.subjects()` sans prédicat ni objet) n'a pas de forme brève | [016](016-ilot-de-motif-selection.md) ; `m{ ?s {ANY} {ANY} }` l'écrit depuis `ldpy.ANY` (ci-dessous) |
 | `s{ }` exige un texte de requête littéral à la transpilation | [015](015-ilot-sparql.md) |
 | l'interpolation de `s{ }` lie une variable, elle n'épisse jamais du texte (une IRI entre chevrons, un motif entier, une clause `FILTER`/`GRAPH` n'ont pas de forme) | [015](015-ilot-sparql.md) |
 | `Literal(expr)` nu hors îlot n'a pas de notation ; un tag de langue variable non plus | [020](020-coercition-python-rdf.md) |
@@ -53,7 +53,7 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 
 | Constat | État |
 |---|---|
-| un motif reçu en DONNÉE (un `(s, p, o)` avec `None`, API `Store`, helper `delete(pattern)`) interpolé dans `-{ }`/`m{ }` fait passer `None` par `node()`, qui en fait `Literal('None')` : `-{ }` **ne retire rien sans lever**, le pire mode d'échec possible | **en attente d'arbitrage**. Proposition rédigée : `node(None)` lève `TypeError`, le message nommant les deux écritures intentionnelles — la variable (`?any` en joker dans `-{ }`, nœud anonyme `[]` non projeté dans `m{ }`) et un alias exporté `ldpy.ANY` (le joker `triples()`/`remove()` de rdflib), que `node()` laisserait passer tel quel. Même règle proposée pour les interpolations de `m{ }` : `{x}` avec `x is None` lèverait au lieu de matcher un littéral |
+| un motif reçu en DONNÉE (un `(s, p, o)` avec `None`, API `Store`, helper `delete(pattern)`) interpolé dans `-{ }`/`m{ }` faisait passer `None` par `node()`, qui en faisait `Literal('None')` : `-{ }` **ne retirait rien sans lever**, le pire mode d'échec possible | décidé par Maxime le 2026-11-01, implémenté : voir « `None` et `ldpy.ANY` » ci-dessous |
 | `-{ }` multi-motifs joint (`DELETE WHERE`) : si un seul motif ne trouve pas de solution, rien n'est effacé — silencieux, alors que trois `remove()` rdflib indépendants retireraient partiellement | acté : pas d'avertissement dans la documentation — la différence entre un `-{ }` à trois motifs et trois `remove()` est évidente pour un humain qui lit le code |
 
 ## Confirmations (comportements voulus, vérifiés sur du code réel)
@@ -91,13 +91,34 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 - **Le joker fait exactement ce que la référence promet**, sur les trois
   positions, y compris l'effacement multi-valeurs d'un coup.
 
-## À trancher
+## `None` et `ldpy.ANY`
 
-- **`None` interpolé** devient `Literal('None')` : `-{ }` ne retire rien
-  sans lever, un motif `m{ }` cherche un littéral là où rdflib fait un
-  joker (catalogue, « en attente d'arbitrage »). Accepter la proposition —
-  `node(None)` lève `TypeError` en nommant les deux écritures voulues, la
-  variable joker et l'alias exporté `ldpy.ANY`, même règle dans `m{ }` ?
+Décision de Maxime du 2026-11-01, sur proposition :
+
+- **`node(None)` lève `TypeError`**, donc toute interpolation `{x}` qui
+  vaut `None`, dans les six îlots : `-{ }`, `m{ }`, `+{ }`, `g{ }`, et
+  `s{ }` à l'exécution. Le message nomme les deux écritures voulues : une
+  variable (`?any` dans `-{ }`, `[]` non projeté dans `m{ }`) et
+  `ldpy.ANY`.
+- **`ldpy.ANY`** (`ldpy.runtime.ANY`, exporté au niveau du paquet) est le
+  joker de rdflib sous un nom qui ne se confond pas avec une valeur
+  manquante. `node()` le laisse passer. Dans `-{ }`, il devient le `None`
+  de `remove()` ; dans `m{ }`, une variable fraîche par occurrence, jamais
+  projetée ni partagée — deux `ANY` sont deux jokers ; dans `s{ }`, il
+  laisse la variable non liée. `+{ }` et `g{ }` le refusent : un joker ne
+  s'écrit pas. Il tient aussi la place que `[]` ne peut pas tenir, en
+  position de prédicat : `m{ ?s {ANY} {ANY} }` est le `g.subjects()` sans
+  argument du catalogue.
+- **Dans des liaisons, `None` reste « non lié »** — la convention que
+  `instantiateBGP` et `_bind_get` appliquaient déjà : une cellule vide
+  d'une ligne CSV dans `for @bindings in …` fait tomber les triplets qui en
+  ont besoin, au lieu d'écrire le littéral `"None"` ou de lever au milieu
+  de la boucle. Seule l'**interpolation** de `None` lève.
+
+Documentation : `querying.md` (`m{ }` et `s{ }`), `current-graph.md`
+(table de `-{ }`), `bindings.md`, `migrate-from-rdflib.md` (table et
+piège 5), `api.md`, info-bulle de `-{ }`. Tests :
+`tests/test_none_and_any.py`.
 
 ## Ce qui reste
 
@@ -111,8 +132,10 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
   `migrate-from-rdflib.md` et à la référence de `s{ }`.
 - `ex:{expr}` est refusé dans `s{ }` avec le message du parseur SPARQL de
   rdflib (« Expected SelectQuery, found '?' »), qui ne nomme pas la cause ;
-  le contournement `@prefix … as S .` puis `{S[term]}` existe. Même remède
-  que pour `?v@en` (fiche 027) : un refus qui se nomme.
+  le contournement `@prefix … as S .` puis `{S[term]}` existe. Remède
+  prévu : un refus qui se nomme, comme pour `?v@en` (fiche 027) ; depuis
+  que `f<…{expr}…>` se lie dans `s{ }` (fiche 015), lier `ex:{expr}` de
+  la même façon serait le remède cohérent.
 - Verser au catalogue les constats de la campagne du 2026-09-03 restés
   hors fiche : `_:label` n'est pas `BNode("label")`, les lectures sans îlot,
   la dérive de lignes.

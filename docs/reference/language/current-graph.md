@@ -97,6 +97,24 @@ variable means:
 | `+{ }` | the triple is **dropped** — an unknown term cannot be written |
 | `-{ }` | a **wildcard** — as in rdflib's `remove((s, p, None))` |
 
+An interpolated `None` is neither: `-{ {s} ex:p {o} }` with `o = None`
+raises `TypeError`. It used to remove nothing — the term looked for was the
+literal `"None"` — without a word. When the wildcard arrives as data, a
+pattern `(s, p, None)` handed to a helper, interpolate `ldpy.ANY`, which
+`-{ }` reads as rdflib reads `None`, and which `+{ }` refuses to write:
+
+```ldpy
+import ldpy
+@prefix ex: <http://example.org/> .
+@graph as g
++{ ex:s ex:p 1 ; ex:q 2 }
+def delete(pattern):
+    s, p, o = (ldpy.ANY if t is None else t for t in pattern)
+    -{ {s} {p} {o} }
+delete((ex:s, ex:p, None))
+assert len(g) == 1
+```
+
 ```ldpy
 @prefix ex: <http://example.org/> .
 @graph as g

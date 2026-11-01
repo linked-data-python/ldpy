@@ -37,6 +37,8 @@ ldpy.install()
 | `next(g.subjects(RDF.type, EX.C))` | `m{ ?s a ex:C }.first()` |
 | `set(g.subjects())` | `{s for s, p in m{ ?s ?p [] }}` |
 | `(s, p, o) in g` | `bool(m{ … })` |
+| `g.remove((s, p, None))` | `-{ {s} {p} ?any }` |
+| a pattern `(s, p, None)` received as data | `None` → `ldpy.ANY`, then `-{ {s} {p} {o} }` |
 | `g.query(TEXT)` | `s{ … }` — checked at transpile time |
 | `g.query(q, initBindings={"s": t})` | `s{ … ?s … }` with `{t}` in term position |
 | `from .namespaces import BRICK` | `from .namespaces import brick:` |
@@ -175,7 +177,17 @@ Nothing raises. The result is simply empty, which is indistinguishable from
 trap 2 in another position: wherever the original spelled an IRI by wrapping
 text in `<...>`, the translation has to say so.
 
-## Trap 5: `"{x}"` in a literal does not interpolate — `f"{x}"` does
+## Trap 5: `None` is not a wildcard
+
+rdflib reads `None` in a pattern as "any term", and code that passes
+patterns around as data relies on it: `delete((s, p, None))`. Interpolated
+into an island, `None` raises `TypeError` — a wildcard written as a missing
+value is too easy to write by accident. Map it to `ldpy.ANY` where the
+pattern arrives, or write a variable where the wildcard is part of the
+pattern (`-{ {s} {p} ?any }`, `m{ {s} ex:p [] }`). See
+[the table of `-{ }`](../reference/language/current-graph.md#variables-in-and).
+
+## Trap 6: `"{x}"` in a literal does not interpolate — `f"{x}"` does
 
 In term position `{expr}` interpolates: `ex:{name}`, a bare `{value}`, the
 `{dt}` after `^^`. Inside the **quoted part** of a literal it does not,

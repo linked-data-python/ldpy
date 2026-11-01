@@ -71,7 +71,7 @@ def bind_namespaces(graph, namespaces):
         graph.bind(prefix, str(ns))
 
 
-def prepare_sparql(text, namespaces, update=False):
+def prepare_sparql(text, namespaces, update=False, base=None):
     """A prepared SPARQL query or update — rdflib's engine, or an error
     that says which backend is missing it."""
     if not HAS_SPARQL:
@@ -81,7 +81,7 @@ def prepare_sparql(text, namespaces, update=False):
             "and use m{ } and e{ } on the device" % NAME)
     from rdflib.plugins.sparql import prepareQuery, prepareUpdate
     return (prepareUpdate if update else prepareQuery)(
-        text, initNs=dict(namespaces))
+        text, initNs=dict(namespaces), base=base)
 
 
 __all__ = ["NAME", "HAS_SPARQL", "HAS_NAMESPACE_MANAGER",

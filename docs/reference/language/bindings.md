@@ -34,7 +34,9 @@ assert {type(t).__name__ for t in list(template)[0]} == {"Variable", "URIRef"}
 
 With bindings in scope, the same island is **instantiated**: bound variables
 become terms, blank nodes are fresh, and a triple that still holds an unbound
-term is dropped.
+term is dropped. A variable bound to `None` is unbound — the empty cell of a
+CSV row drops the triples that need it, instead of writing the literal
+`"None"`.
 
 ```ldpy
 @prefix ex: <http://example.org/> .
