@@ -5,9 +5,9 @@ ce que le dépôt contient d'ldpy (exemples + blocs de la documentation) :
 
 1. **transparence de l'hôte** — sans îlot, le formateur EST black ;
 2. **idempotence** — formater deux fois donne le même texte ;
-3. **le sens ne bouge pas** — l'AST du Python transpilé est inchangé, au
-   blanc près à l'intérieur du texte d'une requête `s{ }` (où il n'a, par
-   définition de SPARQL, aucun sens).
+3. **le sens ne bouge pas** — l'AST du Python transpilé est inchangé, le
+   texte d'une requête `s{ }` comparé jeton par jeton (son blanc et la casse
+   de ses mots-clés n'ont, par définition de SPARQL, aucun sens).
 """
 
 import ast
@@ -24,27 +24,18 @@ from ldpy.transpiler import transpile, LdpySyntaxError
 black = pytest.importorskip("black", reason="extra [format] non installé")
 
 from ldpy.formatter import (                                       # noqa: E402
-    DEFAULT_LINE_LENGTH, format_source, format_file, main)
+    DEFAULT_LINE_LENGTH, _canonical, format_source, format_file, main)
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-class _NormalizeStrings(ast.NodeTransformer):
-    """Réduit le blanc dans les constantes chaîne.
-
-    Une seule chose du code émis porte du blanc venu de la mise en page : le
-    TEXTE d'une requête `s{ }`, embarqué tel quel. SPARQL ignore ce blanc ;
-    l'invariant le fait donc aussi, et rien d'autre n'est relâché."""
-
-    def visit_Constant(self, node):
-        if isinstance(node.value, str):
-            node.value = " ".join(node.value.split())
-        return node
-
-
 def transpiled_ast(source, filename="<t>", exact=False):
-    tree = ast.parse(transpile(source, filename).code)
-    return ast.dump(tree if exact else _NormalizeStrings().visit(tree))
+    """Le programme transpilé. Une seule chose du code émis porte la mise en
+    page : le TEXTE d'une requête `s{ }`, embarqué tel quel ; il est comparé
+    jeton par jeton (`_canonical`, la garde du formateur lui-même), et rien
+    d'autre n'est relâché."""
+    code = transpile(source, filename).code
+    return ast.dump(ast.parse(code)) if exact else _canonical(code)
 
 
 def corpus():
@@ -158,9 +149,8 @@ def test_corpus_sans_sparql_conserve_lAST_exactement():
 
 # --------------------------------------------------- ce qu'il fait vraiment
 
-def test_indentation_python_et_alignement_dilot_suivent():
-    """Le corps d'un îlot multiligne se décale AVEC son instruction, en
-    gardant l'alignement voulu par l'auteur."""
+def test_un_ilot_qui_tient_sur_une_ligne_y_est_mis():
+    """Règle de black : sur une ligne tant que la ligne tient."""
     source = ("@prefix ex: <http://e/> .\n"
               "if True:\n"
               "        gr = g{ ex:s ex:p 1 ;\n"
@@ -168,8 +158,87 @@ def test_indentation_python_et_alignement_dilot_suivent():
     assert format_source(source) == (
         "@prefix ex: <http://e/> .\n"
         "if True:\n"
+        "    gr = g{ ex:s ex:p 1 ; ex:q 2 }\n")
+
+
+def test_fmt_skip_garde_lalignement_de_lauteur():
+    """`# fmt: skip` : le corps est recopié, et se décale AVEC son
+    instruction en gardant l'alignement voulu."""
+    source = ("@prefix ex: <http://e/> .\n"
+              "if True:\n"
+              "        gr = g{ ex:s ex:p 1 ;\n"
+              "                ex:q 2 }  # fmt: skip\n")
+    assert format_source(source) == (
+        "@prefix ex: <http://e/> .\n"
+        "if True:\n"
         "    gr = g{ ex:s ex:p 1 ;\n"
-        "            ex:q 2 }\n")
+        "            ex:q 2 }  # fmt: skip\n")
+
+
+def test_fmt_off_garde_le_corps():
+    source = ("@prefix ex: <http://e/> .\n"
+              "# fmt: off\n"
+              "a = g{ ex:s   ex:p    1 }\n"
+              "# fmt: on\n")
+    assert "ex:s   ex:p    1" in format_source(source)
+
+
+def test_un_ilot_trop_long_seclate_en_retrait_suspendu():
+    source = ("@prefix ex: <http://e/> .\n"
+              "@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n"
+              "@graph as g\n"
+              "def f(person):\n"
+              "    +{ {person} a foaf:Person ; foaf:name \"Alice Liddell\" ; "
+              "foaf:knows [ a foaf:Person ; foaf:name \"The White Rabbit\" ] }\n")
+    assert format_source(source).split("\n")[6:-1] == [
+        "    +{",
+        "        {person} a foaf:Person ;",
+        "            foaf:name \"Alice Liddell\" ;",
+        "            foaf:knows [ a foaf:Person ; foaf:name \"The White Rabbit\" ]",
+        "    }"]
+
+
+def test_un_noeud_anonyme_trop_long_souvre_en_fin_de_ligne():
+    knows = " ; ".join('ex:p%d "%s"' % (i, "v" * 20) for i in range(4))
+    source = ("@prefix ex: <http://e/> .\n@graph as g\n"
+              "+{ ex:s ex:knows [ %s ] }\n" % knows)
+    lines = format_source(source).split("\n")[2:-1]
+    assert lines[0] == "+{"
+    assert lines[1] == "    ex:s ex:knows ["
+    assert lines[2] == '            ex:p0 "%s" ;' % ("v" * 20)
+    assert lines[-2] == "        ]"
+    assert lines[-1] == "}"
+    # des paliers de quatre : rien que l'extension indent-rainbow signale
+    for line in lines:
+        assert (len(line) - len(line.lstrip(" "))) % 4 == 0, line
+
+
+def test_une_requete_sparql_prend_sa_mise_en_page_canonique():
+    source = ("@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n"
+              "min_age = 30\n"
+              "rows = s{ select ?name where { ?p foaf:name ?name ; foaf:age ?age .\n"
+              "           FILTER(?age >= {min_age}) } ORDER BY ?name }\n")
+    assert format_source(source).split("\n")[2:-1] == [
+        "rows = s{",
+        "    SELECT ?name",
+        "    WHERE {",
+        "        ?p foaf:name ?name ;",
+        "            foaf:age ?age .",
+        "        FILTER (?age >= {min_age})",
+        "    }",
+        "    ORDER BY ?name",
+        "}"]
+
+
+def test_sparql_une_accolade_reste_groupe_ou_interpolation():
+    """La décision groupe / interpolation est celle du transpileur."""
+    source = ("@prefix ex: <http://e/> .\n"
+              "x = 1\n"
+              "r = s{ SELECT ?s WHERE { GRAPH ?g { ?s ex:p {x} } } }\n")
+    out = format_source(source)
+    assert "            ?s ex:p {x}\n" in out
+    assert "        GRAPH ?g {\n" in out
+    assert transpiled_ast(out) == transpiled_ast(source)
 
 
 def test_les_bordures_dun_ilot_sont_normalisees():
@@ -180,9 +249,31 @@ def test_les_bordures_dun_ilot_sont_normalisees():
         "b = g{ }\n")
 
 
-def test_le_corps_dun_ilot_nest_pas_reecrit():
-    """Décision de la fiche 024 : la mise en page RDF appartient à l'auteur.
-    Les espaces internes, eux, sont laissés tels quels."""
+def test_le_corps_dun_ilot_est_reecrit():
+    """Fiche 024 : le formateur a une mise en page RDF, l'espacement de
+    l'auteur ne compte pas."""
+    source = "@prefix ex: <http://e/> .\na = g{ ex:s   ex:p    1 }\n"
+    assert "a = g{ ex:s ex:p 1 }" in format_source(source)
+
+
+def test_un_commentaire_dans_un_ilot_garde_le_corps():
+    source = ("@prefix ex: <http://e/> .\n"
+              "a = g{ ex:s   ex:p 1 ;  # le premier\n"
+              "       ex:q 2 }\n")
+    assert "ex:s   ex:p 1 ;  # le premier" in format_source(source)
+
+
+def test_si_le_sens_bougeait_le_corps_est_recopie(monkeypatch):
+    """La garde : une mise en page qui changerait le programme est refusée,
+    le fichier repart corps recopiés."""
+    from ldpy import formatter_islands
+    real = formatter_islands.graph_layout
+
+    def wrong(opener, body):
+        layout = real(opener, body)
+        layout.flat = layout.flat.replace("1", "2")
+        return layout
+    monkeypatch.setattr(formatter_islands, "graph_layout", wrong)
     source = "@prefix ex: <http://e/> .\na = g{ ex:s   ex:p    1 }\n"
     assert "ex:s   ex:p    1" in format_source(source)
 

@@ -1,6 +1,6 @@
 # 024 — Formateur (pretty printer) des fichiers .ldpy
 
-**Date** : 2026-09-03 · **Statut** : implémenté
+**Date** : 2026-11-01 · **Statut** : implémenté
 
 ## Contexte
 
@@ -48,11 +48,18 @@ de la documentation (`tests/test_formatter.py`, 372 tests) :
    après formatage. Un formateur qui change ce que fait le programme n'est pas
    un formateur.
 
-Le point 3 admet **un relâchement, un seul, explicite** : le blanc à
-l'intérieur du texte d'une requête `s{ }`, que le code émis embarque tel quel
-et que SPARQL ignore par définition. Le test le formule ainsi (normalisation
-des constantes chaîne) et vérifie *en plus* l'invariant **sans relâchement**
-sur tous les extraits qui ne contiennent pas de `s{ }`.
+Le point 3 admet **un relâchement, un seul, explicite** : le texte d'une
+requête `s{ }`, que le code émis embarque tel quel, est comparé jeton par
+jeton — SPARQL ignore son blanc et la casse de ses mots-clés. Le test le
+formule ainsi (`_canonical`) et vérifie *en plus* l'invariant **sans
+relâchement** sur tous les extraits qui ne contiennent pas de `s{ }`.
+
+Le point 3 est aussi tenu **à chaque exécution**, pas seulement par les
+tests : le formateur retranspile son résultat et le compare au même fichier
+formaté corps recopiés. S'ils diffèrent, c'est la seconde version qui sort.
+La comparaison se fait contre ce fichier-là, et non contre l'original, parce
+que black lui-même change parfois l'AST (un docstring tabulé réindenté, un
+préfixe `u''` retiré) : la garde ne doit juger que la mise en page des îlots.
 
 ### Le masquage, et le poids des substituts
 
@@ -65,50 +72,64 @@ forme syntaxique et non une expression, et leur substitut la porte aussi :
 | `from m import a, ex:, u: as v:` | `import _L4` | pour que black lui donne les lignes vides d'un **bloc d'imports**, pas celles d'une expression |
 | tout le reste | `_L7` | un nom est valide partout où un îlot l'est |
 
-Et surtout : **le substitut pèse ce que pèse l'îlot** (rallongé par des `_`).
+Et surtout : **le substitut pèse ce que pèsera l'îlot** (rallongé par des
+`_`) — sa forme sur une ligne, ou sa première ligne `s{` pour une requête,
+qui s'éclate toujours.
 C'est la doctrine du masquage de la fiche 023 — un substitut de même longueur
 laisse le moteur délégué décider comme il aurait décidé sur le vrai texte.
 Sans cela, black croit que tout tient sur une ligne, joint une compréhension,
-et l'îlot réinjecté déborde de 30 colonnes. Un îlot **multiligne** ne peut par
-construction pas tenir sur une ligne : son substitut reçoit un poids qui
-dépasse la limite, ce qui préserve la coupure écrite par l'auteur.
+et l'îlot réinjecté déborde de 30 colonnes. Un îlot recopié tel quel (voir
+plus bas) garde l'ancienne règle : s'il est **multiligne**, son substitut
+reçoit un poids qui dépasse la limite, ce qui préserve la coupure écrite par
+l'auteur.
 
 Les noms de substitut sont choisis absents du source (`_L0`, `_L1`, … et un
 `_` de plus tant qu'il y a collision) : le masquage doit être réversible.
 
-## Ce que le formateur ne fait PAS aux îlots — et pourquoi
+## La mise en page des îlots : celle de black
 
-**Le corps d'un `g{ }`, `m{ }`, `s{ }` est recopié caractère pour caractère.**
-Seules les **bordures** sont normalisées :
+Décision de Maxime (2026-11-01), sur un cas concret : un `m{ }` aligné à la
+main dans un `return`, dont les lignes de continuation, à une colonne qui
+n'est pas un multiple de quatre, s'affichaient en rouge dans l'éditeur
+(extension *indent-rainbow*), et des corps d'îlots qu'aucun outil ne mettait
+en forme. `ldpy/formatter_islands.py` reconstruit chaque corps **à partir de
+ses jetons** — l'espacement de l'auteur ne compte pas, d'où l'idempotence :
 
-- les espaces de fin de ligne ;
-- le rembourrage juste après `{` et juste avant `}` (`g{ex:s ex:p 1}` devient
-  `g{ ex:s ex:p 1 }`, un îlot vide devient `g{ }`) ;
-- les déclarations dont la grammaire est **close**, où aucun blanc ne peut
-  être signifiant : `@prefix`, `@base`, `@graph`, `@bindings`, import de
-  préfixes ;
-- l'**indentation des lignes de continuation**, décalée avec l'instruction
-  quand black change son niveau, de façon à préserver l'alignement voulu.
+- **Turtle** (`g{ }`, `+{ }`, `-{ }`, `m{ }`) — la règle de black : sur une
+  ligne tant que la ligne tient (colonne de l'îlot, plus sa forme à plat,
+  plus ce qui le suit sur la ligne) ; sinon éclaté en retrait suspendu, par
+  paliers de quatre à partir de l'indentation de la ligne : le sujet en
+  tête, un prédicat par ligne (`;` en fin de ligne), un nœud anonyme `[`
+  ouvert en fin de ligne et fermé seul sur la sienne s'il ne tient pas, des
+  objets `,` sur la ligne du prédicat tant qu'ils tiennent. Une collection
+  `( … )` reste sur une ligne. Le point final du dernier énoncé est gardé
+  s'il était écrit.
+- **SPARQL** (`s{ }`) — toujours la mise en page canonique : une clause par
+  ligne (`SELECT`, `WHERE`, `FILTER`, `OPTIONAL`, `ORDER BY`, `LIMIT`…), un
+  motif de triplet par ligne, la suite d'un `;` un palier plus loin,
+  accolades en retrait suspendu, `} UNION {` sur une ligne, mots-clés en
+  capitales (`true` et `false` restent en minuscules), pas d'espace avant la
+  parenthèse d'une fonction (`STR(?x)`), une après `FILTER`. Un chemin de
+  propriété garde sa colle : `rdfs:subClassOf*`, `^ex:p` — rdflib lit
+  `rdfs:subClassOf *` autrement, ou pas du tout.
+- **Accolade de requête : groupe ou interpolation**, c'est le transpileur
+  qui tranche (`_is_ldpy_expression`, fiche 015), et le formateur l'écoute
+  par une sous-classe (`_Recording`) plutôt que de redécider : un `{x}` lu
+  autrement changerait la requête.
 
-Trois raisons de s'arrêter là, dans l'ordre de leur poids :
+**Ce qui reste recopié tel quel**, bordures seules normalisées comme
+avant : un îlot qui contient un **commentaire** (une mise en page
+reconstruite des jetons n'a pas où le mettre), un îlot dont la ligne porte
+`# fmt: skip` ou qui est dans une région `# fmt: off` — les marqueurs de
+black, pour l'auteur qui a aligné un graphe à dessein —, et tout ce que le
+découpage ne reconnaît pas. Le risque de la version précédente (`.` à la
+fois fin d'énoncé et point décimal) est levé par le découpage même : un
+nombre est lu selon les productions de Turtle (fiche 020).
 
-1. **Turtle n'a pas de mise en page canonique.** Un graphe est souvent aligné
-   à la main pour montrer sa structure — sujets en colonne, prédicats
-   alignés. Reformater cela, c'est détruire de l'information que l'auteur a
-   mise là exprès. Les formateurs sérieux laissent les DSL embarqués
-   tranquilles (le SQL dans une chaîne, une expression régulière) pour la
-   même raison.
-2. **Le risque est asymétrique.** Normaliser les blancs autour de la
-   ponctuation RDF demande de retokeniser le corps — et `.` est à la fois le
-   séparateur de triplets et le point décimal de `1.5`. Une erreur ne donne
-   pas une vilaine mise en page, elle donne un programme faux. Le bénéfice ne
-   paie pas ce risque-là.
-3. **Le chemin propre existe et reste ouvert** : le transpileur sait tokeniser
-   un îlot (c'est son métier) et le lexer Pygments de la fiche 023 en produit
-   déjà un flux de jetons sans erreur sur toute la documentation. Un
-   re-formatage RDF complet serait « rejoindre ce flux avec l'espacement
-   voulu », sans retokeniser quoi que ce soit. C'est le volet suivant, décidé
-   *pas maintenant* plutôt que bâclé.
+Mesure, sur les 392 fichiers `.ldpy` de l'espace de travail (exemples, 365
+traductions du corpus, matériel de l'étude utilisateur) : 391 mis en page,
+aucun renvoyé à la recopie par la garde, tous idempotents ; le dernier est
+un extrait que black ne sait pas lire.
 
 ## Dépendance : black, optionnelle
 
@@ -140,7 +161,6 @@ en main et appelle `black.format_str` en direct. Le point de couplage est
 
 ## À reconsidérer
 
-- Le re-formatage complet des corps d'îlots par le flux de jetons (ci-dessus).
 - `--check` en intégration continue sur `examples/` et les blocs de `docs/` :
   la documentation deviendrait formatée par construction.
 - Le tri des imports (isort) n'est pas fait — black ne le fait pas non plus,

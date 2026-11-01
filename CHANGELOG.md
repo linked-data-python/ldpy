@@ -1,5 +1,16 @@
 ## Release Notes
 
+### [Unreleased]
+
+- **The formatter lays out island bodies.** A Turtle island stays on one
+  line while the line fits, and is otherwise exploded in hanging indent, in
+  steps of four — the rule black applies to Python. A SPARQL island takes a
+  canonical layout: one clause per line, one triple pattern per line. A body
+  holding a comment, or marked `# fmt: skip` / inside `# fmt: off`, is
+  copied as written. The formatter checks its own work at every run: if the
+  laid-out file would transpile to a different program, the bodies are
+  copied as written instead.
+
 ### [0.7.0] — 2026-11-01
 
 - **A bare number in an island is a Turtle number.** `4.5` is an

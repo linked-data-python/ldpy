@@ -1,8 +1,9 @@
 # How to format `.ldpy` code
 
 `ldpy` ships a formatter. It has **no opinion about Python** — it delegates to
-[`black`](https://black.readthedocs.io/) — and a deliberately small opinion
-about islands: it normalises their edges and copies their bodies verbatim.
+[`black`](https://black.readthedocs.io/) — and lays out the islands the way
+black lays out Python: on one line while the line fits, else in hanging
+indent, in steps of four.
 
 ```text
 pip install "linked-data-python[format]"
@@ -54,32 +55,76 @@ formatter that loses work.
 
 ## What it does, exactly
 
-Python is formatted by black, to the byte. Then, for each island:
+Python is formatted by black, to the byte. Then each island is laid out
+again from its tokens — the author's spacing does not count.
 
-| | before | after |
-|---|---|---|
-| padding inside the braces | `g{ex:s ex:p 1}` | `g{ ex:s ex:p 1 }` |
-| an empty island | `g{}` | `g{ }` |
-| closed-grammar declarations | `@prefix  ex:   <http://e/>  .` | `@prefix ex: <http://e/> .` |
-| trailing spaces | `ex:v 1 ;␣␣` | `ex:v 1 ;` |
-| continuation lines | follow their statement's indentation, keeping the author's alignment |
-
-**The body of a graph or a query is not rewritten.** Turtle has no canonical
-layout, and a graph is often aligned by hand to show its structure — subjects
-in a column, predicates lined up. That alignment is information, and the
-formatter leaves it alone:
+**A Turtle island** (`g{ }`, `+{ }`, `-{ }`, `m{ }`) stays on one line if the
+line fits:
 
 ```ldpy
 @prefix ex: <http://example.org/> .
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @graph as kg
-+{ ex:s1 ex:room ex:R101 ; ex:value "21.5"^^xsd:double .
-   ex:s2 ex:room ex:R101 ; ex:value "19.0"^^xsd:double }
++{ ex:s1 ex:room ex:R101 ; ex:value 21.5 }
+```
+
+and is exploded otherwise — subject on the first line, one predicate per
+line, a blank node opened at the end of its line and closed on its own:
+
+```ldpy
+@prefix ex: <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@graph as kg
++{
+    ex:alice a foaf:Person ;
+        foaf:name "Alice Liddell" ;
+        foaf:knows [
+            a foaf:Person ;
+            foaf:name "The White Rabbit" ;
+            foaf:mbox <mailto:white.rabbit@wonderland.example>
+        ]
+}
+```
+
+**A SPARQL island** (`s{ }`) always takes the canonical layout: one clause
+per line, one triple pattern per line, keywords in capitals, braces in
+hanging indent.
+
+```ldpy
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@graph as kg
+min_age = 30
+rows = s{
+    SELECT ?name
+    WHERE {
+        ?p foaf:name ?name ;
+            foaf:age ?age .
+        FILTER (?age >= {min_age})
+    }
+    ORDER BY ?name
+}
+```
+
+Declarations (`@prefix`, `@base`, `@graph`, `@bindings`) are normalised to
+single spaces.
+
+**Keeping a layout of your own.** A graph aligned by hand to show its
+structure keeps it with `# fmt: skip` at the end of its last line, or inside
+a `# fmt: off` / `# fmt: on` region — black's own markers. Its body is then
+copied as written, and shifted with its statement:
+
+```ldpy
+@prefix ex: <http://example.org/> .
+@graph as kg
++{ ex:s1 ex:room ex:R101 ; ex:value 21.5 .
+   ex:s2 ex:room ex:R101 ; ex:value 19.0 }  # fmt: skip
 assert len(kg) == 4
 ```
 
-The reasoning, and what would be needed to go further, is in
-[design record `ldpy/024`](https://github.com/linked-data-python/pilotage/blob/main/design/ldpy/024-formateur.md).
+An island holding a comment is copied as written too: a comment has no
+place in a layout rebuilt from tokens.
+
+The reasoning is in design record `ldpy/024`, in this repository's
+`steering/design/`.
 
 ## What it guarantees
 
@@ -91,5 +136,11 @@ this documentation:
    [R3](../explanation/why.md).
 2. **Formatting twice changes nothing more than formatting once.**
 3. **The meaning does not move**: the transpiled Python has the same AST
-   before and after, to the byte — with one stated exception, whitespace
-   inside the text of an `s{ }` query, which SPARQL ignores by definition.
+   before and after, to the byte — with one stated exception, the text of
+   an `s{ }` query, compared token by token, since SPARQL ignores its
+   whitespace and the case of its keywords.
+
+The third is also checked at every run: the formatter transpiles its own
+result and compares it with the same file formatted with every island body
+copied as written. If they differ, the file is returned that second way —
+a layout bug can cost you a pretty island, never a correct program.

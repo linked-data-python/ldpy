@@ -14,20 +14,28 @@ Two consequences serve as the contract, and are tested:
   same before and after formatting. A formatter that changes what the
   un formateur.
 
-What the formatter does TO THE ISLANDS is deliberately modest (the body is
-copied verbatim, only the edges are normalised): see record ldpy/024, section
-"what the formatter does not do".
+The islands are laid out by `ldpy.formatter_islands`: a Turtle island on one
+line while it fits, else in hanging indent; a SPARQL island in its canonical
+layout. An island it declines (a comment inside, `# fmt: skip` on its line,
+a `# fmt: off` region) has its body copied verbatim, edges normalised. And
+the formatter checks its own work: the result is transpiled again, and if
+the Python it gives differs from the original's — SPARQL queries compared
+token by token — the file is formatted again with every body verbatim
+(record ldpy/024).
 
 `black` is an OPTIONAL dependency (extra `[format]`): nothing in ldpy imports
 it outside this module, and its absence gives an actionable message.
 """
 
 import argparse
+import ast
 import os
 import re
 import sys
 
+from ldpy import formatter_islands
 from ldpy.transpiler import transpile
+from ldpy.transpiler.core import RUNTIME_ALIAS, Transpiler
 
 DEFAULT_LINE_LENGTH = 88
 
@@ -113,14 +121,69 @@ _TRANSPARENT = ("for-bindings-close",)
 
 
 class _Island:
-    __slots__ = ("kind", "text", "column", "name", "substitute")
+    __slots__ = ("kind", "text", "column", "name", "substitute", "layout")
 
-    def __init__(self, kind, text, column, name, line_length):
+    def __init__(self, kind, text, column, name, line_length, layout=None):
         self.kind = kind
         self.text = text
         self.column = column          # start column in the SOURCE
         self.name = name
-        self.substitute = _substitute(kind, _padded(name, text, line_length))
+        self.layout = layout
+        if layout is None:
+            padded = _padded(name, text, line_length)
+        else:
+            # the stand-in weighs what the island will weigh on one line; an
+            # island that always explodes weighs its first line, `s{`
+            weight = (len(text.split("{", 1)[0]) + 2 if layout.always_explode
+                      else len(layout.flat))
+            padded = name + "_" * max(0, weight - len(name))
+        self.substitute = _substitute(kind, padded)
+
+
+#: island kinds whose body is Turtle, laid out by formatter_islands
+_GRAPH_KINDS = ("graph", "addto", "removefrom", "match")
+
+
+class _Recording(Transpiler):
+    """The transpiler, noting where it read a `{` of a SPARQL island as an
+    interpolation rather than a group: the layout must not decide that
+    differently from the transpiler (record ldpy/015)."""
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.interpolations = set()
+
+    def _is_ldpy_expression(self, text):
+        found = super()._is_ldpy_expression(text)
+        if found:
+            self.interpolations.add(self.i)
+        return found
+
+
+def _skipped(source, a, b):
+    """`# fmt: skip` at the end of the island's last line, or a `# fmt: off`
+    region: the author's layout is kept, as black keeps it."""
+    end = source.find("\n", b)
+    if "fmt: skip" in source[b:end if end != -1 else len(source)]:
+        return True
+    off = max(source.rfind("# fmt: off", 0, a), source.rfind("#fmt: off", 0, a))
+    on = max(source.rfind("# fmt: on", 0, a), source.rfind("#fmt: on", 0, a))
+    return off > on
+
+
+def _layout(kind, text, a, interpolations):
+    """The layout of an island starting at offset `a`, or None."""
+    m = _OPENER.match(text)
+    if not m or not text.endswith("}"):
+        return None
+    opener, body = m.group(0), text[len(m.group(0)):-1]
+    if kind in _GRAPH_KINDS:
+        return formatter_islands.graph_layout(opener, body)
+    if kind == "sparql":
+        start = a + len(opener)
+        return formatter_islands.sparql_layout(
+            opener, body, {i - start for i in interpolations})
+    return None
 
 
 def _fresh_names(source, count):
@@ -135,8 +198,10 @@ def _fresh_names(source, count):
     return ["%s%d" % (prefix, i) for i in range(count)]
 
 
-def _mask(source, lmap, line_length=DEFAULT_LINE_LENGTH):
-    """Returns (masked text, island list) — the masked text is Python."""
+def _mask(source, lmap, line_length=DEFAULT_LINE_LENGTH,
+          interpolations=None):
+    """Returns (masked text, island list) — the masked text is Python.
+    `interpolations` None: every body is copied verbatim."""
     starts = _line_starts(source)
     segments = [s for s in lmap.segments
                 if s.kind.startswith("island:") and s.src is not None
@@ -151,7 +216,11 @@ def _mask(source, lmap, line_length=DEFAULT_LINE_LENGTH):
         b = _offset(starts, seg.src[2], seg.src[3])
         if a < cursor:                       # nested island: already covered
             continue
-        island = _Island(kind, source[a:b], seg.src[1], name, line_length)
+        layout = None
+        if interpolations is not None and not _skipped(source, a, b):
+            layout = _layout(kind, source[a:b], a, interpolations)
+        island = _Island(kind, source[a:b], seg.src[1], name, line_length,
+                         layout)
         out.append(source[cursor:a])
         out.append(island.substitute)
         islands.append(island)
@@ -229,7 +298,7 @@ def _reindent(text, from_column, to_column):
     return "\n".join([first] + rest)
 
 
-def _unmask(formatted, islands):
+def _unmask(formatted, islands, line_length=DEFAULT_LINE_LENGTH):
     """Put each island back in place of its stand-in."""
     for island in islands:
         idx = formatted.find(island.substitute)
@@ -237,9 +306,18 @@ def _unmask(formatted, islands):
             raise RuntimeError(
                 "stand-in %r not found after formatting — please report this "
                 "file as a formatter defect" % island.substitute)
-        column = idx - formatted.rfind("\n", 0, idx) - 1
-        text = _reindent(_normalize_island(island.text),
-                         island.column, column)
+        line_start = formatted.rfind("\n", 0, idx) + 1
+        column = idx - line_start
+        if island.layout is not None:
+            line = formatted[line_start:]
+            indent = len(line) - len(line.lstrip(" "))
+            after = idx + len(island.substitute)
+            line_end = formatted.find("\n", after)
+            rest = formatted[after:line_end if line_end != -1 else None]
+            text = island.layout.text(column, indent, rest, line_length)
+        else:
+            text = _reindent(_normalize_island(island.text),
+                             island.column, column)
         formatted = (formatted[:idx] + text
                      + formatted[idx + len(island.substitute):])
     return formatted
@@ -255,9 +333,49 @@ def format_source(source, filename="<ldpy>",
 
     Raises `LdpySyntaxError` if the source does not transpile (we do not
     format what we do not understand) and `FormatterUnavailable` if black is missing."""
-    result = transpile(source, filename)
-    masked, islands = _mask(source, result.map, line_length)
-    return _unmask(_format_python(masked, line_length), islands)
+    recording = _Recording(source, filename)
+    result = recording.run()
+
+    def formatted(interpolations):
+        masked, islands = _mask(source, result.map, line_length,
+                                interpolations)
+        return _unmask(_format_python(masked, line_length), islands,
+                       line_length)
+    laid_out = formatted(recording.interpolations)
+    verbatim = formatted(None)
+    if laid_out == verbatim or _same_meaning(verbatim, laid_out, filename):
+        return laid_out
+    return verbatim
+
+
+def _same_meaning(verbatim, laid_out, filename):
+    """Do the two formattings transpile to the same program? Both went
+    through black, so what differs is the islands' layout alone. The Python
+    is compared as an AST; a SPARQL query, which the transpiler copies as
+    text, token by token — its whitespace is the formatter's to choose."""
+    try:
+        before = transpile(verbatim, filename).code
+        after = transpile(laid_out, filename).code
+    except Exception:
+        return False
+    return _canonical(before) == _canonical(after)
+
+
+def _canonical(code):
+    tree = ast.parse(code)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) \
+                and isinstance(node.func, ast.Attribute) \
+                and node.func.attr == "prepared" \
+                and isinstance(node.func.value, ast.Name) \
+                and node.func.value.id == RUNTIME_ALIAS \
+                and node.args and isinstance(node.args[0], ast.Constant):
+            try:
+                tokens = formatter_islands.sparql_tokens(node.args[0].value)
+            except formatter_islands._Decline:
+                continue
+            node.args[0].value = "\x00".join(t for _, t in tokens)
+    return ast.dump(tree)
 
 
 def format_file(path, line_length=DEFAULT_LINE_LENGTH, write=False):
