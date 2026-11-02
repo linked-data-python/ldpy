@@ -41,12 +41,12 @@ without parsing expressions at all.
 
 ## Three consequences
 
-**Throughput is linear and dominated by copying.** 56 000–110 000 source
+**Throughput is linear and dominated by copying.** 38 000–84 000 source
 lines/s depending on island density; a full parse of the host is never paid.
 The cost of an island is amortised by its size: files made only of graph
-expressions run from 35 000 lines/s at one triple per graph to 51 000 at a
+expressions run from 22 000 lines/s at one triple per graph to 30 000 at a
 hundred — large graphs are proportionally cheaper than many small ones. For the
-editing loop, a 2 000-line module re-transpiles in about 24 ms.
+editing loop, a 1 000-line module re-transpiles in about 16 ms.
 
 **Host transparency is true by construction.** Text without island triggers is
 copied byte for byte. That turns [R3](why.md#r3-host-language-transparency)

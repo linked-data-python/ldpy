@@ -34,8 +34,8 @@ adult = e{ ?age >= 18 && BOUND(?name) }         # deferred, over bindings
 `.ldpy` files are **transpiled to plain Python** by an *island parser*: the
 Python is copied verbatim — every valid Python file is a valid ldpy file,
 returned byte-identical — and only the RDF islands are parsed and rewritten.
-The transpiler is ~1 500 lines with no parsing dependency and sustains
-56 000–110 000 source lines/s depending on island density.
+The transpiler is ~3 000 lines with no parsing dependency and sustains
+38 000–84 000 source lines/s depending on island density.
 
 ## Quick start
 

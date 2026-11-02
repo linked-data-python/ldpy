@@ -60,7 +60,7 @@ assert sorted(int(o) for s, o in m{ ?s ex:hasValue ?o }(out)) == [20, 50]
 | Property | Where it stands |
 |---|---|
 | **Every valid Python program is a valid ldpy program**, byte for byte | tested on the CPython standard library — 464 files, ~260 000 lines |
-| **Speed** — transpilation is on the import path and the keystroke path | 56 000–110 000 lines/s; a 2 000-line module in ~24 ms |
+| **Speed** — transpilation is on the import path and the keystroke path | 38 000–84 000 lines/s; a 1 000-line module in ~16 ms |
 | **Your debugger works** | breakpoints, `pdb` and `debugpy` bind on `.ldpy` lines directly |
 | **Your editor works** | LSP server that forwards to an unmodified Python language server |
 | **No parsing dependency** | pure Python, no parser generator; emitted code stays in a MicroPython-compatible subset |
@@ -94,17 +94,19 @@ This documentation is organised by what you came for.
 
 ## Status, honestly
 
-ldpy is a research resource under active development, at version 0.6. The
+ldpy is a research resource under active development, at version 0.7. The
 language is stable enough to write real programs in — the corpus study
-translated 140 of them — and the tooling is real. What is *not* settled:
+translated 333 regions of found code, 325 of them proved equivalent to the
+original by execution, none yet approved by human review — and the tooling
+is real. What is *not* settled:
 
-- a plain literal still has no notation outside an island, and neither does a
-  variable language tag;
+- a plain literal still has no notation outside an island;
 - `@prefix` is lexical, so it does not give you a `Namespace` **object**;
 - the MicroPython claim is now proved by execution on the Unix port of
   MicroPython; the ESP32 measurements — flash, RAM, time — are next;
-- there has been **no user study**: the claim that this is easier to read is
-  examined on found code, not on measured developer performance.
+- the **user study** is running and has no result yet: the claim that this is
+  easier to read is examined on found code, not yet on measured developer
+  performance.
 
 The complete list is in the
 [limitations section of the reference](reference/language/lexical.md#known-limitations),

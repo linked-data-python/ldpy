@@ -72,9 +72,10 @@ benchmark requires a **deterministic generator**, which is what `bench/` is.
 
 Throughput is measured by `python -m bench.run`, a campaign harness over
 seeded random ldpy programs with controlled island density, file size and graph
-size. The headline numbers — roughly 110 000 lines/s on pure Python down to
-56 000 in the worst case where every statement holds an island; linear in file
-size from 200 to 50 000 lines — are reproducible from the repository.
+size. The headline numbers — roughly 84 000 lines/s on pure Python down to
+38 000 in the worst case where every statement holds an island; linear in file
+size from 200 to 50 000 lines (measured 2026-11-02) — are reproducible from
+the repository.
 
 They come from **one machine and one CPython version**. Treat them as orders of
 magnitude.
@@ -84,13 +85,15 @@ magnitude.
 Stated plainly, because a page like this is worth nothing if it only lists
 successes.
 
-- **That the language is easier to use.** No user study has been run. The
-  parity claim is examined on found code — 140 translated programs proved
-  equivalent by isomorphism — not on measured developer performance.
-- **R6, by execution.** The generated code is proved to stay within a
-  Python-3.4-level subset by an AST whitelist, and the transpiler has no
-  dependency; but nothing has yet run on a device, because the runtime façade
-  still binds to rdflib.
+- **That the language is easier to use.** A user study is running; it has no
+  result yet. The parity claim is examined on found code — 325 of 333
+  translated regions proved equivalent to the original by execution (graph
+  isomorphism, or equality of the values read), none yet approved by human
+  review — not on measured developer performance.
+- **R6, on a device.** The generated code is proved to stay within a
+  Python-3.4-level subset by an AST whitelist, and runs on the Unix port of
+  MicroPython over urdflib; flash, RAM and time on a microcontroller (ESP32)
+  are not measured yet.
 - **The benchmark's realism.** The generator's output is adversarial and
   executable, but follows a synthetic distribution no human corpus follows. The
   standard library and the corpus study mitigate that bias; they do not remove

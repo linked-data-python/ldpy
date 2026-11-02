@@ -14,9 +14,11 @@ validity, is design record `corpus/402`; the measuring tool is
 
 ## How the corpus was built
 
-**5 190 RDF-relevant files, 376 repositories measured**, out of a pinned
-manifest of 444 — 38 845 Python files analysed, 182 664 RDF operations
-detected.
+**5 157 RDF-relevant files, 377 repositories measured**, out of a pinned
+manifest of 444 — 38 574 Python files analysed, 191 426 RDF operations
+detected. A graph is recognised by how it is called, not only by its name:
+an unannotated `graph` parameter is one as soon as the code calls
+`graph.value(s, p)` on it.
 
 Selection is expressed as **criteria, never as a list of names**: alive, not a
 fork, at least 10 kB of Python and 10 commits, a commit after 2020, a licence
@@ -30,7 +32,7 @@ repositories that *are* the library measure rdflib's implementation, not
 application code written against it.
 
 The corpus is not concentrated: the largest contributor accounts for 11 % of
-`.add` calls, 18 % of selections, 8 % of SPARQL calls, for a median of 22
+`.add` calls, 13 % of selections, 11 % of SPARQL calls, for a median of 25
 `.add` per repository. Every ratio below is published twice — pooled and as a
 median per repository — because a pooled figure always follows the biggest
 contributor.
@@ -39,19 +41,19 @@ contributor.
 
 | Family | Occurrences | Files | Repositories |
 |---|---:|---:|---:|
-| Namespace terms (`NS.term`) | 50 070 | — | — |
-| Namespace definitions | 3 672 | 1 196 | 252 |
-| Triple addition (`.add`) | 13 680 | 1 049 | 233 |
-| Selection / traversal | 7 870 | 1 033 | 214 |
-| SPARQL (query/update/prepare) | 1 523 | 400 | 146 |
-| Namespace imports within a project | 1 271 | 563 | 65 |
-| `initBindings` | 123 | 57 | 39 |
+| Namespace terms (`NS.term`) | 48 673 | — | — |
+| Namespace definitions | 3 627 | 1 160 | 250 |
+| Triple addition (`.add`) | 16 892 | 1 292 | 246 |
+| Selection / traversal | 12 201 | 1 549 | 239 |
+| SPARQL (query/update/prepare) | 1 958 | 486 | 159 |
+| Namespace imports within a project | 1 279 | 567 | 63 |
+| `initBindings` | 170 | 79 | 46 |
 
 ### Reading is as big as writing
 
-1 033 files select triples; 1 049 files add them. The imbalance in ldpy was
-right there: the notation served *construction*, and construction is one third
-of what the code does. That single row is the origin of
+1 549 files select triples; 1 292 files add them. The imbalance in ldpy was
+right there: the notation served *construction*, and more code reads graphs
+than writes them. That single row is the origin of
 [`m{ }`](../reference/language/querying.md) and
 [`s{ }`](../reference/language/querying.md#s-a-sparql-query).
 
@@ -69,36 +71,36 @@ convenience: it is the normal case, and everything else is the exception.
 Three more numbers from the same measurement shaped
 [`@graph`, `+{ }` and `-{ }`](../reference/language/current-graph.md):
 
-- **37 % of triples are added alone** (a lone `.add`, no neighbour),
-- **44 % of additions are inside a loop** — one triple per iteration,
-- **31 % share a subject** with an immediate neighbour, which is what Turtle's
+- **38 % of triples are added alone** (a lone `.add`, no neighbour),
+- **43 % of additions are inside a loop** — one triple per iteration,
+- **30 % share a subject** with an immediate neighbour, which is what Turtle's
   `;` is for.
 
 And one number that killed an argument we had been making: the receiver name
-is long in only 40 % of cases, for a mean of 4.0 characters. `@graph` is not
+is long in only 42 % of cases, for a mean of 4.2 characters. `@graph` is not
 justified by saving keystrokes on `self.graph`. It is justified by the lone
 triple and by the loop, where a multi-triple island amortises nothing.
 
 ## One graph at a time
 
-- **73 % of files that manipulate a graph manipulate exactly one**; **88 % of
+- **67 % of files that manipulate a graph manipulate exactly one**; **87 % of
   functions** likewise.
-- `Dataset` / `ConjunctiveGraph`: 533 constructions, **6.8 %** of graph
+- `Dataset` / `ConjunctiveGraph`: 520 constructions, **6.7 %** of graph
   constructions.
-- Explicitly named graph (`Graph(identifier=…)`): 198, in 40 repositories.
+- Explicitly named graph (`Graph(identifier=…)`): 189, in 38 repositories.
 
 So `@graph` designates *one* current graph, optionally named — the `identifier`
 constructor parameter, which costs nothing — and never a space of graphs.
 
 ## Namespaces are shared by hand
 
-- 3 672 namespace definitions, **1 061 of them (29 %) inside a function** —
+- 3 627 namespace definitions, **1 025 of them (28 %) inside a function** —
   redefined at every call, for want of a natural place to put them.
-- **1 271 imports of a namespace from another module of the same project**, in
-  563 files across **65 repositories**. The canonical pattern is a module whose
+- **1 279 imports of a namespace from another module of the same project**, in
+  567 files across **63 repositories**. The canonical pattern is a module whose
   only job is to export prefixes, imported everywhere.
-- 431 (IRI, repository) pairs are declared in several files of the same
-  repository; 152 distinct IRIs are redeclared across repositories.
+- 428 (IRI, repository) pairs are declared in several files of the same
+  repository; 149 distinct IRIs are redeclared across repositories.
 
 The need is massive and projects already solve it — with a Python module of
 `Namespace` constants. So the question was never whether ldpy should carry
@@ -112,15 +114,15 @@ of fixing it. Hence
 
 ## SPARQL is not a niche
 
-- **1 523 calls** (1 177 `query`, 83 `update`, 263 `prepareQuery`) in 400
-  files across **146 repositories — 39 % of those measured**.
-- **58 % of calls carry a literal query text** (median per repository 71 %);
-  613 distinct queries occupying **4 953 source lines**.
-- SELECT dominates (767), then ASK (37), INSERT (25), CONSTRUCT (9), DELETE (8).
-- 228 `for row in g.query(...)`, 158 hand-offs to a function, 99
+- **1 958 calls** (1 547 `query`, 149 `update`, 262 `prepareQuery`) in 486
+  files across **159 repositories — 42 % of those measured**.
+- **58 % of calls carry a literal query text** (median per repository 67 %);
+  794 distinct queries occupying **5 834 source lines**.
+- SELECT dominates (934), then INSERT (45), ASK (43), CONSTRUCT (33), DELETE (23).
+- 273 `for row in g.query(...)`, 212 hand-offs to a function, 112
   comprehensions: iterating solutions is the consumption pattern.
-- 140 queries are built by interpolation, and **238 inject an RDF term into the
-  query text**, often via `.n3()`, in 87 files across 50 repositories.
+- 178 queries are built by interpolation, and **223 inject an RDF term into the
+  query text**, often via `.n3()`, in 85 files across 48 repositories.
 
 Two out of five repositories write SPARQL, and each such file holds static,
 multi-line query text — exactly what an island accepts, and exactly where
@@ -139,13 +141,13 @@ holds for the other 58 %.
 
 ## Traversal is frequent, and flat
 
-- 7 870 selector calls: `objects` 2 720, `value` 1 840, `subjects` 1 526,
-  `triples` 1 251; the rest is marginal.
-- **41 % of selections feed a loop or a comprehension directly.**
-- Multi-step navigation: **1 039 occurrences, 13 % of calls**, and shallow —
-  141 at depth 2, 50 at depth 3, 29 at depth 4.
-- "The single expected value" weighs **2 252 occurrences** (1 840 `value`,
-  412 `next(...)`).
+- 12 201 selector calls: `objects` 3 743, `value` 3 048, `triples` 2 229,
+  `subjects` 2 141; the rest is marginal.
+- **38 % of selections feed a loop or a comprehension directly.**
+- Multi-step navigation: **1 385 occurrences, 11 % of calls**, and shallow —
+  178 at depth 2, 54 at depth 3, 29 at depth 4.
+- "The single expected value" weighs **3 549 occurrences** (3 048 `value`,
+  501 `next(...)`).
 
 This is the result that most contradicted our prior. A *graph traversal* syntax
 in the manner of Gremlin or Cypher would have answered a rare pattern. Real
@@ -161,9 +163,9 @@ changed two and reduced a third:
 
 | Proposed | Became | Because |
 |---|---|---|
-| chained graph navigation | a [match island](../reference/language/querying.md) (a join, not a chain) | deep navigation is 1 % of selections, and always in nested loops |
+| chained graph navigation | a [match island](../reference/language/querying.md) (a join, not a chain) | deep navigation is under 1 % of selections, and always in nested loops |
 | a binding operator `g @ {…}` | [`@bindings`, a lexical context](../reference/language/bindings.md) | binding is a context, not an operation |
-| named graphs in a dataset | `Graph(identifier=…)` only | datasets are 6.8 % of constructions |
+| named graphs in a dataset | `Graph(identifier=…)` only | datasets are 6.7 % of constructions |
 
 The methodological reversal itself paid off: two of the six a-priori ideas
 would have missed, and one dismissed as secondary — reading — turned out to be
@@ -203,15 +205,19 @@ that were previously out of reach — is planned and not yet run.
 
 Stated here because they bound every number above.
 
-- 376 repositories is enough for solid orders of magnitude and per-repository
+- 377 repositories is enough for solid orders of magnitude and per-repository
   medians, not for a probabilistic sample of "all RDF code". The corpus is
   purposive: four discovery channels, then explicit quality criteria.
 - **The selection criteria are themselves a bias.** Requiring a licence that
   permits extraction excludes 460 candidates with no declared licence;
   requiring a commit after 2020 excludes 196 more. The corpus describes RDF
   code that is *alive and publishable*.
-- The analysis is syntactic: an `.add` on a receiver the resolver does not
-  recognise as a graph is not counted. **All counts are lower bounds.**
+- The analysis is syntactic: a receiver is a graph when it is built, typed
+  or bound as one, or when it is called the way only an rdflib graph is
+  (`triples((…))`, `objects(s, …)`, `value(s, p)`, `add((…, ns.term, …))`).
+  An `.add` on a receiver that is none of these is not counted. **All counts
+  are lower bounds** — the first analyser, which recognised a graph only by
+  its name, undercounted selections by a third.
 - "Static term" is approximated by syntactic form, so the true share of static
   triples is slightly above 9 %.
 - All thresholds are a judgement call. They live in a configuration file, not
