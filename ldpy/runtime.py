@@ -320,9 +320,17 @@ def dtype(value):
 
     A datatype is ALWAYS an IRI: unlike node(), a string is therefore read as
     an IRI and not as a literal. Also accepts an object exposing its IRI
-    through str() (URIRef, a DefinedNamespace term)."""
+    through str() (URIRef, a DefinedNamespace term). None raises, as in
+    node(): it used to type the literal <None> without a word (record
+    ldpy/012; found by the corpus study, `Literal(v, datatype=dt)` with no
+    datatype)."""
     if type(value) is _URIRef:
         return value
+    if value is None:
+        raise TypeError(
+            "None is not a datatype IRI: test the value before the island, "
+            "or write Literal(v, datatype=dt), which reads None as no "
+            "datatype")
     if isinstance(value, str):
         return URIRef(value)
     return URIRef(str(value))

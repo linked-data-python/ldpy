@@ -119,7 +119,10 @@ Décision de Maxime du 2026-11-01, sur proposition :
   `instantiateBGP` et `_bind_get` appliquaient déjà : une cellule vide
   d'une ligne CSV dans `for @bindings in …` fait tomber les triplets qui en
   ont besoin, au lieu d'écrire le littéral `"None"` ou de lever au milieu
-  de la boucle. Seule l'**interpolation** de `None` lève.
+  de la boucle. Seule l'**interpolation** de `None` lève — y compris
+  comme type de données calculé : `{v}^^{dt}` avec `dt` nul typait le
+  littéral `<None>`, il lève (`dtype()`, trouvé par l'étude d'optimisation
+  du corpus, `tableau/altimeter`).
 
 Documentation : `querying.md` (`m{ }` et `s{ }`), `current-graph.md`
 (table de `-{ }`), `bindings.md`, `migrate-from-rdflib.md` (table et

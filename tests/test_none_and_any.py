@@ -157,3 +157,13 @@ def test_sparql_interpolated_none_raises_any_leaves_unbound(run):
         """))
     with pytest.raises(TypeError):
         list(g["q"])
+
+
+def test_a_computed_datatype_that_is_none_raises(run):
+    """Found by the corpus study: `Literal(v, datatype=dt)` with dt None is
+    an untyped literal; `{v}^^{dt}` typed it `<None>` without a word."""
+    with pytest.raises(TypeError, match="datatype"):
+        run(src("""\
+            v, dt = "3", None
+            +{ ex:a ex:p {v}^^{dt} }
+            """))

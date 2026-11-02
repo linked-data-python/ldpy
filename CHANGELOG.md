@@ -9,6 +9,10 @@
   subject or object of `m{ }`, `+{ }`, `-{ }`, `g{ }`, `s{ }` — it now
   raises `TypeError`.
 
+- **A computed datatype that is `None` raises.** `{v}^^{dt}` with
+  `dt = None` used to type the literal `<None>`; it now raises `TypeError`,
+  as an interpolated `None` does since 0.7.1.
+
 - **`f<x>y` and `e<x>y` stay Python** when a name character follows the
   `>`: they are chained comparisons, not an IRI template followed by a
   name.
