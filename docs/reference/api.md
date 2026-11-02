@@ -82,6 +82,9 @@ directly: `URIRef, Literal, Variable, Namespace, RDF` re-exports, plus
   dropped triple / joker, `DELETE WHERE` on shared variables);
 - `match(graph, patterns, project, bindings=None)` → `Match` — the `m{ }`
   island (lazy nested-loop join; `first(default=None)`, `one()`, `count()`);
+- `pnode(value)` — an interpolation in the predicate position of `m{ }`:
+  an rdflib property path is kept for `graph.triples()`, anything else is
+  `node(value)`, which raises on a path;
 - `langtag(value)` — a computed language tag (`{v}@{k}`), `None` raises;
 - `imported_prefix(module, prefix)` — the namespace `from m import p:`
   binds: `m.__namespaces__[p]`, else a namespace exported as `p` or `P`;

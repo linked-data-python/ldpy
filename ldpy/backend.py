@@ -24,6 +24,7 @@ try:
     import rdflib as _lib
     from rdflib import RDF, XSD, BNode, Literal, Namespace, Variable
     from rdflib.term import Node
+    from rdflib.paths import Path
     URIRef = _lib.URIRef
     Graph = _lib.Graph
     NAME = "rdflib"
@@ -32,6 +33,7 @@ try:
 except ImportError:                                  # MicroPython
     import urdflib as _lib
     from urdflib import BNode, Literal, Node, URIRef, Variable, Graph
+    Path = None                                     # no property paths
     NAME = "urdflib"
     HAS_SPARQL = False
     HAS_NAMESPACE_MANAGER = False

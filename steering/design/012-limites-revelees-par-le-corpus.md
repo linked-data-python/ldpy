@@ -56,7 +56,7 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 | Constat | État |
 |---|---|
 | un motif reçu en DONNÉE (un `(s, p, o)` avec `None`, API `Store`, helper `delete(pattern)`) interpolé dans `-{ }`/`m{ }` faisait passer `None` par `node()`, qui en faisait `Literal('None')` : `-{ }` **ne retirait rien sans lever**, le pire mode d'échec possible | décidé par Maxime le 2026-11-01, implémenté : voir « `None` et `ldpy.ANY` » ci-dessous |
-| un `Path` de rdflib (`EX.p / EX.q`) interpolé dans `m{ }` passe par `node()`, qui en fait `Literal('Path(…)')` : le motif ne trouve rien, sans lever — le mode d'échec que la décision sur `None` a fermé. `g.value(s, A / B)` lit le chemin ; `m{ }` n'a pas de chemins (fiche [016](016-ilot-de-motif-selection.md)), donc la lecture reste `g.value` (`comp-rob2b/kindyngen`, `inertial_wrench`, classée `awkward`) | **à trancher**, ci-dessous |
+| un `Path` de rdflib (`EX.p / EX.q`) interpolé dans `m{ }` passait par `node()`, qui en faisait `Literal('Path(…)')` : le motif ne trouvait rien, sans lever — le mode d'échec que la décision sur `None` a fermé. La lecture `g.value(s, A / B)` restait donc `g.value` (`comp-rob2b/kindyngen`, `inertial_wrench`, classée `awkward`) | décidé par Maxime le 2026-11-02, implémenté : voir « Un chemin de propriété rdflib » ci-dessous |
 | le coût de `None` qui lève, mesuré par la reprise : rdflib propage `None` le long d'une chaîne `g.value(g.value(…))` et `(None, p, o) in g` est un joker, alors qu'un `{x}` nul lève. Il faut une garde par pas (`… if x is not None else None`, `BD2KOnFHIR/fhirtordf`, classée `awkward`) ou `.first() or ANY` (`ArangoDB-Community/ArangoRDF`). Remplacer la chaîne par une jointure change la cardinalité (premier par pas contre n'importe quel chemin) | acté : c'est le prix voulu de la décision du 2026-11-01, que les deux régions rendent visible |
 | `-{ }` multi-motifs joint (`DELETE WHERE`) : si un seul motif ne trouve pas de solution, rien n'est effacé — silencieux, alors que trois `remove()` rdflib indépendants retireraient partiellement | acté : pas d'avertissement dans la documentation — la différence entre un `-{ }` à trois motifs et trois `remove()` est évidente pour un humain qui lit le code |
 
@@ -126,25 +126,24 @@ Documentation : `querying.md` (`m{ }` et `s{ }`), `current-graph.md`
 piège 5), `api.md`, info-bulle de `-{ }`. Tests :
 `tests/test_none_and_any.py`.
 
-## À trancher
+## Un chemin de propriété rdflib
 
-**Un `Path` de rdflib interpolé dans un îlot.** Aujourd'hui `node()` le
-coerce en littéral (`Literal('Path(http://e/p / http://e/q)')`), et
-`m{ {s} {path} ?o }` ne rend rien sans lever. Trois réponses :
+Décision de Maxime du 2026-11-02, sur proposition :
 
-1. **le laisser passer jusqu'à `triples()` en position de prédicat de
-   `m{ }`** — rdflib évalue lui-même un `Path` dans `triples((s, path,
-   o))`, donc `m{ {s} {A / B} ?o }.first()` égalerait `g.value(s, A / B)`
-   sans moteur nouveau ; ailleurs (sujet, objet, `+{ }`, `g{ }`, `-{ }`),
-   lever. Proposition de l'agent : elle comble le manque vu sur
-   `kindyngen` à coût presque nul, et ne fait pas de `m{ }` un moteur de
-   chemins (la syntaxe `A / B` reste celle de Python, interpolée) ;
-2. lever partout, comme pour `None`, en nommant `s{ }` ou `g.value` dans
-   le message ;
-3. plus large : lever pour tout littéral en position de prédicat, qui ne
-   peut rien apparier — l'option 2 en découle, et la chaîne qui ressemble à
-   une IRI (fiche [020](020-coercition-python-rdf.md)) aussi en position de
-   prédicat.
+- **En position de prédicat de `m{ }`, un `Path` est passé tel quel à
+  `graph.triples()`**, qui l'évalue : `m{ {s} {A / B} ?o }.first()` vaut
+  `g.value(s, A / B)`, sans moteur nouveau. `m{ }` ne gagne pas de syntaxe
+  de chemin : le chemin s'écrit en Python, avec les opérateurs de rdflib,
+  et s'interpole. Le transpileur émet `pnode()` au lieu de `node()` pour
+  cette seule position.
+- **Partout ailleurs, `node()` lève `TypeError`** sur un `Path` : sujet ou
+  objet de `m{ }`, toute position de `+{ }`, `-{ }`, `g{ }`, `s{ }`. Un
+  chemin n'est pas un terme, ne s'écrit pas, ne se retire pas.
+- Sous MicroPython, urdflib n'a pas de chemins (`backend.Path` vaut
+  `None`) : rien ne change.
+
+Documentation : `querying.md` (« What `m{ }` does not have »), `api.md`.
+Tests : `tests/test_match_path.py`.
 
 ## Ce qui reste
 

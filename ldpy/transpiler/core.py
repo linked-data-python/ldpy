@@ -2008,7 +2008,10 @@ class Transpiler:
             if self._peek() != "}":
                 self._error("'}' attendu")
             self._take(1)
-            return _impure("%s.node((%s))" % (RUNTIME_ALIAS, expr.strip()), gctx)
+            # a property path is read in m{ } only (record ldpy/012)
+            fn = "pnode" if self._match_vars is not None else "node"
+            return _impure("%s.%s((%s))" % (RUNTIME_ALIAS, fn, expr.strip()),
+                           gctx)
         if c in "?$":
             return self._g_var(gctx)
         if c == "<":

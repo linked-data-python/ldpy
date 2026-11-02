@@ -117,8 +117,22 @@ assert rows == [(ex:a, ex:c)]
 
 ### What `m{ }` does not have
 
-No `FILTER`, `OPTIONAL`, `UNION`, property paths or aggregates. Python's `if`
-covers the measured usage of the first, and `s{ }` covers the rest. The
+No `FILTER`, `OPTIONAL`, `UNION`, property path syntax or aggregates.
+Python's `if` covers the measured usage of the first, and `s{ }` covers the
+rest. An rdflib path built in Python is the one exception: interpolated in
+the **predicate** position, it is handed to `graph.triples()`, which
+evaluates it, so `m{ {s} {A / B} ?o }.first()` is `g.value(s, A / B)`.
+
+```ldpy
+@prefix ex: <http://example.org/> .
+@graph as g
++{ ex:a ex:parent ex:b . ex:b ex:parent ex:c }
+grandparent = ex:parent / ex:parent
+assert m{ ex:a {grandparent} ?who }.first() == ex:c
+```
+
+Anywhere else — subject or object of `m{ }`, any position of `+{ }`, `-{ }`,
+`g{ }` or `s{ }` — a path raises `TypeError`: it is not a term. The
 argument for keeping the island small is
 [in the design record](../../explanation/designing-the-syntax.md#why-m-and-g-are-different-letters).
 

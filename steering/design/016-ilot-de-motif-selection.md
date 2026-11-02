@@ -261,9 +261,11 @@ soi-même, ou passer à l'îlot SPARQL (fiche 015) et au moteur de rdflib.
 
 ### Ce qui reste dehors
 
-- **Pas de FILTER, OPTIONAL, UNION, MINUS, chemins de propriété, agrégats, ni
-  tri.** Le `if` de Python couvre le filtrage tel que le corpus le pratique, et
-  `s{ … }` couvre tout le reste. La frontière est nette : `m{}` est un BGP sans
+- **Pas de FILTER, OPTIONAL, UNION, MINUS, syntaxe de chemin de propriété,
+  agrégats, ni tri.** Le `if` de Python couvre le filtrage tel que le corpus
+  le pratique, et `s{ … }` couvre tout le reste. Seule exception : un
+  chemin rdflib construit en Python et interpolé en position de prédicat
+  est évalué par `graph.triples()` (fiche [012](012-limites-revelees-par-le-corpus.md)). La frontière est nette : `m{}` est un BGP sans
   moteur, `s{}` est SPARQL avec moteur.
 - L'ajout de filtres `e{ … }` à l'intérieur de `m{ … }` est la généralisation
   naturelle ; elle est instruite avec les gabarits dans la **fiche 017**.

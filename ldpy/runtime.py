@@ -10,7 +10,7 @@ Emission and runtime choices are explained in docs/explanation/.
 
 from ldpy import backend as _backend
 from ldpy.backend import RDF, BNode, Literal, Variable, Namespace, Node
-from ldpy.backend import URIRef as _URIRef, Graph as _Graph
+from ldpy.backend import URIRef as _URIRef, Graph as _Graph, Path as _Path
 
 _URI_CACHE = {}
 
@@ -48,7 +48,8 @@ _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 __all__ = [
     "RDF", "URIRef", "BNode", "Literal", "Variable", "Namespace",
     "node", "bn", "slot", "firi", "bnode", "dtype", "graph", "instantiateBGP",
-    "pname", "new_graph", "add_to", "remove_from", "match", "prepared",
+    "pname", "new_graph", "add_to", "remove_from", "match", "pnode",
+    "prepared",
     "Bindings", "as_bindings_iter", "Coercion",
     "sparql",
 ]
@@ -174,6 +175,11 @@ _ANY_IS_NOT_WRITABLE = (
     "ldpy.ANY is a wildcard: it matches in -{ } and m{ }, and cannot be "
     "written by +{ } or g{ }")
 
+_PATH_ONLY_IN_MATCH = (
+    "an rdflib property path is not an RDF term: it is read only in the "
+    "predicate position of m{ } — m{ {s} {path} ?o } — or by g.value / "
+    "s{ }; it cannot be written, removed, or stand for a subject or object")
+
 _PASSTHROUGH = frozenset((_URIRef, Literal, BNode, Variable, bn, _Wildcard))
 
 
@@ -257,6 +263,10 @@ def node(value, field=None):
         raise TypeError(_NONE_IS_NOT_A_TERM)
     if isinstance(value, (Node, bn)):
         return value
+    if _Path is not None and isinstance(value, _Path):
+        # it used to become Literal('Path(...)'), which matched nothing
+        # without a word (record ldpy/012)
+        raise TypeError(_PATH_ONLY_IN_MATCH)
     if _COERCION_STACK:
         vt = type(value)
         for pol in reversed(_COERCION_STACK):
@@ -1145,6 +1155,16 @@ class Match:
     def __repr__(self):
         return "m{ %d motif(s), projection %r }" % (
             len(self.patterns), tuple(self.project))
+
+
+def pnode(value):
+    """An interpolation in the predicate position of m{ } (record ldpy/012):
+    an rdflib property path is kept, for graph.triples() evaluates it — the
+    value of `g.value(s, A / B)` is that of `m{ {s} {A / B} ?o }.first()`.
+    Anything else is node()."""
+    if _Path is not None and isinstance(value, _Path):
+        return value
+    return node(value)
 
 
 def match(graph, patterns, project, bindings=None):

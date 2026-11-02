@@ -2,6 +2,17 @@
 
 ### [Unreleased]
 
+- **An rdflib property path is read in the predicate position of `m{ }`.**
+  `m{ {s} {A / B} ?o }.first()` is `g.value(s, A / B)`: the path is handed
+  to `graph.triples()`, which evaluates it. A path used to become the
+  literal `"Path(...)"` and match nothing, without a word; anywhere else —
+  subject or object of `m{ }`, `+{ }`, `-{ }`, `g{ }`, `s{ }` — it now
+  raises `TypeError`.
+
+- **`f<x>y` and `e<x>y` stay Python** when a name character follows the
+  `>`: they are chained comparisons, not an IRI template followed by a
+  name.
+
 ### [0.7.1] — 2026-11-02
 
 - **The formatter lays out island bodies.** A Turtle island stays on one
