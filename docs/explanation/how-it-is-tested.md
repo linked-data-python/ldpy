@@ -86,10 +86,11 @@ Stated plainly, because a page like this is worth nothing if it only lists
 successes.
 
 - **That the language is easier to use.** A user study is running; it has no
-  result yet. The parity claim is examined on found code — 325 of 333
-  translated regions proved equivalent to the original by execution (graph
-  isomorphism, or equality of the values read), none yet approved by human
-  review — not on measured developer performance.
+  result yet. The parity claim is examined on found code — 357 translated
+  regions proved equivalent to the original by execution (graph
+  isomorphism, or equality of the values read), out of a stratified sample
+  of 385, none yet approved by human review — not on measured developer
+  performance.
 - **R6, on a device.** The generated code is proved to stay within a
   Python-3.4-level subset by an AST whitelist, and runs on the Unix port of
   MicroPython over urdflib; flash, RAM and time on a microcontroller (ESP32)

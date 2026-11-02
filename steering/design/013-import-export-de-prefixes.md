@@ -167,23 +167,29 @@ ligne, pas le module, c'est ce que l'utilisateur peut corriger.
 
 Implémentation : commit `0191c78`, 20 tests (`tests/test_prefix_import.py`).
 
-## Limite révélée par le corpus : une condition d'applicabilité
+## Ce que le corpus en montre
 
-`from m import brick:` ne fonctionne que si le module `m` **est un module
-ldpy**, c'est-à-dire s'il expose `__namespaces__`. Aucun dépôt du corpus
-n'en a un : les 22 traductions de l'échantillon (fiche `corpus/403`) qui
-emploient la construction importent toutes d'un module de shim où le
-traducteur a écrit `__namespaces__` à la main. Le besoin, lui, est partout
-— des namespaces de projet employés massivement en position de terme
-(`umd-lib/plastron` : `owl.sameAs`, `edm.Agent`, `bibo.Letter`…).
+Le besoin est partout : des namespaces de projet employés massivement en
+position de terme (`umd-lib/plastron` : `owl.sameAs`, `edm.Agent`,
+`bibo.Letter`…), déclarés dans un `namespaces.py` du dépôt. Dans
+l'échantillon repris de l'étude (fiche `corpus/404`), 42 paires emploient
+`from m import p:`, et toutes importent du module de namespaces du dépôt
+lui-même, sans `__namespaces__` : installé pour quatre dépôts (`nanopub`,
+`pyshacl`, `apysource`, `plastron`), copié tel quel dans un shim de
+contexte pour les autres, faute de paquet installable. L'étude ne crédite
+la construction que dans une paire dont l'import ne repose pas sur un
+`__namespaces__` écrit par le traducteur (`corpus-study`,
+`rdfeval/constructions.py`, `rests_on_written_export`) : aucune n'y repose
+plus.
 
-Ce n'est pas une limite d'expressivité mais une **condition
-d'applicabilité** : la construction paie une fois le module exportateur
-écrit en ldpy, ce qu'un corpus de code antérieur au langage ne peut pas
-montrer. L'étude la compte donc à part, sans citation ni gain
-(`UNATTESTED` dans `corpus-study/rdfeval/constructions.py`), et l'article la
-présente comme un bénéfice d'adoption. Quand elle sert dans un fichier, elle
-ne remplace pas un import Python dont le module se sert aussi comme objet
+Le nom de l'attribut ne coïncide pas toujours avec le préfixe voulu, et
+`as` suffit : `ns_rdfa: as nsrdfa:`, `base_uri: as base:`,
+`fdp_default: as fdp-o:` (un préfixe à trait d'union n'est jamais un nom
+d'attribut Python). Une constante `SPDX_NAMESPACE` donne le préfixe
+`spdx_namespace:`, ou `spdx_namespace: as spdx:`.
+
+Quand la construction sert dans un fichier, elle ne remplace pas un import
+Python dont le module se sert aussi comme objet
 (`MaxBerktoldRWTH/BRICKbuilder` réexporte `QUDT` puis écrit
 `QUDT.degreeCelsius`) : le préfixe importé ne lie aucun nom.
 
@@ -196,8 +202,7 @@ sa majuscule (`edm`, `EDM`) : `rdflib.Namespace`, `URIRef` ou chaîne, ou
 classe `DefinedNamespace` (son `_NS`). L'import se fait par `__import__`
 sur le module, relatif compris. Un projet n'a donc rien à changer à son
 `namespaces.py` : c'est ce qui rend la construction attestable sur le
-corpus (`umd-lib/plastron`, `alganet/apysource`, dont les traductions
-avaient dû écrire un shim qui ajoute `__namespaces__`). Absent des deux
+corpus (ci-dessus). Absent des deux
 côtés, l'import lève `ImportError` en nommant les deux endroits cherchés.
 
 ## Cas voisin : une partie locale qui n'est pas un PN_LOCAL

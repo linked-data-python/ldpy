@@ -96,8 +96,9 @@ This documentation is organised by what you came for.
 
 ldpy is a research resource under active development, at version 0.7. The
 language is stable enough to write real programs in — the corpus study
-translated 333 regions of found code, 325 of them proved equivalent to the
-original by execution, none yet approved by human review — and the tooling
+drew 385 regions of found code, of which 357 are translated and proved
+equivalent to the original by execution and 22 are out of the language's
+reach, none yet approved by human review — and the tooling
 is real. What is *not* settled:
 
 - a plain literal still has no notation outside an island;
