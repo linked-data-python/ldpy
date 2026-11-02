@@ -132,7 +132,14 @@ assert m{ ex:a {grandparent} ?who }.first() == ex:c
 ```
 
 Anywhere else — subject or object of `m{ }`, any position of `+{ }`, `-{ }`,
-`g{ }` or `s{ }` — a path raises `TypeError`: it is not a term. The
+`g{ }` or `s{ }` — a path raises `TypeError`: it is not a term.
+
+The path is Python, with Python's precedence: `/` and `*` bind equally and
+group from the left, so `{sh:or / rdf:rest * "*"}` is `(sh:or / rdf:rest)*`.
+Write `{sh:or / (rdf:rest * "*") / rdf:first}` for SPARQL's
+`sh:or/rdf:rest*/rdf:first`. And `m{ }` reads through `graph.triples()`,
+never through `graph.query()`: a store or a test double that hooks
+`query()` does not see it. The
 argument for keeping the island small is
 [in the design record](../../explanation/designing-the-syntax.md#why-m-and-g-are-different-letters).
 
