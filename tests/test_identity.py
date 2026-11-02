@@ -17,6 +17,9 @@ SNIPPETS = [
     "x = 1",                                   # sans newline final
     "a = b < c\n",
     "if a<b>c:\n    pass\n",                   # comparaison chaînée collée
+    "r = f<x>y\n",                             # f< … > suivi d'un nom : Python
+    "r = e<x>y\n",                             # (fiche vscode/102)
+    "ok = f<x>1 and e<y>_z\n",
     "r = d[i:j]\n",
     "r = d[i:j:k]\n",
     "m = {k: v for k, v in items}\n",

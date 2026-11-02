@@ -786,7 +786,7 @@ class Transpiler:
             self._end_island("enode", mark, gen)
             return
         if nxt == "<" and name in ("f", "e") and operand_here:
-            if name == "e":
+            if name == "e" and self._iri_template_closes():
                 mark = self._begin_island()
                 gen = self._take_eiri()
                 self._end_island("eiri", mark, gen)
@@ -945,14 +945,42 @@ class Transpiler:
                          "%s.URIRef(%r)" % (RUNTIME_ALIAS, self._resolve(iri)))
         return True
 
+    def _iri_template_closes(self):
+        """On 'f<' / 'e<' in operand position: does an IRI template close
+        here — IRI characters and balanced {…} holes up to a '>' — WITHOUT a
+        name character glued after it? `f<x>y` is Python's chained
+        comparison `f < x > y`, and stays Python (fiche vscode/102)."""
+        t = self.text
+        j = self.i + 2
+        while j < self.n:
+            c = t[j]
+            if c == "{":
+                depth = 0
+                while j < self.n:
+                    if t[j] == "{":
+                        depth += 1
+                    elif t[j] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    elif t[j] == "\n":
+                        return False
+                    j += 1
+                if j >= self.n:
+                    return False
+                j += 1
+                continue
+            if c == ">":
+                after = t[j + 1:j + 2]
+                return not (after.isalnum() or after == "_")
+            if not _is_iri_char(c):
+                return False
+            j += 1
+        return False
+
     def _try_take_firi(self):
         """Sur 'f<'. Retourne l'expression générée ou None (repli)."""
-        t = self.text
-        # validation en avant : f< statiques* ( { ... } statiques* )* >
-        j = self.i + 2
-        while j < self.n and _is_iri_char(t[j]) and t[j] != "{":
-            j += 1
-        if j >= self.n or t[j] not in "{>":
+        if not self._iri_template_closes():
             return None
         return self._take_firi()
 

@@ -311,3 +311,11 @@ def test_les_declarations_synthetiques_sont_bornees():
     assert "graph" in _synthetic_declaration(
         Exception("'+{ ... }' sans graphe courant : ..."))
     assert _synthetic_declaration(Exception("autre chose")) is None
+
+
+def test_a_chained_comparison_glued_to_a_name_is_python():
+    """`f<x>y` is `f < x > y` (fiche vscode/102): no island token."""
+    from pygments.lexers.python import PythonLexer
+    code = "r = f<x>y\n"
+    assert [(t, v) for _, t, v in toks(code)] == \
+        [(t, v) for _, t, v in PythonLexer().get_tokens_unprocessed(code)]
