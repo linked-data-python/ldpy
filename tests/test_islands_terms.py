@@ -267,3 +267,15 @@ def test_a_computed_language_tag_of_none_raises(run):
         run("@prefix ex: <http://example.org/> .\n"
             "k = None\n"
             "x = g{ ex:c ex:label {'cat'}@{k} }\n")
+
+
+def test_an_firi_interpolation_takes_a_format_spec_and_a_conversion(run):
+    """As in an f-string — found by the corpus study, where `{seq:d}`
+    emitted invalid Python."""
+    g, _ = run('seq, name = 7, "a b"\n'
+               'u = f<http://e/{seq:03d}>\n'
+               'v = f<http://e/{name!r}>\n'
+               'w = f<http://e/{ {"k": seq}["k"] }>\n')
+    assert str(g["u"]) == "http://e/007"
+    assert str(g["v"]) == "http://e/'a b'"
+    assert str(g["w"]) == "http://e/7"

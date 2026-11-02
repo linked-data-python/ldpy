@@ -224,6 +224,60 @@ def _term_kind(text):
     return "pname"
 
 
+def _with_format_spec(expr):
+    """`{x:d}` and `{x!r}` in an f-IRI, as in an f-string: the conversion
+    and the format spec after the expression become format(). An
+    expression that compiles as it is (a dict, a slice, a lambda) is left
+    alone; found by the corpus study (`f<{dllID}_{seq:d}>` emitted invalid
+    Python)."""
+    try:
+        compile("(%s)" % expr, "<firi>", "eval")
+        return expr
+    except SyntaxError:
+        pass
+    depth, quote, i = 0, None, 0
+    cut = None
+    while i < len(expr):
+        c = expr[i]
+        if quote:
+            if c == "\\":
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        elif c in "\"'":
+            quote = c
+        elif c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        elif depth == 0 and c == "!" and expr[i + 1:i + 2] != "=":
+            cut = i
+            break
+        elif depth == 0 and c == ":":
+            cut = i
+            break
+        i += 1
+    if cut is None:
+        return expr
+    head, rest = expr[:cut], expr[cut:]
+    conv = None
+    if rest.startswith("!"):
+        conv, rest = rest[1:2], rest[2:]
+        if conv not in ("r", "s", "a"):
+            return expr
+    spec = rest[1:] if rest.startswith(":") else ""
+    if rest and not rest.startswith(":"):
+        return expr
+    try:
+        compile("(%s)" % head, "<firi>", "eval")
+    except SyntaxError:
+        return expr
+    value = {"r": "repr(%s)", "s": "str(%s)", "a": "ascii(%s)",
+             None: "(%s)"}[conv] % head
+    return "format(%s, %r)" % (value, spec.strip())
+
+
 class Transpiler:
     """Une instance par fichier. Usage : Transpiler(src, filename).run()."""
 
@@ -1006,7 +1060,7 @@ class Transpiler:
                 if self._peek() != "}":
                     self._error("'}' attendu dans la f-IRI")
                 self._take(1)
-                parts.append((False, expr))
+                parts.append((False, _with_format_spec(expr)))
                 continue
             if not _is_iri_char(c):
                 self._error("caractère %r interdit dans une f-IRI" % c)

@@ -458,3 +458,25 @@ def test_designating_a_graph_keeps_its_bindings(run):
     assert ns["new"] == "http://new/"
     assert "http://www.w3.org/2001/XMLSchema#" not in [
         v for k, v in ns.items() if k == "xsd"]
+
+
+def test_binding_on_one_graph_never_rebinds_another(run):
+    """`@graph as g` and g{ } graphs built under the same declarations used
+    to share one namespace manager: `g.bind()` on one rebound the prefix in
+    all of them (found by the corpus study, `tteon/seocho`)."""
+    g, _ = run('@prefix ex: <http://e/> .\n'
+               'def make(ns):\n'
+               '    @graph as g\n'
+               '    +{ ex:a ex:p ex:b }\n'
+               '    g.bind("priv", ns)\n'
+               '    return g\n'
+               'a = make("http://one/")\n'
+               'b = make("http://two/")\n'
+               'x = g{ ex:a ex:p ex:b }\n'
+               'y = g{ ex:a ex:p ex:c }\n'
+               'x.bind("zz", "http://zz/")\n')
+    ns = lambda graph: dict(graph.namespaces())
+    assert str(ns(g["a"])["priv"]) == "http://one/"
+    assert str(ns(g["b"])["priv"]) == "http://two/"
+    assert "zz" in ns(g["x"]) and "zz" not in ns(g["y"])
+    assert "ex" in ns(g["x"]) and "ex" in ns(g["a"])

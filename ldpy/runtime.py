@@ -432,7 +432,26 @@ def _nm_for(namespaces):
     for prefix, ns in namespaces.items():
         nm.bind(prefix, ns, replace=True)
     _NM_CACHE[key] = (snap, nm)
+    _SHARED_NM.add(id(nm))
     return nm
+
+
+#: The managers _nm_for shares: a graph holding one copies it before its
+#: first bind() — otherwise `g.bind(...)` on one g{ } value rebound the
+#: prefix in every graph built under the same declarations (found by the
+#: corpus study, `tteon/seocho`: a second call wrote `priv1:`).
+_SHARED_NM = set()
+
+
+def _own_namespace_manager(g):
+    """Give ``g`` a private copy of the shared manager it holds."""
+    nm = g.namespace_manager
+    if id(nm) not in _SHARED_NM:
+        return
+    own = _Graph().namespace_manager
+    for prefix, ns in nm.namespaces():
+        own.bind(prefix, ns, override=True, replace=True)
+    g.namespace_manager = own
 
 
 def _new_emitted(base):
@@ -484,6 +503,10 @@ class _EmittedGraph(_Graph):
         if pending is not None:
             return iter(dict.fromkeys(pending))
         return super().__iter__()
+
+    def bind(self, *args, **kw):
+        _own_namespace_manager(self)        # copy on write
+        return super().bind(*args, **kw)
 
     def __len__(self):
         pending = self._pending
@@ -824,10 +847,10 @@ def new_graph(namespaces, base, identifier=None):
     """A graph created by '@graph as g' (record ldpy/014): a plain
     rdflib.Graph, with the serialisation bindings of the prefixes in scope."""
     g = _backend.new_graph(base=base, identifier=identifier)
-    nm = _nm_for(namespaces)
-    if nm is not None:
-        g.namespace_manager = nm
-    elif namespaces and not _backend.HAS_NAMESPACE_MANAGER:
+    # its own manager, never the shared one: the program owns this graph and
+    # binds on it (record ldpy/021 — a declaration is executed once, unlike
+    # a g{ } in a loop)
+    if namespaces:
         _backend.bind_namespaces(g, namespaces)
     return g
 

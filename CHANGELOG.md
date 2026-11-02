@@ -9,6 +9,16 @@
   subject or object of `m{ }`, `+{ }`, `-{ }`, `g{ }`, `s{ }` — it now
   raises `TypeError`.
 
+- **Binding a prefix on one graph no longer rebinds it on another.**
+  Graphs made by `@graph as g` or `g{ }` under the same declarations shared
+  one namespace manager, so `g.bind("p", ns)` on one changed the prefix in
+  all of them. `@graph as g` now has its own manager; a `g{ }` graph copies
+  the shared one on its first `bind()`.
+
+- **An f-IRI interpolation takes a conversion and a format spec**, as in an
+  f-string: `f<http://e/{seq:03d}>`, `f<http://e/{name!r}>`. They used to
+  emit invalid Python.
+
 - **A computed local name that is `None` raises.** `ex:{x}` with
   `x = None` used to name `ex:None`; it now raises `TypeError`.
 
