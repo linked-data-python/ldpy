@@ -43,6 +43,8 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 | `.first()` ne rendait pas un `g.value(…, default)` non-`None` ; `.one()` n'égale pas `next(iter)` (qui ignore le surplus) | résolu : `.first(default=…)`, et `next(iter(m{ … }))` pour `next` sans défaut, fiche [016](016-ilot-de-motif-selection.md) |
 | une lecture à plus d'une position libre (`g.subjects()` sans prédicat ni objet) n'a pas de forme brève | [016](016-ilot-de-motif-selection.md) ; `m{ ?s {ANY} {ANY} }` l'écrit depuis `ldpy.ANY` (ci-dessous) |
 | `s{ }` exige un texte de requête littéral à la transpilation | [015](015-ilot-sparql.md) |
+| `str()` d'une valeur `s{ }` rend le texte de l'îlot, `s{ … }`, sans prologue : une bibliothèque qui lit le texte de la requête plutôt que son algèbre (`vital-ai/vital-graph`, `OptimizedVitalGraph.query` cherche des motifs par expressions régulières dans `str(query)`) peut prendre une autre branche | [015](015-ilot-sparql.md) |
+| `s{ }` est validé par la grammaire SPARQL 1.1 de rdflib, sans échappatoire : une requête SPARQL 1.2 (`TRIPLE`, `isTRIPLE`) destinée à un moteur plus récent (Fuseki 5.5, `hidden-graph/rdflib-starlight`) n'a pas d'îlot | [015](015-ilot-sparql.md) |
 | l'interpolation de `s{ }` lie une variable, elle n'épisse jamais du texte (une IRI entre chevrons, un motif entier, une clause `FILTER`/`GRAPH` n'ont pas de forme) | [015](015-ilot-sparql.md) |
 | `Literal(expr)` nu hors îlot n'a pas de notation ; un tag de langue variable s'écrit `{v}@{k}` depuis 2026-11-02 | [020](020-coercition-python-rdf.md) |
 | une chaîne qui *ressemble* à une IRI se coerce en littéral, sans erreur — vu en interpolation de `m{ }`/`s{ }` (l'`ASK` s'évalue `False` sans erreur sur `RDFLib/VocPrez`) | [020](020-coercition-python-rdf.md) |
@@ -54,6 +56,8 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 | Constat | État |
 |---|---|
 | un motif reçu en DONNÉE (un `(s, p, o)` avec `None`, API `Store`, helper `delete(pattern)`) interpolé dans `-{ }`/`m{ }` faisait passer `None` par `node()`, qui en faisait `Literal('None')` : `-{ }` **ne retirait rien sans lever**, le pire mode d'échec possible | décidé par Maxime le 2026-11-01, implémenté : voir « `None` et `ldpy.ANY` » ci-dessous |
+| un `Path` de rdflib (`EX.p / EX.q`) interpolé dans `m{ }` passe par `node()`, qui en fait `Literal('Path(…)')` : le motif ne trouve rien, sans lever — le mode d'échec que la décision sur `None` a fermé. `g.value(s, A / B)` lit le chemin ; `m{ }` n'a pas de chemins (fiche [016](016-ilot-de-motif-selection.md)), donc la lecture reste `g.value` (`comp-rob2b/kindyngen`, `inertial_wrench`, classée `awkward`) | **à trancher**, ci-dessous |
+| le coût de `None` qui lève, mesuré par la reprise : rdflib propage `None` le long d'une chaîne `g.value(g.value(…))` et `(None, p, o) in g` est un joker, alors qu'un `{x}` nul lève. Il faut une garde par pas (`… if x is not None else None`, `BD2KOnFHIR/fhirtordf`, classée `awkward`) ou `.first() or ANY` (`ArangoDB-Community/ArangoRDF`). Remplacer la chaîne par une jointure change la cardinalité (premier par pas contre n'importe quel chemin) | acté : c'est le prix voulu de la décision du 2026-11-01, que les deux régions rendent visible |
 | `-{ }` multi-motifs joint (`DELETE WHERE`) : si un seul motif ne trouve pas de solution, rien n'est effacé — silencieux, alors que trois `remove()` rdflib indépendants retireraient partiellement | acté : pas d'avertissement dans la documentation — la différence entre un `-{ }` à trois motifs et trois `remove()` est évidente pour un humain qui lit le code |
 
 ## Confirmations (comportements voulus, vérifiés sur du code réel)
@@ -73,13 +77,15 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 - **Piège `@base`** : réécrire `URIRef(x)` en `f<{x}>` n'est exact que si aucun
   `@base` n'est en portée (sinon `firi()` résout le relatif) — documenté dans
   le guide de migration.
-- **L'import de préfixes marche depuis un module Python ordinaire**, à
-  condition qu'il exporte `__namespaces__` — un module `.ldpy` le fait
-  automatiquement, un `.py` peut le faire à la main
-  (`__namespaces__ = {"aorc": AORC}`) ; c'est le protocole qu'exige la forme,
-  pas l'extension du fichier. Le gain se **compose** avec celui du `;` : un
-  îlot multi-triplets qui écrit plusieurs termes du même vocabulaire paie deux
-  fois.
+- **L'import de préfixes marche depuis un module Python ordinaire** : le
+  `__namespaces__` d'un module `.ldpy`, ou un attribut `p` / `P` qui est un
+  `Namespace`, une IRI ou un `DefinedNamespace` (fiche
+  [013](013-import-export-de-prefixes.md)). Dans la reprise du 2026-11-02, des
+  paires importent leurs préfixes du module de namespaces du dépôt lui-même
+  (`apysource.namespaces`, `kindynsyn.namespaces`, `plastron.namespaces`,
+  `nanopub.namespaces`). Le gain se **compose** avec celui du `;` : un
+  îlot multi-triplets qui écrit plusieurs termes du même vocabulaire paie
+  deux fois.
 - **`@graph` accepte une expression d'attribut** (`@graph self.graph`,
   `@graph result.graph`), ce qui rend `+{ }` / `-{ }` utilisables tels quels
   dans du code orienté objet là où `g += g{ }` échouait sur une propriété en
@@ -119,6 +125,26 @@ Documentation : `querying.md` (`m{ }` et `s{ }`), `current-graph.md`
 (table de `-{ }`), `bindings.md`, `migrate-from-rdflib.md` (table et
 piège 5), `api.md`, info-bulle de `-{ }`. Tests :
 `tests/test_none_and_any.py`.
+
+## À trancher
+
+**Un `Path` de rdflib interpolé dans un îlot.** Aujourd'hui `node()` le
+coerce en littéral (`Literal('Path(http://e/p / http://e/q)')`), et
+`m{ {s} {path} ?o }` ne rend rien sans lever. Trois réponses :
+
+1. **le laisser passer jusqu'à `triples()` en position de prédicat de
+   `m{ }`** — rdflib évalue lui-même un `Path` dans `triples((s, path,
+   o))`, donc `m{ {s} {A / B} ?o }.first()` égalerait `g.value(s, A / B)`
+   sans moteur nouveau ; ailleurs (sujet, objet, `+{ }`, `g{ }`, `-{ }`),
+   lever. Proposition de l'agent : elle comble le manque vu sur
+   `kindyngen` à coût presque nul, et ne fait pas de `m{ }` un moteur de
+   chemins (la syntaxe `A / B` reste celle de Python, interpolée) ;
+2. lever partout, comme pour `None`, en nommant `s{ }` ou `g.value` dans
+   le message ;
+3. plus large : lever pour tout littéral en position de prédicat, qui ne
+   peut rien apparier — l'option 2 en découle, et la chaîne qui ressemble à
+   une IRI (fiche [020](020-coercition-python-rdf.md)) aussi en position de
+   prédicat.
 
 ## Ce qui reste
 
