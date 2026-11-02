@@ -2,6 +2,8 @@
 
 ### [Unreleased]
 
+### [0.7.1] — 2026-11-02
+
 - **The formatter lays out island bodies.** A Turtle island stays on one
   line while the line fits, and is otherwise exploded in hanging indent, in
   steps of four — the rule black applies to Python. A SPARQL island takes a
