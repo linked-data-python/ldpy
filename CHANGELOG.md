@@ -9,6 +9,9 @@
   subject or object of `m{ }`, `+{ }`, `-{ }`, `g{ }`, `s{ }` — it now
   raises `TypeError`.
 
+- **A computed local name that is `None` raises.** `ex:{x}` with
+  `x = None` used to name `ex:None`; it now raises `TypeError`.
+
 - **A computed datatype that is `None` raises.** `{v}^^{dt}` with
   `dt = None` used to type the literal `<None>`; it now raises `TypeError`,
   as an interpolated `None` does since 0.7.1.

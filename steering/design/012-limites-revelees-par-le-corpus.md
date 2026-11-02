@@ -122,7 +122,9 @@ Décision de Maxime du 2026-11-01, sur proposition :
   de la boucle. Seule l'**interpolation** de `None` lève — y compris
   comme type de données calculé : `{v}^^{dt}` avec `dt` nul typait le
   littéral `<None>`, il lève (`dtype()`, trouvé par l'étude d'optimisation
-  du corpus, `tableau/altimeter`).
+  du corpus, `tableau/altimeter`) ; et comme partie locale calculée :
+  `ex:{x}` avec `x` nul nommait `ex:None`, il lève (`pname()`,
+  `d3fend/d3fend-ontology`).
 
 Documentation : `querying.md` (`m{ }` et `s{ }`), `current-graph.md`
 (table de `-{ }`), `bindings.md`, `migrate-from-rdflib.md` (table et

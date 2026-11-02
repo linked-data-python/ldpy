@@ -353,6 +353,10 @@ def pname(ns, *parts):
         tp = type(p)
         if tp is Variable or (cls and tp is cls):
             return _deferred_pname(ns, parts)
+        if p is None:
+            # `ex:{x}` with x None used to name `ex:None` (record ldpy/012)
+            raise TypeError(
+                "None is not a local name: test the value before the island")
     return _URIRef(
         str(ns) + "".join(p if isinstance(p, str) else str(p) for p in parts))
 

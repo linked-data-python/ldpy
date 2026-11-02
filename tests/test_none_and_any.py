@@ -167,3 +167,12 @@ def test_a_computed_datatype_that_is_none_raises(run):
             v, dt = "3", None
             +{ ex:a ex:p {v}^^{dt} }
             """))
+
+
+def test_a_computed_local_name_that_is_none_raises(run):
+    """Found by the corpus study: `ex:{x}` with x None named `ex:None`."""
+    with pytest.raises(TypeError, match="local name"):
+        run(src("""\
+            x = None
+            +{ ex:a ex:p ex:{x} }
+            """))
