@@ -1241,7 +1241,8 @@ class Transpiler:
             var = self._fresh_ns_var(target)
             self.prefixes[target] = DynPrefix(var)
             self._prefix_col[target] = decl_col
-            binds.append("%s = %s[%r]" % (var, nsvar, source))
+            binds.append("%s = %s.imported_prefix(%s, %r)" % (
+                var, RUNTIME_ALIAS, nsvar, source))
             updates.append("%r: %s" % (target, var))
         if not prefix_items:
             # aucun préfixe finalement : l'instruction est du Python ordinaire
@@ -1255,8 +1256,15 @@ class Transpiler:
             self.stmt_start = False
             return
         self._import_lines.append((decl_line, module))
-        items = py_items + ["__namespaces__ as %s" % nsvar]
-        gen = "; ".join(["from %s import %s" % (module, ", ".join(items))]
+        # the module itself, not its `__namespaces__`: a module written in
+        # Python exports Namespace objects, not that dict (record ldpy/013)
+        level = len(module) - len(module.lstrip("."))
+        head = (["from %s import %s" % (module, ", ".join(py_items))]
+                if py_items else [])
+        gen = "; ".join(head
+                        + ["%s = __import__(%r, globals(), None, "
+                           "('__name__',), %d)" % (nsvar, module.lstrip("."),
+                                                   level)]
                         + binds
                         + ["__namespaces__.update({%s})" % ", ".join(updates)])
         self._end_island("import", mark, gen)
@@ -2181,11 +2189,27 @@ class Transpiler:
             return "%s.node(%d)" % (RUNTIME_ALIAS, int(lexical))
         return "%s.node(%s)" % (RUNTIME_ALIAS, lexical)
 
+    def _computed_lang(self):
+        """On '@{' glued after a literal or an interpolation: the language
+        tag is computed (record ldpy/020) — `{v}@{k}`, `"…"@{k}`. Returns
+        the generated tag expression, or None if no '@{' is here."""
+        if self.text[self.i:self.i + 2] != "@{":
+            return None
+        self._take(2)
+        expr = self._scan_embedded_expr("}")
+        if self._peek() != "}":
+            self._error("'}' attendu pour fermer le tag de langue @{...}")
+        self._take(1)
+        return "%s.langtag((%s))" % (RUNTIME_ALIAS, expr.strip())
+
     def _interp_with_suffix(self, expr):
         """Terme interpolé de graphe, avec suffixe RDF optionnel COLLÉ :
-        {expr}@lang -> Literal(expr, lang=...) ; {expr}^^dt -> Literal(expr,
-        datatype=dt) ; sinon node(expr).."""
+        {expr}@lang -> Literal(expr, lang=...) ; {expr}@{k} -> tag calculé ;
+        {expr}^^dt -> Literal(expr, datatype=dt) ; sinon node(expr).."""
         expr = expr.strip()
+        lang = self._computed_lang()
+        if lang is not None:
+            return "%s.Literal((%s), lang=%s)" % (RUNTIME_ALIAS, expr, lang)
         if self._peek() == "@":
             m = _LANGTAG_RE.match(self.text, self.i)
             if m:
@@ -2210,6 +2234,10 @@ class Transpiler:
         end = self._string_end(qpos)
         string_text = t[start:end]
         self._take(end - self.i)
+        lang = self._computed_lang()
+        if lang is not None:
+            return "%s.Literal(%s, lang=%s)" % (RUNTIME_ALIAS, string_text,
+                                                lang)
         if self._peek() == "@":
             lm = _LANGTAG_RE.match(t, self.i)
             if lm:

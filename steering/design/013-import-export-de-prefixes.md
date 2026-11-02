@@ -1,6 +1,6 @@
 # 013 — Import et export de préfixes entre modules
 
-**Date** : 2026-10-30 · **Statut** : implémenté — extension aux `Namespace` rdflib ordinaires à trancher
+**Date** : 2026-11-02 · **Statut** : implémenté — un module Python ordinaire exporte aussi ses préfixes
 
 **Origine** : décision D1 de la fiche `corpus/402` (analyse de surface) ;
 manque structurel 3 de la fiche 012.
@@ -187,19 +187,18 @@ ne remplace pas un import Python dont le module se sert aussi comme objet
 (`MaxBerktoldRWTH/BRICKbuilder` réexporte `QUDT` puis écrit
 `QUDT.degreeCelsius`) : le préfixe importé ne lie aucun nom.
 
-## Question ouverte : reconnaître un `Namespace` rdflib ordinaire
+## Un module Python ordinaire exporte des préfixes
 
-Deux suites possibles, à arbitrer, qui rejoignent la fiche
-[027](027-prefixe-sans-objet-dexecution.md) :
-
-1. **reconnaître un `Namespace` rdflib ordinaire** à l'import — `from
-   plastron.namespaces import edm:` irait chercher l'objet `Namespace` exporté
-   et en dériverait la liaison. C'est la voie qui débloque du code existant
-   sans rien demander à l'amont, et la seule qui rendrait la construction
-   attestable sur le corpus ;
-2. **déclarer côté consommateur** — l'utilisateur écrit lui-même le `@prefix`
-   correspondant, ce qui est la situation actuelle et n'a rien de scandaleux :
-   une ligne par namespace, une fois par fichier.
+Décision de Maxime du 2026-11-02 : `from m import edm:` reconnaît un
+`Namespace` rdflib ordinaire. `imported_prefix()` lit `m.__namespaces__`
+d'abord (un module ldpy), puis un objet exporté sous le nom du préfixe ou
+sa majuscule (`edm`, `EDM`) : `rdflib.Namespace`, `URIRef` ou chaîne, ou
+classe `DefinedNamespace` (son `_NS`). L'import se fait par `__import__`
+sur le module, relatif compris. Un projet n'a donc rien à changer à son
+`namespaces.py` : c'est ce qui rend la construction attestable sur le
+corpus (`umd-lib/plastron`, `alganet/apysource`, dont les traductions
+avaient dû écrire un shim qui ajoute `__namespaces__`). Absent des deux
+côtés, l'import lève `ImportError` en nommant les deux endroits cherchés.
 
 ## Cas voisin : une partie locale qui n'est pas un PN_LOCAL
 

@@ -123,6 +123,8 @@ def _term_end(text, i):
 
 
 def _suffix_end(text, j):
+    if text.startswith("@{", j):                # computed tag (ldpy/020)
+        return _brace_end(text, j + 1)
     m = _SUFFIX.match(text, j)
     if not m:
         return j

@@ -1,6 +1,6 @@
 # 020 — Coercition Python → RDF : une politique, configurable
 
-**Date** : 2026-11-01 · **Statut** : implémenté
+**Date** : 2026-11-02 · **Statut** : implémenté
 
 ## Contexte
 
@@ -215,15 +215,16 @@ surestime le bénéfice.
 7. Performance : le banc de matérialisation (fiche 009) ne régresse pas
    mesurablement sans politique installée.
 
-## À trancher
+## Le tag de langue calculé
 
-- **Le tag de langue calculé n'a pas de notation** : `"…"@{expr}` n'existe
-  pas, et `Literal(v, lang=k)` sur un dictionnaire indexé par codes de
-  langue (`Informasjonsforvaltning/concepttordf`) reste en Python, passé par
-  `{expr}` — correct, mais c'est le cas où la notation ne sert plus.
-  Notation (`{v}@{k}` ?), refus nommé, ou statu quo assumé ? Question
-  distincte de `?v@en`, refusé (fiche 027) : ici la valeur est une forme
-  lexicale, seul le tag est calculé.
+Décision de Maxime du 2026-11-02 : `{v}@{k}` et `"…"@{k}` — le tag collé
+après `@` peut être une interpolation, la forme qu'appelle un dictionnaire
+de libellés indexé par codes de langue (`Informasjonsforvaltning/
+concepttordf`). Le tag passe par `langtag()`, qui lève sur `None` : un tag
+manquant donnerait sinon un littéral simple sans un mot, l'échec que la
+fiche 012 refuse pour les termes. Distinct de `?v@en`, qui reste refusé
+(fiche 027) : ici la valeur est une forme lexicale, seul le tag est calculé.
+Formateur et coloration Pygments suivent.
 
 ## Questions ouvertes
 

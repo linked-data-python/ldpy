@@ -374,3 +374,12 @@ def test_point_dentree_installe():
                        capture_output=True, text=True, cwd=REPO, timeout=60,
                        env=dict(os.environ, PYTHONPATH=REPO))
     assert r.returncode == 0 and "ldpy-format" in r.stdout
+
+
+def test_un_tag_de_langue_calcule_reste_colle():
+    """`{v}@{k}` (fiche 020) : le tag calculé fait partie du terme."""
+    source = ('@prefix ex: <http://e/> .\nk = "en"\n'
+              'x = g{ex:c ex:label  {"v"}@{k} ; ex:n "x"@{k}}\n')
+    out = format_source(source)
+    assert 'x = g{ ex:c ex:label {"v"}@{k} ; ex:n "x"@{k} }' in out
+    assert transpiled_ast(out) == transpiled_ast(source)

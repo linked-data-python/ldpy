@@ -63,11 +63,21 @@ def new_graph(base=None, identifier=None):
     return Graph(identifier=identifier) if identifier is not None else Graph()
 
 
-def bind_namespaces(graph, namespaces):
+def bind_namespaces(graph, namespaces, override=True):
     """Give `graph` the serialisation prefixes of `namespaces` (a dict
     prefix -> namespace IRI). On rdflib the runtime shares a cached
-    NamespaceManager instead (record ldpy/021); this is the plain path."""
+    NamespaceManager instead (record ldpy/021); this is the plain path.
+
+    `override=False` keeps what the graph already binds: a namespace it
+    carries under another prefix stays there, a prefix it gives another
+    namespace stays that one (record ldpy/027)."""
     for prefix, ns in namespaces.items():
+        if override:
+            graph.bind(prefix, str(ns))
+            continue
+        known = dict(graph.namespaces())
+        if prefix in known or any(str(v) == str(ns) for v in known.values()):
+            continue
         graph.bind(prefix, str(ns))
 
 

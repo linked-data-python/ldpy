@@ -266,6 +266,45 @@ def node(value, field=None):
     return Literal(value)
 
 
+def imported_prefix(module, prefix):
+    """The namespace `from module import prefix:` binds (record ldpy/013).
+
+    A module written in ldpy exports `__namespaces__`; a module written in
+    Python exports Namespace objects — `EDM = Namespace(...)`, a
+    `DefinedNamespace` class — under the prefix's name or its upper case.
+    Both are read, `__namespaces__` first."""
+    table = getattr(module, "__namespaces__", None)
+    if isinstance(table, dict) and prefix in table:
+        return table[prefix]
+    for name in (prefix, prefix.upper()):
+        value = getattr(module, name, None)
+        if value is None:
+            continue
+        if isinstance(value, str):                # Namespace, URIRef, str
+            return Namespace(str(value))
+        # a DefinedNamespace class (a Namespace answers any attribute, so
+        # this test comes after the one above)
+        inner = getattr(value, "_NS", None) if isinstance(value, type) \
+            else None
+        if inner is not None:
+            return Namespace(str(inner))
+    raise ImportError(
+        "cannot import prefix '%s:' from %s: it exports neither "
+        "__namespaces__[%r] nor a namespace named %s or %s"
+        % (prefix, getattr(module, "__name__", module), prefix, prefix,
+           prefix.upper()))
+
+
+def langtag(value):
+    """A computed language tag (`{v}@{k}`, record ldpy/020). None raises —
+    a missing tag would otherwise give a plain literal without a word, the
+    failure record ldpy/012 refuses for terms."""
+    if value is None:
+        raise TypeError("a computed language tag is None: test it before "
+                        "the island, or write the literal without a tag")
+    return str(value)
+
+
 def dtype(value):
     """Coerce a value into a datatype IRI ({expr} after '^^').
 
@@ -782,14 +821,18 @@ def designate(namespaces, graph):
 
     The bindings are added to the graph's OWN manager, never by swapping it
     for the shared cached one — a designated graph belongs to the caller and
-    may already carry bindings that matter. Anything that is not a graph, or
+    may already carry bindings that matter. They are added WITHOUT
+    overwriting (record ldpy/027): a namespace the graph already binds under
+    another prefix, or a prefix it already gives another namespace, keeps
+    the caller's binding — rdflib's `bind` replaced it, and the graph then
+    serialised with prefixes its owner never chose. Anything that is not a graph, or
     a backend without a namespace manager, passes through untouched: the
     declaration's job is to designate, and it must not fail on the shape of
     what it is given.
     """
     if namespaces:
         try:
-            _backend.bind_namespaces(graph, namespaces)
+            _backend.bind_namespaces(graph, namespaces, override=False)
         except (AttributeError, TypeError):
             pass                    # not a graph, or no binding support
     return graph
@@ -808,7 +851,7 @@ def bind_prefix(graph, prefix, ns):
     backend without a namespace manager, passes through untouched.
     """
     try:
-        _backend.bind_namespaces(graph, {prefix: ns})
+        _backend.bind_namespaces(graph, {prefix: ns}, override=False)
     except (AttributeError, TypeError):
         pass                        # not a graph, or no binding support
 
@@ -1074,11 +1117,12 @@ class Match:
             return True
         return False
 
-    def first(self):
-        """The first solution, or None if there is none (~ g.value)."""
+    def first(self, default=None):
+        """The first solution, or ``default`` if there is none (~ g.value,
+        whose fourth argument is that default)."""
         for x in self:
             return x
-        return None
+        return default
 
     def one(self):
         """The single solution; raises if there are zero or several."""

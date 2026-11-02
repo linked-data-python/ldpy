@@ -48,7 +48,22 @@ assert "@prefix ex:" in mine.serialize(format="turtle")
 ```
 
 For a designated graph the prefixes are *added* to the bindings it already
-carries — it belongs to its caller, and nothing it had is discarded. Until
+carries — it belongs to its caller, and nothing it had is discarded, nor
+overwritten: a namespace the graph already binds under another prefix keeps
+that prefix, and a prefix it already gives another namespace keeps that
+namespace. `@prefix` names terms in your source; how somebody else's graph
+serialises stays theirs. To impose a binding, call `g.bind(…)` yourself.
+
+```ldpy
+from rdflib import Graph
+theirs = Graph()
+theirs.bind("xs", "http://www.w3.org/2001/XMLSchema#")
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@graph theirs
++{ <http://example.org/a> <http://example.org/v> "1"^^xsd:integer }
+assert str(dict(theirs.namespaces())["xs"]) == "http://www.w3.org/2001/XMLSchema#"
+```
+ Until
 0.6.3 only a *created* graph inherited them, so the same block filling two
 graphs the same way serialised them differently; that was an inconsistency
 rather than a decision (record ldpy/027).

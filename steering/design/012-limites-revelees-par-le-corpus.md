@@ -1,6 +1,6 @@
 # 012 — Catalogue des limites révélées par l'étude de corpus
 
-**Date** : 2026-11-01 · **Statut** : constats établis — catalogue, chaque point traité dans sa fiche
+**Date** : 2026-11-02 · **Statut** : constats établis — catalogue, chaque point traité dans sa fiche
 
 **Source** : revue humaine des 40 traductions de `github/examples/`
 (fiche 401), et les campagnes de traduction stratifiée (fiche `corpus/403`).
@@ -40,11 +40,11 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 | `m{ }` projette toutes ses variables : ni projection explicite, ni `DISTINCT` — le nœud anonyme ne remplace la projection qu'en position d'objet, refusé en position de prédicat | [016](016-ilot-de-motif-selection.md) |
 | `m{ }` ne paie pas sur un parcours complet (`list(g)` vs `list(m{ ?s ?p ?o }(g))`) | [016](016-ilot-de-motif-selection.md) — recommandation : `list(g)` pour le parcours complet, `m{ }` pour les motifs sélectifs |
 | la jointure implicite de `m{ }` change la cardinalité quand les prédicats sont indépendamment optionnels | [016](016-ilot-de-motif-selection.md) |
-| `.first()` ne rend pas un `g.value(…, default)` non-`None` ; `.one()` n'égale pas `next(iter)` (qui ignore le surplus) | [016](016-ilot-de-motif-selection.md) |
+| `.first()` ne rendait pas un `g.value(…, default)` non-`None` ; `.one()` n'égale pas `next(iter)` (qui ignore le surplus) | résolu : `.first(default=…)`, et `next(iter(m{ … }))` pour `next` sans défaut, fiche [016](016-ilot-de-motif-selection.md) |
 | une lecture à plus d'une position libre (`g.subjects()` sans prédicat ni objet) n'a pas de forme brève | [016](016-ilot-de-motif-selection.md) ; `m{ ?s {ANY} {ANY} }` l'écrit depuis `ldpy.ANY` (ci-dessous) |
 | `s{ }` exige un texte de requête littéral à la transpilation | [015](015-ilot-sparql.md) |
 | l'interpolation de `s{ }` lie une variable, elle n'épisse jamais du texte (une IRI entre chevrons, un motif entier, une clause `FILTER`/`GRAPH` n'ont pas de forme) | [015](015-ilot-sparql.md) |
-| `Literal(expr)` nu hors îlot n'a pas de notation ; un tag de langue variable non plus | [020](020-coercition-python-rdf.md) |
+| `Literal(expr)` nu hors îlot n'a pas de notation ; un tag de langue variable s'écrit `{v}@{k}` depuis 2026-11-02 | [020](020-coercition-python-rdf.md) |
 | une chaîne qui *ressemble* à une IRI se coerce en littéral, sans erreur — vu en interpolation de `m{ }`/`s{ }` (l'`ASK` s'évalue `False` sans erreur sur `RDFLib/VocPrez`) | [020](020-coercition-python-rdf.md) |
 | `^^` et `@lang` n'existent qu'en position de terme ; hors îlot, `f{ }` ne gagne que sur la coercition non typée | [020](020-coercition-python-rdf.md) |
 | l'espace `Dataset` / graphes nommés hors SPARQL n'a pas d'îlot | [028](028-espace-des-graphes-nommes.md) |

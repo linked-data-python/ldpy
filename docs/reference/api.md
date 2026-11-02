@@ -81,7 +81,10 @@ directly: `URIRef, Literal, Variable, Namespace, RDF` re-exports, plus
   bindings=None)` — the `+{ }` / `-{ }` statements (unbound variable:
   dropped triple / joker, `DELETE WHERE` on shared variables);
 - `match(graph, patterns, project, bindings=None)` → `Match` — the `m{ }`
-  island (lazy nested-loop join; `first()`, `one()`, `count()`);
+  island (lazy nested-loop join; `first(default=None)`, `one()`, `count()`);
+- `langtag(value)` — a computed language tag (`{v}@{k}`), `None` raises;
+- `imported_prefix(module, prefix)` — the namespace `from m import p:`
+  binds: `m.__namespaces__[p]`, else a namespace exported as `p` or `P`;
 - `prepared(text, interps, namespaces, base, graph=None, bindings=None,
   update=False)` → `PreparedQuery` — the `s{ }` island (lazy, cached).
   Iterating or truth-testing runs it; `execute()` runs it and returns rdflib's

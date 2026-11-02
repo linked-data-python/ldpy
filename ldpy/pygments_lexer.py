@@ -459,6 +459,12 @@ class LdpyLexer(Lexer):
                 regions.append((i, end, self._emit_firi(text, i, end)))
                 i = end
                 continue
+            if text.startswith("@{", i) and not is_query:
+                # a computed language tag, `{v}@{k}` (record ldpy/020): the
+                # `@` is the tag's, the braces an interpolation
+                regions.append((i, i + 1, self._emit_lang_at(i)))
+                i += 1
+                continue
             if c == "{":
                 end = _match_brace(text, i)
                 if is_query and not _is_interpolation(text[i + 1:end - 1]):
@@ -486,6 +492,11 @@ class LdpyLexer(Lexer):
                              self._regions(chunk, "sparql"))
         return [(offset + start + idx, ttype, value)
                 for idx, ttype, value in out]
+
+    def _emit_lang_at(self, start):
+        def emit(offset):
+            yield offset + start, T_LANG, "@"
+        return emit
 
     def _emit_interp(self, text, start, end):
         def emit(offset):

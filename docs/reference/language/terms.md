@@ -113,7 +113,17 @@ interpret. The parser refuses, and says so:
                 ^ suffixe de langue interdit sur une variable
 ```
 
-Write `{expr}@en` when you mean to build a literal from a Python value.
+Write `{expr}@en` when you mean to build a literal from a Python value. The
+tag itself may be computed, glued after `@`: `{v}@{k}` or `"…"@{k}` — the
+form a dictionary of labels by language code asks for. A tag that is `None`
+raises.
+
+```ldpy
+@prefix ex: <http://example.org/> .
+labels = {"en": "cat", "fr": "chat"}
+gr = g{ ex:c ex:label {labels["en"]}@{"en"} ; ex:alt "chat"@{"fr"} }
+assert sorted(o.language for _, _, o in gr) == ["en", "fr"]
+```
 
 To tag or type the value a *variable* is bound to, say it explicitly with
 standard SPARQL — `STRLANG` takes a lexical form and a language tag, `STRDT`

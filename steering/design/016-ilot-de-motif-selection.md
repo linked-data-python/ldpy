@@ -1,6 +1,6 @@
 # 016 — Îlot de motif `m{ … }` : lire le graphe
 
-**Date** : 2026-11-01 · **Statut** : implémenté
+**Date** : 2026-11-02 · **Statut** : implémenté
 
 **Origine** : décision D5 de la fiche `corpus/402` (mesures) ; manque
 structurel 5 de la fiche 012 (« aucun îlot de *filtrage* »).
@@ -364,13 +364,16 @@ Le rappel de coercition qui vaut ici — un prédicat qui est une chaîne Python
 contenant une IRI se coerce en littéral et ne matche rien — est en fiche
 [020](020-coercition-python-rdf.md).
 
-## À trancher
+## Lever sur zéro solution, et le défaut non-`None`
 
-- **Une réduction « première solution, lever sur aucune »** : `.first()` ne
-  lève pas sur zéro solution, `.one()` lève sur deux, et seul
-  `next(iter(m{ … }))` fait ce que fait `next(…)` sans défaut — forme que la
-  réparation des paires du corpus a dû employer. Faut-il une réduction
-  dédiée ? Sans elle, ces paires restent-elles `directly-expressible` ?
+Décision de Maxime du 2026-11-02 : pas de réduction « première solution,
+lever sur aucune ». `.first()` garde son `None` sur zéro solution, qui est
+ce qui le rend exact pour `g.value(…)` et `next(it, None)`, les deux formes
+dominantes ; `next(…)` sans défaut s'écrit `next(iter(m{ … }))`, Python
+ordinaire sur l'îlot, et ces paires restent `directly-expressible`.
+`.first(default=x)` couvre le défaut non-`None` (`g.value(s, p,
+default=x)`, `next(it, x)`), qui ne laissait d'autre choix que de garder
+`g.value`.
 
 ## Tests imposés
 

@@ -34,6 +34,9 @@ ldpy.install()
 | `g += other` | unchanged |
 | `for o in g.objects(s, EX.p)` | `for o in m{ {s} ex:p ?o }` |
 | `g.value(s, EX.p)` | `m{ {s} ex:p ?v }.first()` |
+| `g.value(s, EX.p, default=x)` | `m{ {s} ex:p ?v }.first(default=x)` |
+| `next(g.objects(s, EX.p))` (raises on none) | `next(iter(m{ {s} ex:p ?o }))` |
+| `Literal(v, lang=k)` | `{v}@{k}` |
 | `next(g.subjects(RDF.type, EX.C))` | `m{ ?s a ex:C }.first()` |
 | `set(g.subjects())` | `{s for s, p in m{ ?s ?p [] }}` |
 | `(s, p, o) in g` | `bool(m{ … })` |

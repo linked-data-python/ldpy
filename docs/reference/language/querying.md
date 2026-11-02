@@ -56,7 +56,8 @@ were counted in the corpus (`value`, `next(...)`). They have a spelling:
 +{ ex:a ex:v 1 . ex:b a ex:Sensor }
 one = m{ ex:a ex:v ?v }.one()             # exactly one solution, or raises
 none = m{ ex:zzz ex:v ?v }.first()        # None when there is none
-assert int(one) == 1 and none is None
+zero = m{ ex:zzz ex:v ?v }.first(default=0)  # g.value(s, p, default=0)
+assert int(one) == 1 and none is None and zero == 0
 assert bool(m{ ex:b a ex:Sensor })        # ASK, evaluated lazily
 assert m{ ?s ex:v ?v }.count() == 1       # consumes the generator
 ```

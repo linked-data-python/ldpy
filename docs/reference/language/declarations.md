@@ -121,6 +121,12 @@ transpiler needs; `brick:Class` then resolves at run time through the imported
 namespace binding. One consequence worth knowing: an IRI that changes in
 `vocab.ldpy` changes for every importer, with no stale inlined copy.
 
+The imported module need not be written in ldpy. A module written in ldpy
+exports its prefixes in `__namespaces__`; a module written in Python exports
+`Namespace` objects, and `from m import edm:` takes the one named `edm`, or
+`EDM` — a `rdflib.Namespace`, or a `DefinedNamespace` class. So a
+project's existing `namespaces.py` serves as it is.
+
 `import m` and `from m import *` import no prefixes. `@base` is not exported.
 Declaring `__namespaces__` in `__all__` is refused at transpile time.
 

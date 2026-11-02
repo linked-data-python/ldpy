@@ -180,3 +180,15 @@ def test_m_space_brace_stays_python(run):
 def test_m_as_variable_name_untouched(run):
     g, _ = run("m = 5\ny = m + 1\n")
     assert g["y"] == 6
+
+
+def test_first_takes_a_default(run):
+    """Record ldpy/016: `.first(default=x)` is `g.value(s, p, default=x)`."""
+    g, _ = run(
+        "@prefix ex: <http://example.org/> .\n"
+        "@graph as gr\n"
+        "+{ ex:a ex:v 1 }\n"
+        "hit = m{ ex:a ex:v ?v }.first(default=0)\n"
+        "miss = m{ ex:b ex:v ?v }.first(default=0)\n"
+        "none = m{ ex:b ex:v ?v }.first()\n")
+    assert int(g["hit"]) == 1 and g["miss"] == 0 and g["none"] is None

@@ -334,7 +334,10 @@ def test_probe_en_ligne_de_commande():
                        capture_output=True, text=True, timeout=60, cwd=REPO,
                        env=dict(os.environ, PYTHONPATH=REPO))
     assert p.returncode == 0, p.stderr
-    assert json.loads(p.stdout)["package"] == package_dir()
+    # realpath: through the workspace's symbolic link, the same directory
+    # has two spellings
+    assert os.path.realpath(json.loads(p.stdout)["package"]) == \
+        os.path.realpath(package_dir())
 
 
 # ------------------------- points d'arrêt intenables (rabattus, fiche 103)

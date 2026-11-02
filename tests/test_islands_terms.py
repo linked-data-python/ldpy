@@ -245,3 +245,25 @@ def test_a_bare_variable_and_a_suffixed_interpolation_still_work(run, prefixes):
                "+{ ex:s ex:p {v}@en }\n"
                "-{ ex:s ex:q ?any }\n")
     assert list(g["g"])[0][2] == Literal("x", lang="en")
+
+
+def test_a_computed_language_tag(run):
+    """Record ldpy/020: `{v}@{k}` and `"…"@{k}`, the tag computed."""
+    g, _ = run(
+        "@prefix ex: <http://example.org/> .\n"
+        "@graph as out\n"
+        "labels = {'en': 'cat', 'fr': 'chat'}\n"
+        "for k, v in labels.items():\n"
+        "    +{ ex:c ex:label {v}@{k} ; ex:note \"x\"@{k} }\n"
+        "found = sorted((str(o), o.language) for o in out.objects(None, ex:label))\n"
+        "notes = sorted(o.language for o in out.objects(None, ex:note))\n")
+    assert g["found"] == [("cat", "en"), ("chat", "fr")]
+    assert g["notes"] == ["en", "fr"]
+
+
+def test_a_computed_language_tag_of_none_raises(run):
+    import pytest
+    with pytest.raises(TypeError):
+        run("@prefix ex: <http://example.org/> .\n"
+            "k = None\n"
+            "x = g{ ex:c ex:label {'cat'}@{k} }\n")

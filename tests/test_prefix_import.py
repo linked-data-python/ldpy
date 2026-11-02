@@ -260,3 +260,33 @@ def test_import_avec_prefixe_et_commentaire():
     result = transpile(src, "<t>")
     assert "__namespaces__.update({'brick'" in result.code
     compile(result.code, "<t>", "exec")
+
+
+# ------------------------------- un module Python ordinaire (fiche 013, option 1)
+
+def test_a_prefix_from_an_ordinary_namespace_module(module_dir):
+    """`from plastron.namespaces import edm:` : the module is plain Python
+    and exports `EDM = Namespace(...)`, no `__namespaces__`."""
+    (module_dir / "ldpypfx_plain.py").write_text(textwrap.dedent("""\
+        from rdflib import Namespace
+        from rdflib.namespace import DefinedNamespace
+        edm = Namespace("http://www.europeana.eu/schemas/edm/")
+        BIBO = Namespace("http://purl.org/ontology/bibo/")
+        class SCHEMA(DefinedNamespace):
+            _NS = Namespace("https://schema.org/")
+            Person = None
+        """))
+    m = run_in(module_dir, textwrap.dedent("""\
+        from ldpypfx_plain import edm:, bibo:, schema:
+        terms = [edm:Agent, bibo:Letter, schema:Person]
+        """))
+    assert m.terms == [URIRef("http://www.europeana.eu/schemas/edm/Agent"),
+                       URIRef("http://purl.org/ontology/bibo/Letter"),
+                       URIRef("https://schema.org/Person")]
+
+
+def test_a_missing_prefix_names_both_places_looked(module_dir):
+    (module_dir / "ldpypfx_none.py").write_text("x = 1\n")
+    with pytest.raises(ImportError) as exc:
+        run_in(module_dir, "from ldpypfx_none import edm:\n")
+    assert "__namespaces__" in str(exc.value) and "EDM" in str(exc.value)

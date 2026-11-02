@@ -1,6 +1,6 @@
 # 027 — `@prefix` sans objet d'exécution : les issues possibles
 
-**Date** : 2026-11-01 · **Statut** : implémenté — livré en ldpy 0.6.3, portée et STRLANG/STRDT depuis
+**Date** : 2026-11-02 · **Statut** : implémenté — livré en ldpy 0.6.3, portée et STRLANG/STRDT depuis
 
 ## Contexte
 
@@ -144,14 +144,18 @@ ses dix-neuf `global` servis par `global @prefix … as EX .`.
 des préfixes, si bien qu'une traduction cassée restait verte. Leurs pilotes
 rendent maintenant les liaisons du graphe et les globals exportés.
 
-## À trancher
+## `@graph` lie sans écraser
 
-- **`@graph g` remplace la liaison d'un espace de noms que le graphe portait
-  déjà sous un autre préfixe** (`bind()` de rdflib remplace par défaut) :
-  sept traductions du corpus faisaient perdre au graphe sérialisé un préfixe
-  posé par le dépôt, et l'étude compte désormais une liaison perdue comme
-  une différence (fiche corpus/403). Garder, et le dire plus haut, ou lier
-  sans écraser (`bind(…, override=False)`) ?
+Décision de Maxime du 2026-11-02 : `@graph g` sur un graphe existant ajoute
+les préfixes du bloc **sans écraser** ce que le graphe lie déjà — un espace
+de noms lié sous un autre préfixe garde ce préfixe, un préfixe lié à un
+autre espace de noms garde celui-là (`designate`, `bind_prefix`, avec
+`bind_namespaces(…, override=False)`). `@prefix` nomme des termes dans le
+source ; la sérialisation du graphe d'autrui reste la sienne. Qui veut
+imposer une liaison appelle `g.bind(…)`. C'est ce qui rend juste la règle
+de l'étude (une liaison en plus tolérée, une liaison remplacée comptée
+comme différence) : sept traductions du corpus perdaient ainsi un préfixe
+posé par le dépôt.
 
 ## Voir aussi
 

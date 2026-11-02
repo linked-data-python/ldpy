@@ -433,3 +433,28 @@ def test_add_writes_nothing_when_materialising_a_later_term_raises():
         runtime.add_to(g, (a, p, Variable("x")), (a, q, Variable("y")),
                        bindings={"x": 1, "y": 2})
     assert len(g) == 0
+
+
+def test_designating_a_graph_keeps_its_bindings(run):
+    """Record ldpy/027: `@graph g` binds the block's prefixes WITHOUT
+    overwriting — a namespace the caller bound under another prefix keeps
+    it, and a prefix the caller gave another namespace keeps that one."""
+    g, _ = run(
+        "from rdflib import Graph, Namespace\n"
+        "g = Graph()\n"
+        "g.bind('xs', 'http://www.w3.org/2001/XMLSchema#')\n"
+        "g.bind('ex', 'http://other/')\n"
+        "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
+        "@prefix ex: <http://example.org/> .\n"
+        "@prefix new: <http://new/> .\n"
+        "def f():\n"
+        "    @graph g\n"
+        "    +{ ex:a ex:p 1 }\n"
+        "f()\n"
+        "ns = {p: str(n) for p, n in g.namespaces()}\n")
+    ns = g["ns"]
+    assert ns["xs"] == "http://www.w3.org/2001/XMLSchema#"
+    assert ns["ex"] == "http://other/"
+    assert ns["new"] == "http://new/"
+    assert "http://www.w3.org/2001/XMLSchema#" not in [
+        v for k, v in ns.items() if k == "xsd"]

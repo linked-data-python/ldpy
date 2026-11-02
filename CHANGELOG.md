@@ -11,6 +11,31 @@
   laid-out file would transpile to a different program, the bodies are
   copied as written instead.
 
+- **An interpolated `None` raises.** `{x}` with `x = None` used to become
+  the literal `"None"`, so that `-{ }` removed nothing and `m{ }` matched
+  nothing, without a word. It now raises `TypeError`, in every island.
+  `ldpy.ANY` is the wildcard for a pattern that arrives as data: `-{ }`
+  reads it as rdflib reads `None`, `m{ }` as an unprojected variable, `s{ }`
+  as an unbound one; `+{ }` and `g{ }` refuse it. In bindings, `None` still
+  means unbound.
+
+- **`s{ }` is accepted by rdflib's `graph.query()` and `graph.update()`**,
+  interpolated terms included. Run on its own, it passes `initBindings` only
+  when there is something to bind, and retries with the query text if the
+  receiver refuses rdflib's prepared form. `f<…{x}…>` works inside `s{ }`,
+  and `@base` now applies to its relative IRIs.
+
+- **`@graph g` no longer overwrites the bindings of a graph it designates.**
+  A namespace the graph binds under another prefix keeps it.
+
+- **`from m import edm:` reads an ordinary Python module**: a `Namespace`
+  exported as `edm` or `EDM`, or a `DefinedNamespace` class, when the module
+  has no `__namespaces__`.
+
+- **Computed language tags**: `{v}@{k}` and `"…"@{k}`.
+
+- **`.first(default=…)`**, the counterpart of `g.value(s, p, default=…)`.
+
 ### [0.7.0] — 2026-11-01
 
 - **A bare number in an island is a Turtle number.** `4.5` is an
