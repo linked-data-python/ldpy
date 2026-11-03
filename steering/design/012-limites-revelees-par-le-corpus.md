@@ -161,9 +161,13 @@ Tests : `tests/test_match_path.py`.
 ## Ce qui reste
 
 - Les deux défauts ouverts du catalogue : `{r}` et ses pareils, `@graph NAME .`.
-- Les colorations hors transpileur (grammaire TextMate de `vscode-ldpy`,
-  `highlight-ldpy`) ne savent pas encore l'échappement `\` d'une partie
-  locale (`fhir:Extension\.url`) : à vérifier.
+- La grammaire TextMate de `vscode-ldpy` ne colore pas encore
+  l'échappement `\` d'une partie locale (`fhir:Extension\.url` : le `\` y
+  est lu comme une continuation de ligne). `highlight-ldpy` le sait depuis
+  `007ddb1`, pas encore poussé ; la grammaire vendorée se régénère de la
+  dépendance npm (GitHub) : pousser `highlight-ldpy`, puis dans
+  `vscode-ldpy` `npm update linked-data-python-highlight && npm run
+  generate`.
 - `docs/reference/language/current-graph.md` dit encore « designate the
   existing Python variable `g` » : `@graph g` capture la **valeur** de `g`,
   pas le nom, et une réaffectation ultérieure envoie les écritures dans un
