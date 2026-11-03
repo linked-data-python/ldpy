@@ -1,6 +1,6 @@
 # 012 — Catalogue des limites révélées par l'étude de corpus
 
-**Date** : 2026-11-02 · **Statut** : constats établis — catalogue, chaque point traité dans sa fiche
+**Date** : 2026-11-03 · **Statut** : constats établis — catalogue, chaque point traité dans sa fiche
 
 **Source** : revue humaine des 40 traductions de `github/examples/`
 (fiche 401), et les campagnes de traduction stratifiée (fiche `corpus/403`).
@@ -47,6 +47,7 @@ sont dans les fiches pointées ; cette fiche ne les redit pas.
 | `s{ }` est validé par la grammaire SPARQL 1.1 de rdflib, sans échappatoire : une requête SPARQL 1.2 (`TRIPLE`, `isTRIPLE`) destinée à un moteur plus récent (Fuseki 5.5, `hidden-graph/rdflib-starlight`) n'a pas d'îlot | [015](015-ilot-sparql.md) |
 | l'interpolation de `s{ }` lie une variable, elle n'épisse jamais du texte (une IRI entre chevrons, un motif entier, une clause `FILTER`/`GRAPH` n'ont pas de forme) | [015](015-ilot-sparql.md) |
 | hors îlot, un nom préfixé dont la partie locale commence par un chiffre (`brdftime:2011`) n'est pas reconnu (erreur de syntaxe Python) ; dans un îlot, il l'est (`BONSAMURAIS/arborist`) | à instruire : la grammaire Turtle l'admet, la reconnaissance hors îlot évite `x[a:1]` |
+| hors îlot, un nom préfixé s'arrête au point : `fhir:Extension.url` se lit `fhir:Extension` suivi de l'attribut `.url` (AttributeError), et `\.` est refusé ; une IRI complète `<…>` est obligatoire (`BD2KOnFHIR/fhirtordf`, campagne d'optimisation du 2026-11-03) | à instruire : la grammaire Turtle admet le point au milieu de la partie locale, Python y voit un accès d'attribut |
 | `Literal(expr)` nu hors îlot n'a pas de notation ; un tag de langue variable s'écrit `{v}@{k}` depuis 2026-11-02 | [020](020-coercition-python-rdf.md) |
 | une chaîne qui *ressemble* à une IRI se coerce en littéral, sans erreur — vu en interpolation de `m{ }`/`s{ }` (l'`ASK` s'évalue `False` sans erreur sur `RDFLib/VocPrez`) | [020](020-coercition-python-rdf.md) |
 | `^^` et `@lang` n'existent qu'en position de terme ; hors îlot, `f{ }` ne gagne que sur la coercition non typée | [020](020-coercition-python-rdf.md) |
@@ -154,6 +155,12 @@ Tests : `tests/test_match_path.py`.
 ## Ce qui reste
 
 - Les deux défauts ouverts du catalogue : `{r}` et ses pareils, `@graph NAME .`.
+- Constat d'un agent de la campagne d'optimisation, non vérifié : dans
+  `m{ {tm} r2rml:predicateObjectMap [ r2rml:objectMap ?om ] }`, le triple
+  intérieur du `[ ]` serait évalué d'abord, ce qui balaie tous les
+  `rr:objectMap` du graphe à chaque appel (`kumagallium/asterism`) ;
+  l'ordre des motifs écrits devrait gouverner la jointure. À vérifier sur
+  le code engendré.
 - `docs/reference/language/current-graph.md` dit encore « designate the
   existing Python variable `g` » : `@graph g` capture la **valeur** de `g`,
   pas le nom, et une réaffectation ultérieure envoie les écritures dans un
