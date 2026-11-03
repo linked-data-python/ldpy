@@ -9,6 +9,12 @@
   subject or object of `m{ }`, `+{ }`, `-{ }`, `g{ }`, `s{ }` — it now
   raises `TypeError`.
 
+- **Turtle's `\` escapes are read in the local part of a prefixed name**,
+  inside islands and out: `fhir:Extension\.url`, `ex:a\-b`. Outside an
+  island this is the way to put a `.` in a local part, since a bare `.`
+  there is attribute access (`ex:label.n3()`). They used to emit invalid
+  Python outside an island, and a syntax error inside one.
+
 - **`m{ }` reaches a `[ … ]` or `( … )` object through its predicate.**
   `m{ {s} ex:p [ ex:q ?o ] }` now matches `{s} ex:p _:b` first, then
   `_:b ex:q ?o`, as the patterns are written. The nested patterns used to

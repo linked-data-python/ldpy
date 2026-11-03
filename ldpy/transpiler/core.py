@@ -100,6 +100,11 @@ def _pn_base(c):
     return _in_ranges(c, _PN_BASE_RANGES)
 
 
+# Turtle 1.1, PN_LOCAL_ESC : les caractères qu'un `\` rend littéraux dans
+# la partie locale d'un nom préfixé.
+_PN_LOCAL_ESC = frozenset("_~.-!$&'()*+,;=/?#@%")
+
+
 def _pn_char(c):
     """PN_CHARS de Turtle/SPARQL."""
     return (_pn_base(c) or c == "_" or c.isdigit() and c.isascii()
@@ -1144,6 +1149,15 @@ class Transpiler:
                     self._error("'}' attendu dans le nom préfixé interpolé")
                 self._take(1)
                 parts.append((False, expr))
+                continue
+            if c == "\\" and self._peek(1) in _PN_LOCAL_ESC:
+                # PN_LOCAL_ESC de Turtle : `fhir:Extension\.url`.  Hors îlot,
+                # c'est le seul moyen d'écrire un point dans la partie
+                # locale (le point nu y est un accès d'attribut :
+                # `ex:label.n3()`) ; `\` après un nom n'est jamais du Python
+                # valide, l'échappement ne prend rien au langage hôte.
+                self._take(1)
+                static.append(self._take(1))
                 continue
             if in_island:
                 # PN_LOCAL exact (chiffres en tête, tirets, points intérieurs)

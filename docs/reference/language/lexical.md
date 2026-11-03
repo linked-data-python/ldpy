@@ -182,7 +182,17 @@ assert str(ex:café) == "http://example.org/café"
   usable inside islands only.
 - Python-only identifier characters (`µ`, `ª`) end a local part — Turtle could
   not write them either.
-- Local parts support neither an interior `:` nor `%`/`\` escapes.
+- A `.` ends a local part outside an island — it is attribute access on the
+  term, as in `ex:label.n3()`. Turtle's `\` escapes write what the local
+  part cannot hold bare, inside islands and out: `fhir:Extension\.url`,
+  `ex:a\-b` (a `\` after a name is never valid Python, so nothing is lost).
+- Local parts support neither an interior `:` nor `%` escapes.
+
+```ldpy
+@prefix fhir: <http://hl7.org/fhir/> .
+assert str(fhir:Extension\.url) == "http://hl7.org/fhir/Extension.url"
+assert fhir:Extension\.url.n3() == "<http://hl7.org/fhir/Extension.url>"
+```
 
 These rules are verified against an independent transcription of both
 specifications by `tools/charsets.py`. The final decision on the residual

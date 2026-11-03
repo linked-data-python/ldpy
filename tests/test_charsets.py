@@ -7,8 +7,9 @@
 - l'oracle tools/charsets.py vérifie les tables du transpileur contre une
   transcription indépendante des specs (test dédié en bas de ce fichier).
 
-Limitation documentée : pas de ':' intérieur ni d'échappements PLX dans les
-parties locales."""
+Limitation documentée : pas de ':' intérieur ni d'échappement '%' dans les
+parties locales ; les échappements '\' (PN_LOCAL_ESC) sont admis, dans les
+îlots et hors îlots."""
 
 import pytest
 
@@ -34,6 +35,28 @@ def test_python_only_char_stops_local_outside(run):
 def test_hyphen_still_subtraction_outside(run):
     r = transpile(P + "t = ex:a-b\n")
     assert "URIRef('http://e/a')" in r.code and "- b" in r.code.replace("-b", "- b")
+
+
+def test_local_escape_writes_a_dot_outside_island(run):
+    # hors îlot le point nu est un accès d'attribut : `\.` l'écrit dans la
+    # partie locale (FHIR : fhir:Extension.url), et l'attribut reste possible
+    g, _ = run("@prefix fhir: <http://hl7.org/fhir/> .\n"
+               "t = fhir:Extension\\.url\nn = fhir:Extension\\.url.n3()\n"
+               "h = ex:a\\-b\n".replace("ex:", "fhir:"))
+    assert str(g["t"]) == "http://hl7.org/fhir/Extension.url"
+    assert g["n"] == "<http://hl7.org/fhir/Extension.url>"
+    assert str(g["h"]) == "http://hl7.org/fhir/a-b"
+
+
+def test_local_escape_in_island(run):
+    g, _ = run(P + "gr = g{ ex:a\\~b ex:p\\.q 1 }\n")
+    (s, p, _), = list(g["gr"])
+    assert (str(s), str(p)) == ("http://e/a~b", "http://e/p.q")
+
+
+def test_backslash_newline_after_a_name_stays_a_continuation(run):
+    g, _ = run(P + "t = (ex:a\\\n     )\n")
+    assert str(g["t"]) == "http://e/a"
 
 
 # ------------------------------------------------------- déclarations
