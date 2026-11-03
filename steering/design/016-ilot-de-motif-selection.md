@@ -1,6 +1,6 @@
 # 016 — Îlot de motif `m{ … }` : lire le graphe
 
-**Date** : 2026-11-02 · **Statut** : implémenté
+**Date** : 2026-11-03 · **Statut** : implémenté
 
 **Origine** : décision D5 de la fiche `corpus/402` (mesures) ; manque
 structurel 5 de la fiche 012 (« aucun îlot de *filtrage* »).
@@ -245,7 +245,9 @@ for s in _ldpy_.match(g, ((_ldpy_.Variable('s'), _ldpy_.RDF.type, _ldpy_.URIRef(
 collecte avant retrait.
 
 **Aucune heuristique d'ordre de jointure : les motifs sont appariés dans
-l'ordre où ils sont écrits.** C'est le choix le plus simple, et il a une
+l'ordre où ils sont écrits.** Un `[ … ]` ou une liste `( … )` en position
+d'objet est atteint par son prédicat : `{s} p [ q ?o ]` apparie `{s} p _:b`,
+puis `_:b q ?o` (`ldpy` `f8938d8`). C'est le choix le plus simple, et il a une
 vertu — l'ordre est visible dans la source, donc contrôlable par qui écrit, au
 lieu d'être décidé par un optimiseur absent. Le runtime reste une boucle : rien
 de plus que `triples()`, donc portable sur cible embarquée (fiche 008), ce qui
