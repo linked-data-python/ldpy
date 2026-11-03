@@ -2013,8 +2013,13 @@ class Transpiler:
             verb = self._g_verb(triples, gctx)
             self._g_ws()
             while True:
+                # the triple goes before those of a `[ ... ]` or `( ... )`
+                # object: m{ } joins its patterns in the order written
+                # (record ldpy/016), and the object's own triples are
+                # written after the predicate that reaches them
+                at = len(triples)
                 obj, _ = self._g_node(triples, gctx)
-                triples.append((subj, verb, obj))
+                triples.insert(at, (subj, verb, obj))
                 self._g_ws()
                 if self._peek() == ",":
                     self._take(1)

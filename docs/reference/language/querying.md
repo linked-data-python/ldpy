@@ -105,7 +105,10 @@ assert m{ {s} {p} {o} }.count() == 2
 Several patterns are joined by shared variables, evaluated as nested loops in
 the order you wrote them — no optimiser, no reordering. The order is therefore
 visible and controllable, which is the point: an optimiser could be added
-later without changing a single program.
+later without changing a single program. A `[ … ]` or `( … )` in object
+position is reached through its predicate: `{tm} rr:predicateObjectMap
+[ rr:objectMap ?om ]` matches `{tm} rr:predicateObjectMap _:b` first, then
+`_:b rr:objectMap ?om`.
 
 ```ldpy
 @prefix ex: <http://example.org/> .

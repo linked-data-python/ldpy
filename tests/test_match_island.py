@@ -73,6 +73,17 @@ def test_anonymous_node_is_nondistinguished_variable(run):
     assert g["ps"] == [URIRef(E + "name")]
 
 
+def test_anonymous_node_object_is_joined_after_its_predicate():
+    """`s p [ q ?o ]` is matched in the order written: `s p _:b` first,
+    then `_:b q ?o` — not every `q` triple of the graph first (record
+    ldpy/016: no join heuristic, the order is the reader's)."""
+    code = transpile("@prefix ex: <http://e/> .\n"
+                     "xs = m{ {s} ex:pom [ ex:om ?om ] ; ex:x ( 1 ) }\n").code
+    pom, om, x = (code.index("http://e/" + n) for n in ("pom", "om", "x"))
+    first = code.index("RDF.first")
+    assert pom < om < x < first
+
+
 def test_shared_variable_joins(run):
     g, _ = run(textwrap.dedent("""\
         @prefix ex: <http://e/> .

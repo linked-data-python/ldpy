@@ -9,6 +9,12 @@
   subject or object of `m{ }`, `+{ }`, `-{ }`, `g{ }`, `s{ }` — it now
   raises `TypeError`.
 
+- **`m{ }` reaches a `[ … ]` or `( … )` object through its predicate.**
+  `m{ {s} ex:p [ ex:q ?o ] }` now matches `{s} ex:p _:b` first, then
+  `_:b ex:q ?o`, as the patterns are written. The nested patterns used to
+  come first, so every `ex:q` triple of the graph was scanned on each call,
+  and solutions came in that other order.
+
 - **Binding a prefix on one graph no longer rebinds it on another.**
   Graphs made by `@graph as g` or `g{ }` under the same declarations shared
   one namespace manager, so `g.bind("p", ns)` on one changed the prefix in
